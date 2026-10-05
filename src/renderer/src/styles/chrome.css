@@ -373,7 +373,26 @@ button.site-button:active {
 }
 
 .site-button.insecure {
-  color: color-mix(in srgb, #e5484d 80%, var(--text));
+  position: relative;
+  color: var(--text);
+}
+
+/* The open padlock is drawn in the text colour (readable on any theme); a red dot, ringed so it
+   shows on red themes too, marks the page as not secure. */
+.site-button.insecure::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+}
+
+[data-ui='dark'] .site-button.insecure::after {
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.55);
 }
 
 .site-button.local {
