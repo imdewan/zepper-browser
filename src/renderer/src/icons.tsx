@@ -96,6 +96,12 @@ export const IconPrivate = (p: IconProps): React.JSX.Element => (
     <path d="M10 16.5c1.3-.8 2.7-.8 4 0" />
   </Icon>
 )
+export const IconLockOpen = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <rect x="5" y="11" width="14" height="9" rx="2.5" />
+    <path d="M8 11V8a4 4 0 0 1 7.7-1.5" />
+  </Icon>
+)
 export const IconLock = (p: IconProps): React.JSX.Element => (
   <Icon {...p}>
     <rect x="5" y="11" width="14" height="9" rx="2.5" />

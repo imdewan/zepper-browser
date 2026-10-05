@@ -373,6 +373,10 @@ button.site-button:active {
 }
 
 .site-button.insecure {
+  color: color-mix(in srgb, #e5484d 80%, var(--text));
+}
+
+.site-button.local {
   color: var(--text-3);
 }
 
@@ -382,13 +386,6 @@ button.site-button:active {
 
 .url-pill-icon {
   flex: none;
-  color: var(--text-2);
-}
-
-.url-pill-insecure {
-  flex: none;
-  font-size: 11px;
-  font-weight: 500;
   color: var(--text-2);
 }
 

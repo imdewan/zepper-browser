@@ -11,6 +11,7 @@ import {
   IconForward,
   IconGlobe,
   IconLock,
+  IconLockOpen,
   IconPlus,
   IconPrivate,
   IconPuzzle,
@@ -121,6 +122,8 @@ function TopRow({ tab, isPrivate, extensionsRow }: { tab: Tab | null; isPrivate:
 
 function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
   const secure = tab?.url.startsWith('https://')
+  // Plain HTTP: an open padlock (with "Not secure" in its tooltip and the site panel), not a word that crowds the address.
+  const insecure = tab?.url.startsWith('http://')
   const pill = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef(0)
@@ -144,10 +147,13 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
     >
       {tab ? (
         <>
-          <button className={cx('site-button', !secure && 'insecure')} title="View site information" onClick={openSiteInfo}>
-            {secure ? <IconLock size={12} /> : <IconGlobe size={12} />}
+          <button
+            className={cx('site-button', insecure && 'insecure', !secure && !insecure && 'local')}
+            title={insecure ? 'Not secure: this page isn’t encrypted' : 'View site information'}
+            onClick={openSiteInfo}
+          >
+            {secure ? <IconLock size={12} /> : insecure ? <IconLockOpen size={12} /> : <IconGlobe size={12} />}
           </button>
-          {/^http:/.test(tab.url) && <span className="url-pill-insecure">Not secure</span>}
           <span className="url-pill-host">{hostOf(tab.url)}</span>
           <button className={cx('url-pill-copy', copied && 'copied')} title="Copy URL (⇧⌘C)" onClick={copy}>
             {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}

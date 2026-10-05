@@ -57,7 +57,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
   - **Cross-site cookies blocked:** third-party requests can't set or send cookies (sign-in frames from Google, Microsoft and Apple still work).
   - **HTTPS upgrades** for plain-HTTP pages, falling back for sites without HTTPS.
   - **Clean links:** click identifiers (fbclid, gclid, msclkid…) are removed and Google AMP pages open on the real site.
-- **HTTPS first:** typed addresses go to HTTPS, falling back to HTTP only when a site has no HTTPS; plain-HTTP pages say "Not secure".
+- **HTTPS first:** typed addresses go to HTTPS, falling back to HTTP only when a site has no HTTPS; plain-HTTP pages show an open padlock ("Not secure").
 - **Secure DNS:** DNS over HTTPS, automatic or through Cloudflare, Quad9 or Google.
 - **Certificate errors** get their own page, and sites asking for a client certificate let you choose (or send none).
 - **Clear browsing data:** history (by time range), cookies and site data, cached files and the downloads list, across every space.
