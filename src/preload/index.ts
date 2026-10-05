@@ -1,0 +1,21 @@
+import { contextBridge, ipcRenderer } from 'electron'
+import { IPC, type Command, type Snapshot, type UiEvent, type ZepperApi } from '../shared/types'
+
+const api: ZepperApi = {
+  platform: process.platform,
+  getSnapshot: () => ipcRenderer.invoke(IPC.getSnapshot),
+  onSnapshot(callback) {
+    const listener = (_event: Electron.IpcRendererEvent, snapshot: Snapshot): void => callback(snapshot)
+    ipcRenderer.on(IPC.snapshot, listener)
+    return () => ipcRenderer.removeListener(IPC.snapshot, listener)
+  },
+  onEvent(callback) {
+    const listener = (_event: Electron.IpcRendererEvent, event: UiEvent): void => callback(event)
+    ipcRenderer.on(IPC.event, listener)
+    return () => ipcRenderer.removeListener(IPC.event, listener)
+  },
+  send: (command: Command) => ipcRenderer.send(IPC.command, command),
+  suggest: (text: string) => ipcRenderer.invoke(IPC.suggest, text)
+}
+
+contextBridge.exposeInMainWorld('zepper', api)

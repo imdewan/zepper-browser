@@ -1,0 +1,1026 @@
+/* Browser chrome: the layer under the web views. */
+
+.window {
+  position: fixed;
+  inset: 0;
+  color: var(--text);
+}
+
+.background {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: filter 0.3s ease;
+}
+
+.background-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.background-grain {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: overlay;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.window[data-focused='false'] .background {
+  filter: saturate(0.15);
+}
+
+.window[data-focused='false'] .sidebar {
+  --text: var(--text-2);
+}
+
+.drag-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--content-top);
+}
+
+.sidebar-slot {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--sidebar-w);
+}
+
+.window[data-side='right'] .sidebar-slot {
+  left: auto;
+  right: 0;
+}
+
+[data-side='right'] .sidebar {
+  padding: 0 8px 6px 6px;
+}
+
+[data-side='right'] .traffic-light-space {
+  width: 4px;
+}
+
+.window[data-side='right'] .resize-handle {
+  right: auto;
+  left: 0;
+}
+
+/* Compact mode: hovering the window edge floats the sidebar back in. */
+.edge-hotzone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--gap) + 2px);
+  -webkit-app-region: no-drag;
+}
+
+.window[data-side='right'] .edge-hotzone {
+  left: auto;
+  right: 0;
+}
+
+/* ---- Web content card ---------------------------------------------------- */
+
+.content-card {
+  position: absolute;
+  left: var(--content-left);
+  top: var(--content-top);
+  right: var(--content-right);
+  bottom: var(--gap);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.24),
+    0 0 0 0.5px rgba(0, 0, 0, 0.08);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-3);
+}
+
+.empty-logo {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 10px;
+  background: linear-gradient(120deg, var(--text-2), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.empty-hint {
+  font-size: 13px;
+}
+
+.window[data-animating='true'] .content-card {
+  transition:
+    left 0.26s cubic-bezier(0.25, 1, 0.5, 1),
+    right 0.26s cubic-bezier(0.25, 1, 0.5, 1),
+    top 0.26s cubic-bezier(0.25, 1, 0.5, 1),
+    bottom 0.26s cubic-bezier(0.25, 1, 0.5, 1),
+    border-radius 0.26s ease;
+}
+
+/* Slim pill centred in the gap above the page, with breathing room on both sides. */
+.loading-pill {
+  position: absolute;
+  top: calc(var(--content-top) / 2);
+  left: calc(var(--content-left) + (100vw - var(--content-left) - var(--content-right)) / 2);
+  width: 64px;
+  height: 3px;
+  translate: -50% -50%;
+  border-radius: 100px;
+  background: color-mix(in srgb, var(--accent), var(--text) 45%);
+  animation: pill-pulse 1s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes pill-pulse {
+  from {
+    scale: 0.85 1;
+    opacity: 0.6;
+  }
+  to {
+    scale: 0.95 1;
+    opacity: 1;
+  }
+}
+
+/* ---- Sidebar ------------------------------------------------------------- */
+
+.sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 6px 6px 8px;
+}
+
+.top-row {
+  height: 46px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  container-type: inline-size;
+}
+
+/* Traffic lights sit at x=17 and end around x=69; leave a clear gap after them. */
+.traffic-light-space {
+  width: 70px;
+  flex: none;
+}
+
+.compact-toggle {
+  margin-left: 4px;
+}
+
+/* Narrow sidebars drop the least important buttons instead of clipping. */
+@container (max-width: 205px) {
+  .compact-toggle {
+    display: none;
+  }
+}
+
+@container (max-width: 170px) {
+  .forward-button {
+    display: none;
+  }
+}
+
+.top-row-spacer {
+  flex: 1;
+}
+
+.icon-button {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease,
+    transform 0.2s ease;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.icon-button:active:not(:disabled) {
+  transform: scale(0.94);
+  background: var(--press);
+}
+
+.icon-button:disabled {
+  opacity: 0.32;
+}
+
+.url-pill {
+  flex: none;
+  height: 36px;
+  margin: 0 0 8px;
+  border-radius: 10px;
+  background: var(--element);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 5px;
+  text-align: left;
+  transition: background-color 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.site-button {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease,
+    transform 0.15s ease;
+}
+
+button.site-button:hover {
+  background: var(--press);
+  color: var(--text);
+}
+
+button.site-button:active {
+  transform: scale(0.92);
+}
+
+.site-button.insecure {
+  color: var(--text-3);
+}
+
+.url-pill:hover {
+  background: var(--element-hover);
+}
+
+.url-pill-icon {
+  flex: none;
+  color: var(--text-2);
+}
+
+.url-pill-host {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--text);
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
+}
+
+.url-pill-placeholder {
+  flex: 1;
+  color: var(--text-3);
+}
+
+.url-pill-blocked {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--element);
+  padding: 2px 6px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.url-pill:hover .url-pill-blocked {
+  opacity: 1;
+}
+
+/* ---- Essentials ---------------------------------------------------------- */
+
+.essentials {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+.essential {
+  height: 46px;
+  border-radius: 12px;
+  background: var(--element);
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition: background-color 0.1s ease;
+}
+
+.essential:hover {
+  background: var(--element-hover);
+}
+
+.essential:active {
+  scale: 0.97;
+}
+
+.essential .favicon {
+  position: relative;
+  z-index: 2;
+}
+
+.essential.active {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Favicon-coloured glow showing around the active tile's rim (Zen's favicon background). */
+.essential-glow {
+  position: absolute;
+  inset: -50%;
+  z-index: 0;
+  background-image: var(--icon);
+  background-size: 50% 50%;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(14px) saturate(1.4);
+  transform: scale(2.2);
+  opacity: 0.85;
+}
+
+.essential-fill {
+  position: absolute;
+  inset: 1.5px;
+  z-index: 1;
+  border-radius: 10.5px;
+  background: var(--essential-fill);
+}
+
+.essential-audio {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  z-index: 3;
+}
+
+/* ---- Spaces -------------------------------------------------------------- */
+
+.sidebar-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+}
+
+.spaces-viewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  transition: opacity 0.15s ease;
+}
+
+.sidebar-body:has(.space-create) .spaces-viewport {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.spaces-track {
+  display: flex;
+  height: 100%;
+}
+
+.space {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.space-header {
+  height: 40px;
+  flex: none;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 5px 0 10px;
+  border-radius: 10px;
+  transition: background-color 0.1s ease;
+}
+
+.space-header:hover {
+  background: var(--hover);
+}
+
+.space-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  position: relative;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
+
+.space-emoji {
+  transition: opacity 0.15s ease;
+}
+
+.space-chevron {
+  position: absolute;
+  color: var(--text-2);
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    transform 0.1s ease;
+}
+
+.space-header.has-pinned:hover .space-emoji {
+  opacity: 0;
+}
+
+.space-header.has-pinned:hover .space-chevron {
+  opacity: 1;
+}
+
+.space-header.collapsed .space-chevron {
+  transform: rotate(-90deg);
+}
+
+.space-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.space-name-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  border-radius: 6px;
+  padding: 3px 6px;
+  margin-left: -6px;
+  background: var(--element);
+  font-weight: 600;
+}
+
+.space-actions {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  opacity: 0;
+  transition:
+    opacity 0.1s ease,
+    background-color 0.1s ease;
+}
+
+.space-header:hover .space-actions {
+  opacity: 1;
+}
+
+.space-actions:hover {
+  background: var(--press);
+}
+
+.space-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: none;
+}
+
+.space-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.space-fill {
+  flex: 1;
+  min-height: 32px;
+}
+
+/* ---- Tab rows ------------------------------------------------------------ */
+
+.tab-wrap {
+  flex: none;
+  transform-origin: center left;
+}
+
+.tab {
+  height: 36px;
+  margin: 1px 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 5px 0 10px;
+  position: relative;
+  color: var(--text);
+  transition:
+    background-color 0.1s ease,
+    scale 0.1s ease;
+}
+
+.tab:hover {
+  background: var(--hover);
+}
+
+.tab.active {
+  background: var(--selected);
+  box-shadow: var(--selected-shadow);
+}
+
+.tab:active:not(:has(button:active)) {
+  scale: 0.985;
+}
+
+.tab-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.tab-title {
+  white-space: nowrap;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, black calc(100% - 20px), transparent);
+}
+
+.tab-sublabel {
+  font-size: 10px;
+  color: var(--text-2);
+  white-space: nowrap;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition:
+    max-height 0.1s ease-in-out,
+    opacity 0.1s ease-in-out,
+    transform 0.1s ease-in-out;
+}
+
+.tab-sublabel.visible {
+  max-height: 12px;
+  opacity: 0.85;
+  transform: none;
+}
+
+.tab-button {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition: background-color 0.1s ease;
+}
+
+.tab-button:hover {
+  background: var(--press);
+  color: var(--text);
+}
+
+.tab-button.close {
+  display: none;
+}
+
+.tab:hover .tab-button.close {
+  display: grid;
+}
+
+/* Pinned tab that navigated away from its pinned URL: "favicon / title". */
+.pin-reset {
+  position: relative;
+  height: 28px;
+  margin: 0 -3px 0 -6px;
+  padding: 0 4px 0 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  transition: background-color 0.1s ease;
+}
+
+.pin-original {
+  position: absolute;
+  left: 6px;
+  opacity: 0;
+}
+
+.pin-original,
+.pin-current,
+.pin-slash {
+  transition: opacity 0.12s ease;
+}
+
+.pin-slash {
+  width: 2px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--text-3);
+  transform: rotate(15deg);
+}
+
+.pin-reset:hover {
+  background: var(--press);
+}
+
+.pin-reset:hover .pin-original {
+  opacity: 1;
+}
+
+.pin-reset:hover .pin-current,
+.pin-reset:hover .pin-slash {
+  opacity: 0;
+}
+
+/* ---- Separator, Clear, New Tab -------------------------------------------- */
+
+.pinned-separator {
+  height: 22px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 8px;
+  overflow: hidden;
+  transition:
+    height 0.08s ease-in-out,
+    opacity 0.06s ease-in-out;
+}
+
+.pinned-separator.hidden {
+  height: 0;
+  opacity: 0;
+}
+
+.separator-line {
+  flex: 1;
+  height: 1px;
+  background: var(--separator);
+}
+
+.clear-button {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 0;
+  padding: 2px 0;
+  overflow: hidden;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text-2);
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    max-width 0.2s var(--spring),
+    padding 0.2s var(--spring);
+}
+
+.sidebar:hover .clear-button {
+  max-width: 60px;
+  padding: 2px 4px;
+  opacity: 0.55;
+}
+
+.sidebar .clear-button:hover {
+  opacity: 1;
+}
+
+.clear-button svg {
+  display: none;
+}
+
+.clear-button.can-clear svg {
+  display: block;
+}
+
+.new-tab-row {
+  height: 36px;
+  flex: none;
+  margin: 1px 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 11px;
+  color: var(--text-2);
+  text-align: left;
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease,
+    scale 0.1s ease;
+}
+
+.new-tab-row:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.new-tab-row:active {
+  scale: 0.985;
+}
+
+/* ---- Bottom bar ------------------------------------------------------------ */
+
+.bottom-bar {
+  height: 38px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.space-switcher {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.space-dot {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  filter: grayscale(1);
+  opacity: 0.5;
+  transition:
+    filter 0.2s ease,
+    opacity 0.2s ease,
+    background-color 0.1s ease,
+    transform 0.2s ease;
+}
+
+.space-dot:hover {
+  filter: none;
+  opacity: 1;
+  background: var(--hover);
+}
+
+.space-dot:active {
+  transform: scale(0.92);
+}
+
+.space-dot.active {
+  filter: none;
+  opacity: 1;
+}
+
+.resize-handle {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  right: 0;
+  width: 6px;
+  cursor: ew-resize;
+  -webkit-app-region: no-drag;
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 1px;
+  border-radius: 4px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.resize-handle:hover::after {
+  opacity: 0.8;
+  transition-delay: 0.2s;
+}
+
+.resize-handle[data-resizing]::after {
+  opacity: 0.8;
+}
+
+/* ---- Create a Space form ---------------------------------------------------- */
+
+.space-create {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 4px 6px;
+}
+
+.space-create h1 {
+  margin: 6px 0 4px;
+  font-size: 16px;
+  font-weight: 650;
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+
+.space-create-sub {
+  margin: 0 0 20px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--text-3);
+}
+
+.space-create-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--element);
+}
+
+.space-create-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 7px;
+  border: 1px dashed var(--text-3);
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+}
+
+.space-create-name input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+}
+
+.space-create-name input::placeholder {
+  color: var(--text-3);
+}
+
+.emoji-grid.inline {
+  margin-top: 8px;
+  max-height: 156px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--element);
+  grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+  scrollbar-width: none;
+}
+
+.space-create-label {
+  margin: 18px 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.space-create-buttons {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.primary-button {
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    filter 0.15s ease;
+}
+
+.primary-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.primary-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.primary-button:disabled {
+  opacity: 0.4;
+}
+
+.ghost-button {
+  height: 34px;
+  border-radius: 10px;
+  color: var(--text-2);
+  transition: background-color 0.1s ease;
+}
+
+.ghost-button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* ---- Swipe to navigate -------------------------------------------------------- */
+
+.swipe-indicator {
+  position: absolute;
+  top: calc(50% - 20px);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--element-hover);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.swipe-indicator.back {
+  left: calc(var(--content-left) + 12px);
+}
+
+.swipe-indicator.forward {
+  right: calc(var(--content-right) + 12px);
+}
+
+.swipe-indicator.armed {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ---- Customisation hooks ----------------------------------------------------------- */
+
+[data-density='compact'] .tab,
+[data-density='compact'] .new-tab-row {
+  height: 30px;
+}
+
+[data-density='compact'] .space-header {
+  height: 34px;
+}
+
+[data-density='compact'] .essential {
+  height: 38px;
+}
+
+[data-glow='false'] .essential-glow {
+  display: none;
+}
+
+[data-glow='false'] .essential.active {
+  background: var(--accent);
+}
+
+.window[data-motion='reduced'] *,
+.overlay[data-motion='reduced'] * {
+  transition-duration: 0s !important;
+  animation: none !important;
+}

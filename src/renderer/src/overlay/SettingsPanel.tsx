@@ -1,0 +1,284 @@
+import { useEffect, useState } from 'react'
+import { motion } from 'motion/react'
+import {
+  PINNED_CLOSE_LABELS,
+  SEARCH_ENGINES,
+  type PinnedCloseBehavior,
+  type SearchEngineId,
+  type Settings
+} from '@shared/settings'
+import { zepper } from '../bridge'
+import { IconClose } from '../icons'
+import { cx, isMac } from '../util'
+
+type Section = 'appearance' | 'tabs' | 'search' | 'gestures' | 'privacy' | 'shortcuts'
+
+const SECTIONS: { id: Section; label: string; icon: string }[] = [
+  { id: 'appearance', label: 'Appearance', icon: '🎨' },
+  { id: 'tabs', label: 'Tabs', icon: '🗂️' },
+  { id: 'search', label: 'Search', icon: '🔎' },
+  { id: 'gestures', label: 'Spaces & Gestures', icon: '👆' },
+  { id: 'privacy', label: 'Privacy', icon: '🛡️' },
+  { id: 'shortcuts', label: 'Shortcuts', icon: '⌨️' }
+]
+
+const SHORTCUTS: [string, string][] = [
+  ['New tab / command bar', '⌘T'],
+  ['Open location', '⌘L'],
+  ['Close tab', '⌘W'],
+  ['Reopen closed tab', '⇧⌘T'],
+  ['Copy current URL', '⇧⌘C'],
+  ['Copy URL as Markdown', '⌥⇧⌘C'],
+  ['Pin / unpin tab', '⇧⌘D'],
+  ['Clear unpinned tabs', '⇧⌘K'],
+  ['Next / previous space', '⌥⌘→ / ⌥⌘←'],
+  ['Go to space 1–9', '⌃1 … ⌃9'],
+  ['Go to tab 1–8 / last', '⌘1 … ⌘8 / ⌘9'],
+  ['Next / previous tab', '⌃⇥ / ⌃⇧⇥'],
+  ['Toggle compact mode', '⌘S'],
+  ['Find in page', '⌘F'],
+  ['Back / forward', '⌘[ / ⌘]'],
+  ['Zoom in / out / reset', '⌘+ / ⌘− / ⌘0'],
+  ['Developer tools', '⌥⌘I'],
+  ['Settings', '⌘,']
+]
+
+interface SettingsPanelProps {
+  settings: Settings
+  onClose: () => void
+}
+
+/** Settings sheet: every change applies immediately. */
+export function SettingsPanel({ settings, onClose }: SettingsPanelProps): React.JSX.Element {
+  const [section, setSection] = useState<Section>('appearance')
+  const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <motion.div
+      className="settings-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.15 } }}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        className="settings"
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.97, y: 6, transition: { duration: 0.15 } }}
+        transition={{ type: 'spring', bounce: 0.12, duration: 0.35 }}
+      >
+        <nav className="settings-nav">
+          <div className="settings-title">Settings</div>
+          {SECTIONS.map((s) => (
+            <button key={s.id} className={cx('settings-nav-item', section === s.id && 'active')} onClick={() => setSection(s.id)}>
+              <span className="settings-nav-icon">{s.icon}</span>
+              {s.label}
+            </button>
+          ))}
+        </nav>
+        <div className="settings-body">
+          <button className="settings-close" title="Close (Esc)" onClick={onClose}>
+            <IconClose size={14} />
+          </button>
+          <motion.div
+            key={section}
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.25 }}
+          >
+            {section === 'appearance' && (
+              <>
+                <h2>Appearance</h2>
+                <Row label="Theme" hint="Websites follow this too.">
+                  <Segmented
+                    value={settings.colorScheme}
+                    options={[
+                      ['system', 'Auto'],
+                      ['light', 'Light'],
+                      ['dark', 'Dark']
+                    ]}
+                    onChange={(colorScheme) => set({ colorScheme })}
+                  />
+                </Row>
+                <Row label="Sidebar position">
+                  <Segmented
+                    value={settings.sidebarPosition}
+                    options={[
+                      ['left', 'Left'],
+                      ['right', 'Right']
+                    ]}
+                    onChange={(sidebarPosition) => set({ sidebarPosition })}
+                  />
+                </Row>
+                <Row label="Tab density">
+                  <Segmented
+                    value={settings.density}
+                    options={[
+                      ['comfortable', 'Comfortable'],
+                      ['compact', 'Compact']
+                    ]}
+                    onChange={(density) => set({ density })}
+                  />
+                </Row>
+                <Row label="Content gap" hint={`${settings.contentGap}px around the page`}>
+                  <input type="range" min={0} max={16} step={1} value={settings.contentGap} onChange={(e) => set({ contentGap: Number(e.target.value) })} />
+                </Row>
+                <Row label="Corner radius" hint={`${settings.cornerRadius}px`}>
+                  <input type="range" min={0} max={18} step={1} value={settings.cornerRadius} onChange={(e) => set({ cornerRadius: Number(e.target.value) })} />
+                </Row>
+                <Row label="Essentials glow" hint="Tint the active Essential with its icon’s colour.">
+                  <Toggle checked={settings.essentialsGlow} onChange={(essentialsGlow) => set({ essentialsGlow })} />
+                </Row>
+                <Row label="Reduce motion" hint="Turn off animations.">
+                  <Toggle checked={settings.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })} />
+                </Row>
+              </>
+            )}
+
+            {section === 'tabs' && (
+              <>
+                <h2>Tabs</h2>
+                <Row label="New tabs open at">
+                  <Segmented
+                    value={settings.newTabPosition}
+                    options={[
+                      ['top', 'Top'],
+                      ['bottom', 'Bottom']
+                    ]}
+                    onChange={(newTabPosition) => set({ newTabPosition })}
+                  />
+                </Row>
+                <Row label="Closing a pinned tab" hint="What ⌘W does on pinned tabs and Essentials.">
+                  <select
+                    value={settings.pinnedCloseBehavior}
+                    onChange={(e) => set({ pinnedCloseBehavior: e.target.value as PinnedCloseBehavior })}
+                  >
+                    {Object.entries(PINNED_CLOSE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </Row>
+                <Row label="After closing a tab, go to the most recently used tab" hint="Otherwise the tab next to it.">
+                  <Toggle checked={settings.closeSelectsRecent} onChange={(closeSelectsRecent) => set({ closeSelectsRecent })} />
+                </Row>
+              </>
+            )}
+
+            {section === 'search' && (
+              <>
+                <h2>Search</h2>
+                <Row label="Search engine">
+                  <select value={settings.searchEngine} onChange={(e) => set({ searchEngine: e.target.value as SearchEngineId })}>
+                    {Object.entries(SEARCH_ENGINES).map(([id, engine]) => (
+                      <option key={id} value={id}>
+                        {engine.name}
+                      </option>
+                    ))}
+                  </select>
+                </Row>
+                <Row label="Search suggestions" hint="Ask the search engine for suggestions while you type.">
+                  <Toggle checked={settings.searchSuggestions} onChange={(searchSuggestions) => set({ searchSuggestions })} />
+                </Row>
+              </>
+            )}
+
+            {section === 'gestures' && (
+              <>
+                <h2>Spaces &amp; Gestures</h2>
+                <Row label="Swipe between spaces" hint="Two-finger swipe on the sidebar.">
+                  <Toggle checked={settings.swipeBetweenSpaces} onChange={(swipeBetweenSpaces) => set({ swipeBetweenSpaces })} />
+                </Row>
+                <Row label="Swipe to go back and forward" hint="Two-finger swipe on a page.">
+                  <Toggle checked={settings.swipeToNavigate} onChange={(swipeToNavigate) => set({ swipeToNavigate })} />
+                </Row>
+                <Row label="Wrap around spaces" hint="Next space after the last one is the first.">
+                  <Toggle checked={settings.wrapSpaces} onChange={(wrapSpaces) => set({ wrapSpaces })} />
+                </Row>
+                <Row label="Reveal sidebar on hover in compact mode">
+                  <Toggle checked={settings.compactRevealOnHover} onChange={(compactRevealOnHover) => set({ compactRevealOnHover })} />
+                </Row>
+              </>
+            )}
+
+            {section === 'privacy' && (
+              <>
+                <h2>Privacy</h2>
+                <Row label="Block ads and trackers" hint="uBlock Origin’s filter lists, built in.">
+                  <Toggle checked={settings.adblock} onChange={(adblock) => set({ adblock })} />
+                </Row>
+                <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
+                  <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
+                </Row>
+              </>
+            )}
+
+            {section === 'shortcuts' && (
+              <>
+                <h2>Keyboard Shortcuts</h2>
+                <div className="shortcut-list">
+                  {SHORTCUTS.map(([label, keys]) => (
+                    <div key={label} className="shortcut-row">
+                      <span>{label}</span>
+                      <kbd>{isMac ? keys : keys.replace(/⌘/g, 'Ctrl+')}</kbd>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </motion.div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <div className="settings-row-label">{label}</div>
+        {hint && <div className="settings-row-hint">{hint}</div>}
+      </div>
+      <div className="settings-row-control">{children}</div>
+    </div>
+  )
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }): React.JSX.Element {
+  return (
+    <button role="switch" aria-checked={checked} className={cx('toggle', checked && 'on')} onClick={() => onChange(!checked)}>
+      <motion.span className="toggle-knob" layout transition={{ type: 'spring', bounce: 0.25, duration: 0.3 }} />
+    </button>
+  )
+}
+
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange
+}: {
+  value: T
+  options: [T, string][]
+  onChange: (value: T) => void
+}): React.JSX.Element {
+  return (
+    <div className="segmented">
+      {options.map(([option, label]) => (
+        <button key={option} className={cx(value === option && 'selected')} onClick={() => onChange(option)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}

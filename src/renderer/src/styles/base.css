@@ -1,0 +1,191 @@
+:root {
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --system-accent: #8b7cf6;
+  --accent: var(--system-accent);
+  --spring: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  font: 13px/1.3 var(--font);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: default;
+  -webkit-app-region: no-drag;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+  -webkit-app-region: no-drag;
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+
+kbd {
+  font: 500 11px var(--font);
+  display: inline-block;
+  min-width: 20px;
+  padding: 2px 5px;
+  margin: 0 2px;
+  border-radius: 5px;
+  background: var(--element);
+  color: var(--text-2);
+  text-align: center;
+}
+
+[data-ui='dark'] {
+  color-scheme: dark;
+  --text: rgba(255, 255, 255, 0.92);
+  --text-2: rgba(255, 255, 255, 0.6);
+  --text-3: rgba(255, 255, 255, 0.38);
+  --hover: rgba(255, 255, 255, 0.075);
+  --press: rgba(255, 255, 255, 0.12);
+  --element: rgba(255, 255, 255, 0.09);
+  --element-hover: rgba(255, 255, 255, 0.14);
+  --selected: color-mix(in srgb, rgba(255, 255, 255, 0.17) 92%, var(--accent));
+  --selected-shadow: 0 0.8px 1.5px rgba(0, 0, 0, 0.2);
+  --essential-fill: color-mix(in srgb, var(--accent) 10%, rgba(52, 52, 56, 0.94));
+  --separator: rgba(255, 255, 255, 0.1);
+  --panel: rgb(30, 30, 32);
+  --panel-border: rgba(255, 255, 255, 0.12);
+  --palette-bg: rgb(26, 26, 28);
+  --card: #1c1c1e;
+}
+
+[data-ui='light'] {
+  color-scheme: light;
+  --text: rgba(0, 0, 0, 0.86);
+  --text-2: rgba(0, 0, 0, 0.55);
+  --text-3: rgba(0, 0, 0, 0.36);
+  --hover: rgba(0, 0, 0, 0.055);
+  --press: rgba(0, 0, 0, 0.09);
+  --element: rgba(0, 0, 0, 0.055);
+  --element-hover: rgba(0, 0, 0, 0.085);
+  --selected: color-mix(in srgb, rgba(255, 255, 255, 0.86) 96%, var(--accent));
+  --selected-shadow: 0 0.8px 1.5px rgba(0, 0, 0, 0.15);
+  --essential-fill: rgba(255, 255, 255, 0.86);
+  --separator: rgba(0, 0, 0, 0.1);
+  --panel: rgb(252, 252, 253);
+  --panel-border: rgba(0, 0, 0, 0.12);
+  --palette-bg: #ffffff;
+  --card: #ffffff;
+}
+
+.favicon {
+  flex: none;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.favicon-fallback {
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+
+/* Shared by the space-creation form (chrome) and the theme popover (overlay). */
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px 8px;
+  justify-items: center;
+}
+
+.swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.12);
+  transition: transform 0.1s ease;
+}
+
+.swatch:hover {
+  transform: scale(1.06);
+}
+
+.swatch:active {
+  transform: scale(0.95);
+}
+
+.swatch.selected {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.swatch-default {
+  background: linear-gradient(135deg, rgba(160, 160, 168, 0.55), rgba(230, 230, 236, 0.85));
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+}
+
+.emoji-cell {
+  height: 30px;
+  border-radius: 7px;
+  font-size: 17px;
+  display: grid;
+  place-items: center;
+  transition: background-color 0.08s ease;
+}
+
+.emoji-cell:hover {
+  background: var(--hover);
+}
+
+.emoji-cell.selected {
+  background: var(--press);
+}
+
+/* UI development outside Electron: approximate the vibrancy material over a wallpaper. */
+html[data-mock] body {
+  background:
+    radial-gradient(ellipse at 20% 85%, rgba(120, 104, 70, 0.55), transparent 60%),
+    radial-gradient(ellipse at 80% 10%, rgba(90, 110, 130, 0.45), transparent 55%),
+    linear-gradient(160deg, #3d352c, #29241f 55%, #1e1b18);
+}
+
+@media (prefers-color-scheme: light) {
+  html[data-mock] body {
+    background:
+      radial-gradient(ellipse at 20% 85%, rgba(220, 200, 160, 0.6), transparent 60%),
+      radial-gradient(ellipse at 80% 10%, rgba(170, 200, 230, 0.55), transparent 55%),
+      linear-gradient(160deg, #e9e4dc, #dedad3 55%, #d4d0ca);
+  }
+}
