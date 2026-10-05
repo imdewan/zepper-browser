@@ -25,7 +25,7 @@
     "check": "npm run typecheck && npm run lint && prettier --check .",
     "dist": "electron-vite build && npm run build:native && electron-builder --mac",
     "brand:dev": "node scripts/brand-dev-runtime.mjs",
-    "build:native": "mkdir -p build/bin && swiftc -O -parse-as-library -target arm64-apple-macos26.0 native/tidy/main.swift -o build/bin/zepper-tidy",
+    "build:native": "mkdir -p build/bin && swiftc -O -parse-as-library -swift-version 5 -target arm64-apple-macos26.0 native/zepper-ai/main.swift -o build/bin/zepper-ai",
     "vmp:signup": ".evs/bin/python -m castlabs_evs.account signup",
     "vmp:login": ".evs/bin/python -m castlabs_evs.account reauth",
     "vmp:sign": ".evs/bin/python -m castlabs_evs.vmp sign-pkg node_modules/electron/dist",
@@ -99,8 +99,8 @@
     ],
     "extraResources": [
       {
-        "from": "build/bin/zepper-tidy",
-        "to": "bin/zepper-tidy"
+        "from": "build/bin/zepper-ai",
+        "to": "bin/zepper-ai"
       }
     ],
     "directories": {

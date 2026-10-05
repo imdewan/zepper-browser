@@ -29,7 +29,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 ## Tabs
 
-- **Essentials:** a grid shared by every space.
+- **Essentials:** a grid of most-used sites per space, using that space's sign-ins; they can be dragged to another space.
 - **Pinned tabs** per space, saved across restarts; ⌘W resets and unloads them.
 - **Restored on restart:** open tabs and Essentials come back (both can be turned off in Settings → Tabs).
 - **Folders** in the pinned area, nestable: collapse, rename, ungroup or delete with their tabs.

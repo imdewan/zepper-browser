@@ -6,6 +6,7 @@ import { IconArrowDown, IconChevronDown, IconDots, IconPlus, IconSparkle } from 
 import { cx, rectOf } from '../util'
 import { SplitRow } from './SplitRow'
 import { useDragging, useDrop } from './dnd'
+import { Essentials } from './Essentials'
 import { FolderRow } from './FolderRow'
 import { TabRow, type RowPlace } from './TabRow'
 
@@ -378,6 +379,11 @@ function SpaceView({
 
   return (
     <section className="space">
+      <Essentials
+        tabs={tabs.filter((t) => t.kind === 'essential' && t.spaceId === space.id)}
+        spaceId={space.id}
+        activeTabId={activeTabId}
+      />
       <SpaceHeader space={space} hasPinned={hasPinnedArea} renaming={renaming} onRenameDone={onRenameDone} onStartRename={onStartRename} />
       <div className="space-scroll">
         <AnimatePresence initial={false}>{pinnedArea}</AnimatePresence>

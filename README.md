@@ -60,7 +60,7 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 
 **A sidebar built for tabs.**
 
-- **Essentials:** a grid of your most-used sites, shared by every space.
+- **Essentials:** a grid of your most-used sites for each space, signed in with that space's accounts.
 - **Pinned tabs** per space that survive restarts, organised in nestable **folders**.
 - **Drag and drop** for everything: reorder, pin, add to Essentials, move to another space.
 - **Split view:** up to four tabs side by side, stacked or in a grid.

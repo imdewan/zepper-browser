@@ -351,6 +351,20 @@ export class Browser {
       this.tabs = saved.tabs
         .filter((t) => (t.kind !== 'normal' || restoreTabs) && (t.kind !== 'essential' || keepEssentials))
         .map((t) => makeTab(t))
+      // Essentials used to be shared by every space; now each space has its own, starting with a copy.
+      const shared = this.tabs.filter((t) => t.kind === 'essential' && !t.spaceId)
+      if (shared.length > 0) {
+        this.tabs = this.tabs.filter((t) => !shared.includes(t))
+        this.spaces.forEach((space, i) => {
+          for (const tab of shared) {
+            this.tabs.push(
+              i === 0
+                ? { ...tab, spaceId: space.id }
+                : makeTab({ ...tab, id: randomUUID(), spaceId: space.id, loaded: false, loading: false, audible: false, media: null })
+            )
+          }
+        })
+      }
       this.activeSpaceId = saved.spaces.some((s) => s.id === saved.activeSpaceId) ? saved.activeSpaceId : saved.spaces[0].id
       this.restoreTabId = saved.activeTabId
       const ids = new Set(this.tabs.map((t) => t.id))
@@ -1105,7 +1119,7 @@ export class Browser {
   /** Tabs in sidebar order for the active space: Essentials, pinned, then normal. */
   visibleTabs(): Tab[] {
     const inSpace = (kind: TabKind): Tab[] => this.tabs.filter((t) => t.kind === kind && t.spaceId === this.activeSpaceId)
-    return [...this.tabs.filter((t) => t.kind === 'essential'), ...inSpace('pinned'), ...inSpace('normal')]
+    return [...inSpace('essential'), ...inSpace('pinned'), ...inSpace('normal')]
   }
 
   private activeWebContents(): WebContents | undefined {
@@ -1167,7 +1181,7 @@ export class Browser {
     if (!tab) return
     const previousId = this.activeTabId
     const sameSplit = !!previousId && this.splitOf(previousId) !== undefined && this.splitOf(previousId) === this.splitOf(id)
-    if (tab.kind !== 'essential' && tab.spaceId && tab.spaceId !== this.activeSpaceId) {
+    if (tab.spaceId && tab.spaceId !== this.activeSpaceId) {
       this.activeSpaceId = tab.spaceId
     }
     if (this.pip.activeTabId === id) this.pip.exit()
@@ -1483,16 +1497,22 @@ export class Browser {
     this.broadcast()
   }
 
+  /** A space's Essentials, in order. */
+  private essentialsOf(spaceId: string | null): Tab[] {
+    return this.tabs.filter((t) => t.kind === 'essential' && t.spaceId === spaceId)
+  }
+
   private addEssential(id: string): void {
     const tab = this.tab(id)
     if (!tab || tab.kind === 'essential') return
-    if (this.tabs.filter((t) => t.kind === 'essential').length >= MAX_ESSENTIALS) {
-      this.toast({ id: 'essentials-full', message: 'Essentials are full', description: `You can keep up to ${MAX_ESSENTIALS}.` })
+    const spaceId = tab.spaceId ?? this.activeSpaceId
+    if (this.essentialsOf(spaceId).length >= MAX_ESSENTIALS) {
+      this.toast({ id: 'essentials-full', message: 'Essentials are full', description: `A space can keep up to ${MAX_ESSENTIALS}.` })
       return
     }
     this.detachPinned(tab.id)
     tab.kind = 'essential'
-    tab.spaceId = null
+    tab.spaceId = spaceId
     tab.pinned ??= { url: tab.url, title: tab.title, favicon: tab.favicon }
     this.moveToEnd(tab)
     this.rehome(tab)
@@ -1503,7 +1523,7 @@ export class Browser {
     const tab = this.tab(id)
     if (!tab || tab.kind !== 'essential') return
     tab.kind = 'normal'
-    tab.spaceId = this.activeSpaceId
+    tab.spaceId ??= this.activeSpaceId
     tab.pinned = null
     this.moveToFront(tab)
     this.rehome(tab)
@@ -1512,7 +1532,7 @@ export class Browser {
 
   private moveTabToSpace(id: string, spaceId: string): void {
     const tab = this.tab(id)
-    if (!tab || tab.kind === 'essential') return
+    if (!tab || !this.canMoveTo(tab, spaceId)) return
     this.setTabSpace(tab, spaceId)
     this.rehome(tab)
     this.activateTab(tab.id)
@@ -1591,6 +1611,13 @@ export class Browser {
   }
 
   /** Moves a tab to another space, keeping it pinned (at the end of that space's pinned area) or normal. */
+  /** An Essential can move to another space only if that space's Essentials have room. */
+  private canMoveTo(tab: Tab, spaceId: string): boolean {
+    if (tab.kind !== 'essential' || this.essentialsOf(spaceId).length < MAX_ESSENTIALS) return true
+    this.toast({ id: 'essentials-full', message: 'Essentials are full there', description: `A space can keep up to ${MAX_ESSENTIALS}.` })
+    return false
+  }
+
   private setTabSpace(tab: Tab, spaceId: string): void {
     if (tab.spaceId === spaceId) return
     tab.spaceId = spaceId
@@ -1615,7 +1642,7 @@ export class Browser {
     const tab = this.tab(id)
     if (!tab) return
     if (target.zone === 'space') {
-      if (tab.kind === 'essential' || tab.spaceId === target.spaceId) return
+      if (tab.spaceId === target.spaceId || !this.canMoveTo(tab, target.spaceId)) return
       // The tab you're on leaves this space, so another of its tabs takes its place.
       if (this.activeTabId === tab.id) {
         const next = this.pickNextTab(tab)
@@ -1635,14 +1662,14 @@ export class Browser {
       return
     }
     if (target.zone === 'essentials') {
-      const essentials = this.tabs.filter((t) => t.kind === 'essential')
-      if (tab.kind !== 'essential' && essentials.length >= MAX_ESSENTIALS) {
-        this.toast({ id: 'essentials-full', message: 'Essentials are full', description: `You can keep up to ${MAX_ESSENTIALS}.` })
+      const essentials = this.essentialsOf(target.spaceId)
+      if (!essentials.includes(tab) && essentials.length >= MAX_ESSENTIALS) {
+        this.toast({ id: 'essentials-full', message: 'Essentials are full', description: `A space can keep up to ${MAX_ESSENTIALS}.` })
         return
       }
       this.detachPinned(id)
       tab.kind = 'essential'
-      tab.spaceId = null
+      tab.spaceId = target.spaceId
       tab.pinned ??= { url: tab.url, title: tab.title, favicon: tab.favicon }
       this.placeInList(tab, essentials, target.index)
       this.rehome(tab)
@@ -1989,7 +2016,7 @@ export class Browser {
 
   /** ⌥1–9: the Nth Essential. */
   selectEssential(n: number): void {
-    const tab = this.tabs.filter((t) => t.kind === 'essential')[n - 1]
+    const tab = this.essentialsOf(this.activeSpaceId)[n - 1]
     if (tab) this.activateTab(tab.id)
   }
 
@@ -2223,7 +2250,8 @@ export class Browser {
    */
   private sessionFor(tab: Tab): Session {
     if (this.kind === 'private') return this.ses
-    const profile = tab.kind === 'essential' || !tab.spaceId ? DEFAULT_PROFILE : (this.space(tab.spaceId)?.profile ?? DEFAULT_PROFILE)
+    // Essentials too use their space's sign-ins.
+    const profile = tab.spaceId ? (this.space(tab.spaceId)?.profile ?? DEFAULT_PROFILE) : DEFAULT_PROFILE
     return this.hub.profileSession(profile)
   }
 
@@ -2444,7 +2472,7 @@ export class Browser {
       }
     }
     const opener = this.tab(openerId)
-    const spaceId = opener?.kind === 'essential' || !opener?.spaceId ? this.activeSpaceId : opener.spaceId
+    const spaceId = opener?.spaceId ?? this.activeSpaceId
     const probe = makeTab({ kind: 'normal', url: details.url, spaceId })
     if (openerContents && this.sessionFor(probe) !== openerContents.session) {
       // A link from an Essential into a space with its own sign-ins: open it in that space's
@@ -2509,7 +2537,7 @@ export class Browser {
     this.activeSpaceId = id
     const space = this.space(id)!
     const remembered = this.tab(space.lastTabId)
-    if (remembered && (remembered.kind === 'essential' || remembered.spaceId === id)) {
+    if (remembered && remembered.spaceId === id) {
       this.activateTab(remembered.id)
     } else {
       this.clearActiveTab()
@@ -3234,7 +3262,7 @@ export class Browser {
   private tabContextMenu(id: string): void {
     const tab = this.tab(id)
     if (!tab) return
-    const essentialsFull = this.tabs.filter((t) => t.kind === 'essential').length >= MAX_ESSENTIALS
+    const essentialsFull = this.essentialsOf(tab.spaceId ?? this.activeSpaceId).length >= MAX_ESSENTIALS
     const changed = !!tab.pinned && stripHash(tab.url) !== stripHash(tab.pinned.url)
     const otherSpaces = this.spaces.filter((s) => s.id !== tab.spaceId)
     const items: MenuItemConstructorOptions[] = []
@@ -3294,7 +3322,7 @@ export class Browser {
     } else if (tab.kind !== 'essential' && active && active.id !== id && active.kind !== 'essential') {
       items.push({ type: 'separator' }, { label: 'Split View with Current Tab', click: () => this.addToSplit(id) })
     }
-    if (tab.kind !== 'essential' && otherSpaces.length > 0) {
+    if (otherSpaces.length > 0) {
       items.push({
         label: 'Move to Space',
         submenu: otherSpaces.map((s) => ({ label: `${s.icon}  ${s.name}`, click: () => this.moveTabToSpace(id, s.id) }))

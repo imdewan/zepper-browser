@@ -86,7 +86,7 @@ export interface Folder {
 export type DropTarget =
   | { zone: 'pinned'; spaceId: string; parentId: string | null; index: number }
   | { zone: 'normal'; spaceId: string; index: number }
-  | { zone: 'essentials'; index: number }
+  | { zone: 'essentials'; spaceId: string; index: number }
   | { zone: 'space'; spaceId: string }
 
 /**

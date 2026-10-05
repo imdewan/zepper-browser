@@ -14,16 +14,19 @@ function columnsFor(count: number): number {
 }
 
 interface EssentialsProps {
+  /** This space's Essentials. */
   tabs: Tab[]
+  spaceId: string
   activeTabId: string | null
 }
 
-export function Essentials({ tabs, activeTabId }: EssentialsProps): React.JSX.Element | null {
+/** A space's Essentials: a grid of its most-used sites, above its pinned and open tabs. */
+export function Essentials({ tabs, spaceId, activeTabId }: EssentialsProps): React.JSX.Element | null {
   const dragging = useDragging()
   const end = useDrop({
-    key: 'essentials-end',
+    key: `essentials-end:${spaceId}`,
     whole: 'after',
-    target: (_position, item) => (item.kind === 'tab' ? { zone: 'essentials', index: tabs.length } : null)
+    target: (_position, item) => (item.kind === 'tab' ? { zone: 'essentials', spaceId, index: tabs.length } : null)
   })
   if (tabs.length === 0) {
     // Nothing yet: while dragging a tab, offer the spot.
@@ -37,19 +40,19 @@ export function Essentials({ tabs, activeTabId }: EssentialsProps): React.JSX.El
     <div {...end.props} className="essentials" style={{ '--cols': columnsFor(tabs.length) } as React.CSSProperties}>
       <AnimatePresence initial={false}>
         {tabs.map((tab, index) => (
-          <Essential key={tab.id} tab={tab} index={index} active={tab.id === activeTabId} />
+          <Essential key={tab.id} tab={tab} index={index} spaceId={spaceId} active={tab.id === activeTabId} />
         ))}
       </AnimatePresence>
     </div>
   )
 }
 
-function Essential({ tab, index, active }: { tab: Tab; index: number; active: boolean }): React.JSX.Element {
+function Essential({ tab, index, spaceId, active }: { tab: Tab; index: number; spaceId: string; active: boolean }): React.JSX.Element {
   const drop = useDrop({
     key: `essential:${tab.id}`,
     horizontal: true,
     target: (position, item) =>
-      item.kind === 'tab' && item.id !== tab.id ? { zone: 'essentials', index: position === 'after' ? index + 1 : index } : null
+      item.kind === 'tab' && item.id !== tab.id ? { zone: 'essentials', spaceId, index: position === 'after' ? index + 1 : index } : null
   })
   return (
     <motion.div

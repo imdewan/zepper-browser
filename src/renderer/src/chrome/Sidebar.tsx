@@ -21,7 +21,6 @@ import {
 } from '../icons'
 import { useSnapshot, useUiEvents } from '../useSnapshot'
 import { cx, hostOf, rectOf } from '../util'
-import { Essentials } from './Essentials'
 import { MediaCard } from './MediaCard'
 import { SpacesViewport } from './Spaces'
 
@@ -36,7 +35,6 @@ interface SidebarProps {
 export function Sidebar({ snapshot, width, onResize, floating = false }: SidebarProps): React.JSX.Element {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const activeTab = snapshot.tabs.find((t) => t.id === snapshot.activeTabId) ?? null
-  const essentials = snapshot.tabs.filter((t) => t.kind === 'essential')
 
   useUiEvents(
     useCallback((event: UiEvent) => {
@@ -49,7 +47,6 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
       <TopRow tab={activeTab} isPrivate={snapshot.kind === 'private'} extensionsRow={snapshot.settings.extensionsRow} />
       <UrlPill tab={activeTab} />
       {snapshot.settings.extensionsRow && snapshot.kind !== 'private' && <ExtensionsRow />}
-      <Essentials tabs={essentials} activeTabId={snapshot.activeTabId} />
       <div className="sidebar-body">
         <SpacesViewport
           snapshot={snapshot}
@@ -233,7 +230,6 @@ function useSnapshotPinnedExtensions(extensions: ReturnType<typeof useExtensions
 function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element | null {
   const list = useRef<HTMLDivElement>(null)
   const [fade, setFade] = useState({ start: false, end: false })
-  const essentials = new Set(snapshot.tabs.filter((t) => t.kind === 'essential').map((t) => t.id))
 
   useEffect(() => {
     const el = list.current
@@ -271,7 +267,6 @@ function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element 
       {snapshot.spaces.map((space) => (
         <SpaceDot
           key={space.id}
-          essentials={essentials}
           space={space}
           active={space.id === snapshot.activeSpaceId}
           playing={snapshot.tabs.some((t) => t.spaceId === space.id && t.audible)}
@@ -285,22 +280,11 @@ function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element 
 }
 
 /** A space in the bottom bar: click to switch, drop a tab or folder on it to move it there. */
-function SpaceDot({
-  space,
-  active,
-  playing,
-  essentials
-}: {
-  space: Snapshot['spaces'][number]
-  active: boolean
-  playing: boolean
-  /** Essentials belong to every space, so they can't be moved to one. */
-  essentials: Set<string>
-}): React.JSX.Element {
+function SpaceDot({ space, active, playing }: { space: Snapshot['spaces'][number]; active: boolean; playing: boolean }): React.JSX.Element {
   const drop = useDrop({
     key: `space-dot:${space.id}`,
     whole: 'into',
-    target: (_position, item) => (active || (item.kind === 'tab' && essentials.has(item.id)) ? null : { zone: 'space', spaceId: space.id })
+    target: () => (active ? null : { zone: 'space', spaceId: space.id })
   })
   return (
     <button
