@@ -16,6 +16,8 @@ export interface DebugTarget {
   evaluate(code: string): Promise<unknown>
   /** Internal state that snapshots don't carry (dialog queue, overlay). */
   state(): unknown
+  /** Moves the mouse over a layer, in that layer's coordinates (hover testing). */
+  move(layer: string, x: number, y: number): void
 }
 
 /**
@@ -29,7 +31,10 @@ export function startDebugServer(target: DebugTarget): void {
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost')
-      if (url.pathname === '/state') {
+      if (url.pathname === '/move') {
+        target.move(url.searchParams.get('layer') ?? 'overlay', Number(url.searchParams.get('x') ?? 0), Number(url.searchParams.get('y') ?? 0))
+        res.end('ok')
+      } else if (url.pathname === '/state') {
         res.setHeader('content-type', 'application/json')
         res.end(JSON.stringify(target.state()))
       } else if (url.pathname === '/snapshot') {

@@ -61,6 +61,10 @@ import { resolveInput, searchUrl, setSearchEngine, stripHash, stripTracking } fr
 
 /** Height reserved for the traffic lights when the sidebar is on the right. */
 const TITLEBAR_STRIP = 34
+/** Where the traffic lights sit in the sidebar's top row. */
+const TRAFFIC_LIGHTS = { x: 17, y: 17 }
+/** The compact-mode peek card's inset from the window edge (overlay.css .peek-card). */
+const PEEK_INSET = 6
 const MIN_SIDEBAR = 170
 const MAX_SIDEBAR = 500
 const DEFAULT_SIDEBAR = 250
@@ -166,6 +170,9 @@ function readNaturalScrolling(): void {
     naturalScrolling = error ? true : stdout.trim() !== '0'
   })
 }
+
+/** Narrowest strip compact mode leaves at the sidebar's edge, so hovering there can reveal it. */
+const MIN_REVEAL_EDGE = 4
 
 /** How long a playing tab must stay out of view before its video floats. */
 const PIP_DELAY_MS = 250
@@ -358,7 +365,7 @@ export class Browser {
       titleBarStyle: 'hidden',
       // Let the first click on an inactive window hit the button under it.
       acceptFirstMouse: true,
-      trafficLightPosition: { x: 17, y: 17 },
+      trafficLightPosition: TRAFFIC_LIGHTS,
       vibrancy: 'sidebar',
       visualEffectState: 'followWindow',
       backgroundColor: '#00000000',
@@ -386,6 +393,8 @@ export class Browser {
     this.win.once('ready-to-show', () => this.win.show())
     this.win.on('resize', () => this.layout())
     this.win.on('focus', () => this.broadcast())
+    // macOS puts the traffic lights back at their default spot after full screen.
+    this.win.on('leave-full-screen', () => this.showTrafficLights(!this.compact || this.peeking))
     this.win.on('blur', () => this.broadcast())
     this.win.on('closed', () => this.destroy())
     const onTheme = (): void => this.broadcast()
@@ -409,7 +418,7 @@ export class Browser {
 
     this.applySettings(this.settings, null)
     this.disposers.push(this.settingsStore.onChange((next, prev) => this.applySettings(next, prev)))
-    this.win.setWindowButtonVisibility(!this.compact)
+    this.showTrafficLights(!this.compact)
     this.layout()
 
     if (this.kind !== 'main') return
@@ -428,6 +437,10 @@ export class Browser {
       handle: (command) => this.handle(command),
       snapshotJson: () => this.snapshot(),
       evaluate: async (code) => this.activeWebContents()?.executeJavaScript(code, true) ?? null,
+      move: (layer, x, y) => {
+        const wc = layer === 'chrome' ? this.win.webContents : layer === 'tab' ? this.activeWebContents() : this.overlay.webContents
+        wc?.sendInputEvent({ type: 'mouseMove', x: Math.round(x), y: Math.round(y) })
+      },
       state: () => ({
         activeTabId: this.activeTabId,
         overlayMode: this.overlayMode,
@@ -756,6 +769,10 @@ export class Browser {
         return this.emit({ type: 'settings.open' }, 'overlay')
       case 'ui.peekSidebar':
         return this.setPeek(command.show)
+      case 'ui.peekLights':
+        // Only for a left-hand peek: with the sidebar on the right, the lights would sit on the page.
+        if (!this.compact || !this.peeking || this.settings.sidebarPosition === 'right') return
+        return this.showTrafficLights(command.visible)
       case 'ui.dismissOverlay':
         return this.emit({ type: 'overlay.dismiss' }, 'overlay')
       case 'split.add':
@@ -1636,7 +1653,7 @@ export class Browser {
   private setOverlayMode(mode: OverlayMode): void {
     if (mode !== 'peek' && this.peeking && mode !== 'hidden') {
       this.peeking = false
-      this.win.setWindowButtonVisibility(!this.compact)
+      this.showTrafficLights(!this.compact)
     }
     this.overlayMode = mode
     this.layoutOverlay()
@@ -1663,9 +1680,22 @@ export class Browser {
     this.peeking = false
     if (this.overlayMode === 'peek') this.setOverlayMode('hidden')
     // The traffic lights live in the sidebar; with the sidebar hidden they'd sit on the page.
-    this.win.setWindowButtonVisibility(!this.compact)
+    this.showTrafficLights(!this.compact)
     this.animateLayout()
     this.broadcast()
+  }
+
+  /**
+   * Shows or hides the traffic lights and puts them in the sidebar's top row: the docked
+   * sidebar, or the peek card (inset from the window edge). macOS forgets custom positions
+   * after visibility and full-screen changes, so the position is applied every time.
+   */
+  private showTrafficLights(visible: boolean): void {
+    if (!this.win || this.win.isDestroyed()) return
+    this.win.setWindowButtonVisibility(visible)
+    if (!visible) return
+    const inset = this.peeking ? PEEK_INSET : 0
+    this.win.setWindowButtonPosition({ x: TRAFFIC_LIGHTS.x + inset, y: TRAFFIC_LIGHTS.y + inset })
   }
 
   /** Compact mode: float the sidebar over the page while the pointer is at the window edge. */
@@ -1674,7 +1704,8 @@ export class Browser {
     if (show === this.peeking) return
     if (show && this.overlayMode === 'full') return
     this.peeking = show
-    this.win.setWindowButtonVisibility(show)
+    // Shown once the card has slid in (ui.peekLights), so they never float over the page alone.
+    if (!show) this.showTrafficLights(false)
     if (show) {
       this.setOverlayMode('peek')
       this.emit({ type: 'peek.show' }, 'overlay')
@@ -2350,7 +2381,9 @@ export class Browser {
     const [width, height] = this.win.getContentSize()
     if (this.htmlFullscreen) return { x: 0, y: 0, width, height }
     const gap = this.settings.contentGap
-    const sidebar = this.compact ? gap : this.sidebarWidth
+    // Compact mode keeps a sliver at the sidebar's edge for the hover reveal, even with no gap.
+    const edge = this.settings.compactRevealOnHover ? Math.max(gap, MIN_REVEAL_EDGE) : gap
+    const sidebar = this.compact ? edge : this.sidebarWidth
     const right = this.settings.sidebarPosition === 'right'
     // With the sidebar on the right, the traffic lights need a strip above the page.
     const top = right && !this.compact ? Math.max(gap, TITLEBAR_STRIP) : gap

@@ -284,6 +284,8 @@ export type Command =
   | { type: 'site.setAdblock'; domain: string; enabled: boolean }
   | { type: 'widevine.respond'; host: string; choice: 'install' | 'later' | 'never' }
   | { type: 'app.relaunch' }
+  /** Compact-mode peek: the card has slid in (show the traffic lights) or started leaving (hide them). */
+  | { type: 'ui.peekLights'; visible: boolean }
   | { type: 'dialog.respond'; id: number; ok: boolean; value: string; suppress: boolean }
   | { type: 'auth.respond'; id: number; username: string | null; password: string }
   | { type: 'media.dismiss'; tabId: string }

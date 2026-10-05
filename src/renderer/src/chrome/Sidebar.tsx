@@ -2,7 +2,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Snapshot, Tab, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
 import { ExtensionButton, useExtensions } from '../extensions'
-import { IconBack, IconForward, IconGlobe, IconLock, IconPlus, IconPrivate, IconPuzzle, IconReload, IconSearch, IconSettings, IconSidebar } from '../icons'
+import {
+  IconBack,
+  IconCheck,
+  IconCopy,
+  IconForward,
+  IconGlobe,
+  IconLock,
+  IconPlus,
+  IconPrivate,
+  IconPuzzle,
+  IconReload,
+  IconSearch,
+  IconSettings,
+  IconSidebar
+} from '../icons'
 import { useUiEvents } from '../useSnapshot'
 import { cx, hostOf, rectOf } from '../util'
 import { Essentials } from './Essentials'
@@ -78,6 +92,15 @@ function TopRow({ tab, isPrivate }: { tab: Tab | null; isPrivate: boolean }): Re
 function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
   const secure = tab?.url.startsWith('https://')
   const pill = useRef<HTMLDivElement>(null)
+  const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef(0)
+  const copy = (e: React.MouseEvent): void => {
+    e.stopPropagation()
+    zepper.send({ type: 'ui.copyUrl' })
+    setCopied(true)
+    window.clearTimeout(copiedTimer.current)
+    copiedTimer.current = window.setTimeout(() => setCopied(false), 1400)
+  }
   const openSiteInfo = (e: React.MouseEvent): void => {
     e.stopPropagation()
     if (pill.current) zepper.send({ type: 'ui.siteInfo', anchor: rectOf(pill.current) })
@@ -95,6 +118,9 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
             {secure ? <IconLock size={12} /> : <IconGlobe size={12} />}
           </button>
           <span className="url-pill-host">{hostOf(tab.url)}</span>
+          <button className={cx('url-pill-copy', copied && 'copied')} title="Copy URL (⇧⌘C)" onClick={copy}>
+            {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
+          </button>
         </>
       ) : (
         <>

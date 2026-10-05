@@ -43,6 +43,12 @@ export const IconSidebar = (p: IconProps): React.JSX.Element => (
     <path d="M9 4v16" />
   </Icon>
 )
+export const IconCopy = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.5" />
+    <path d="M15.5 5.5V5a1.5 1.5 0 0 0-1.5-1.5H5A1.5 1.5 0 0 0 3.5 5v9A1.5 1.5 0 0 0 5 15.5h.5" />
+  </Icon>
+)
 export const IconCheck = (p: IconProps): React.JSX.Element => (
   <Icon {...p}>
     <path d="M5 12.5l4.5 4.5L19 7.5" />

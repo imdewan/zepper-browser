@@ -73,7 +73,8 @@
   top: 0;
   bottom: 0;
   left: 0;
-  width: calc(var(--gap) + 2px);
+  /* Matches the strip main leaves beside the page in compact mode (at least 4px). */
+  width: calc(max(var(--gap), 4px) + 2px);
   -webkit-app-region: no-drag;
 }
 
@@ -228,15 +229,16 @@
   margin-left: 4px;
 }
 
-/* Narrow sidebars drop the least important buttons instead of clipping. */
-@container (max-width: 205px) {
-  .compact-toggle {
+/* Narrow sidebars drop the least important buttons instead of clipping (reload always stays).
+   Measured: everything needs 196px of row; without the compact toggle, 162px. */
+@container (max-width: 195.5px) {
+  .top-row .compact-toggle {
     display: none;
   }
 }
 
-@container (max-width: 170px) {
-  .forward-button {
+@container (max-width: 161.5px) {
+  .top-row .forward-button {
     display: none;
   }
 }
@@ -342,6 +344,37 @@ button.site-button:active {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Copy URL: appears on hover, where the blocked count used to be. */
+.url-pill-copy {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  margin-right: -4px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    background-color 0.1s ease,
+    color 0.1s ease;
+}
+
+.url-pill:hover .url-pill-copy,
+.url-pill-copy.copied {
+  opacity: 1;
+}
+
+.url-pill-copy:hover {
+  background: var(--press);
+  color: var(--text);
+}
+
+.url-pill-copy.copied {
+  color: var(--accent);
 }
 
 /* ---- Essentials ---------------------------------------------------------- */

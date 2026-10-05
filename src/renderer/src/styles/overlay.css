@@ -601,12 +601,26 @@
 
 /* ---- Compact mode peek sidebar ---------------------------------------------------- */
 
+/* Hover area: from the window edge to just past the card. Transparent; it slides with the card. */
+.peek-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: auto;
+}
+
+.peek-zone.right {
+  left: auto;
+  right: 0;
+}
+
 .peek-card {
   position: absolute;
   top: 6px;
   bottom: 6px;
   left: 6px;
-  pointer-events: auto;
+  right: 6px;
   border-radius: 12px;
   overflow: hidden;
   background: var(--panel);
@@ -615,10 +629,6 @@
     0 0 0 0.5px var(--panel-border);
 }
 
-.peek-card.right {
-  left: auto;
-  right: 6px;
-}
 
 .peek-background {
   position: absolute;

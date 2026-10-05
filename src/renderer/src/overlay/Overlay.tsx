@@ -126,7 +126,7 @@ export function Overlay(): React.JSX.Element | null {
           zepper.send({ type: 'ui.peekSidebar', show: false })
         }}
       >
-        {peek === 'shown' && !wantsFull && <Peek key="peek" snapshot={snapshot} onHide={() => setPeek('exiting')} />}
+        {peek === 'shown' && !wantsFull && <Peek key="peek" snapshot={snapshot} onHide={() => setPeek('exiting')} onShow={() => setPeek('shown')} />}
       </AnimatePresence>
       <AnimatePresence onExitComplete={() => setExiting(false)}>
         {settingsOpen && <SettingsPanel key="settings" settings={snapshot.settings} widevine={snapshot.widevine} onClose={closeSettings} />}
