@@ -276,7 +276,6 @@ export type PopoverSpec =
   | { kind: 'permission'; anchor: Rect; prompt: PermissionPrompt }
   | { kind: 'extensions'; anchor: Rect }
   | { kind: 'spaces'; anchor: Rect }
-  | { kind: 'downloads'; anchor: Rect }
   | { kind: 'widevine'; anchor: Rect; host: string; restart: boolean }
   | { kind: 'jsDialog'; anchor: Rect; dialog: JsDialogSpec }
   | { kind: 'auth'; anchor: Rect; auth: AuthSpec }
@@ -386,7 +385,7 @@ export type UiEvent =
   | { type: 'history.open' }
   | { type: 'folder.startRename'; folderId: string }
   | { type: 'about.open'; info: AboutInfo }
-  /** Open the downloads panel from the sidebar's downloads button. */
+  /** Show the downloads window (centred, like History). */
   | { type: 'downloads.open' }
   | { type: 'space.startRename'; spaceId: string }
   | { type: 'space.startCreate' }

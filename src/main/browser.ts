@@ -7,6 +7,7 @@ import {
   clipboard,
   dialog,
   nativeTheme,
+  screen,
   session,
   shell,
   type AuthInfo,
@@ -92,6 +93,8 @@ interface PersistedState {
   adblockEnabled: boolean
   splits?: Split[]
   folders?: Folder[]
+  /** The main window's size and place (its normal, un-maximized bounds). */
+  window?: { bounds: Rectangle; maximized: boolean }
 }
 
 const MAX_SPLIT_PANES = 4
@@ -252,6 +255,7 @@ export class Browser {
   private broadcastTimer: NodeJS.Timeout | null = null
   private blockedTimer: NodeJS.Timeout | null = null
   private restoreTabId: string | null = null
+  private savedWindow: PersistedState['window'] = undefined
   private readonly permissions: SitePermissions
   private prompts: PendingPrompt[] = []
   private promptSeq = 0
@@ -313,6 +317,7 @@ export class Browser {
         .filter((split) => split.tabIds.length >= 2)
       this.sidebarWidth = Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, saved.sidebarWidth ?? DEFAULT_SIDEBAR))
       this.folders = (saved.folders ?? []).filter((f) => this.space(f.spaceId))
+      this.savedWindow = saved.window
       this.compact = saved.compact ?? false
       // Pinned areas from before folders: the pinned tabs in their saved order.
       for (const space of this.spaces) space.pinnedItems ??= this.tabs.filter((t) => t.kind === 'pinned' && t.spaceId === space.id).map((t) => t.id)
@@ -371,11 +376,8 @@ export class Browser {
     const preload = join(__dirname, '../preload/index.js')
     const uiPrefs = { preload, contextIsolation: true, sandbox: true, partition: 'zepper-ui' }
 
-    const offset = this.kind === 'main' ? {} : { x: undefined, y: undefined }
     this.win = new BrowserWindow({
-      ...offset,
-      width: this.kind === 'main' ? 1440 : 1280,
-      height: this.kind === 'main' ? 900 : 820,
+      ...this.initialBounds(),
       minWidth: 640,
       minHeight: 495,
       show: false,
@@ -412,6 +414,12 @@ export class Browser {
       this.layout()
       this.broadcast()
     })
+    // Remember where the window is, like other Mac apps (saved with the rest of the state).
+    this.win.on('moved', () => this.broadcast())
+    this.win.on('close', () => {
+      this.savedWindow = { bounds: this.win.getNormalBounds(), maximized: this.win.isMaximized() }
+    })
+    if (this.savedWindow?.maximized) this.win.maximize()
     this.win.on('focus', () => this.broadcast())
     // macOS puts the traffic lights back at their default spot after full screen.
     this.win.on('leave-full-screen', () => this.showTrafficLights(!this.compact || this.peeking))
@@ -642,6 +650,24 @@ export class Browser {
     this.hub.windowClosed(this)
   }
 
+  /**
+   * Where a new window opens: the main window where you left it (if that's still on a
+   * screen), otherwise a comfortable default; other windows cascade from the default.
+   */
+  private initialBounds(): Partial<Rectangle> {
+    const saved = this.kind === 'main' ? this.savedWindow?.bounds : undefined
+    if (saved && saved.width >= 640 && saved.height >= 495) {
+      const area = screen.getDisplayMatching(saved).workArea
+      const visibleX = Math.min(saved.x + saved.width, area.x + area.width) - Math.max(saved.x, area.x)
+      const visibleY = Math.min(saved.y + saved.height, area.y + area.height) - Math.max(saved.y, area.y)
+      if (visibleX >= 200 && visibleY >= 120) return saved
+    }
+    const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
+    const width = Math.min(this.kind === 'main' ? 1440 : 1280, area.width - 40)
+    const height = Math.min(this.kind === 'main' ? 900 : 820, area.height - 40)
+    return { width, height }
+  }
+
   window(): BrowserWindow {
     return this.win
   }
@@ -814,12 +840,10 @@ export class Browser {
         return this.history.remove(command.url)
       case 'history.clear':
         return this.history.clearSince(command.since)
-      case 'ui.downloads': {
-        // From the sidebar's button; with the sidebar hidden, from the bottom corner.
-        if (!this.compact) return this.emit({ type: 'downloads.open' }, 'chrome')
-        const [, height] = this.win.getContentSize()
-        return this.handle({ type: 'ui.openPopover', popover: { kind: 'downloads', anchor: { x: 12, y: height - 12, width: 0, height: 0 } } })
-      }
+      case 'ui.downloads':
+        this.setOverlayMode('full')
+        this.overlay.webContents.focus()
+        return this.emit({ type: 'downloads.open' }, 'overlay')
       case 'download.show':
         return shell.showItemInFolder(command.path)
       case 'settings.update':
@@ -3156,7 +3180,8 @@ export class Browser {
       compact: this.compact,
       adblockEnabled: this.settings.adblock,
       splits: this.splits,
-      folders: this.folders
+      folders: this.folders,
+      window: this.win && !this.win.isDestroyed() ? { bounds: this.win.getNormalBounds(), maximized: this.win.isMaximized() } : this.savedWindow
     }
   }
 }

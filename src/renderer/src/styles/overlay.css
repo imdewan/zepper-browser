@@ -1797,8 +1797,33 @@
 
 /* ---- Downloads panel ------------------------------------------------------------------ */
 
-.popover-downloads {
-  transform-origin: bottom left;
+.downloads-panel {
+  position: relative;
+  width: min(520px, calc(100vw - 48px));
+  max-height: min(560px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 14px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--panel);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.4),
+    0 0 0 0.5px var(--panel-border);
+}
+
+.downloads-panel .downloads-list,
+.downloads-panel .downloads-empty,
+.downloads-panel .downloads-clear {
+  margin-left: 14px;
+  margin-right: 14px;
+  width: auto;
+}
+
+.downloads-panel .downloads-list {
+  max-height: none;
+  flex: 1;
+  min-height: 0;
 }
 
 .downloads-list {

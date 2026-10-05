@@ -167,17 +167,7 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
   const known = running.filter((d) => d.total > 0)
   const progress = known.length > 0 ? known.reduce((a, d) => a + d.received, 0) / known.reduce((a, d) => a + d.total, 0) : null
 
-  const openDownloads = useCallback(() => {
-    if (downloadsRef.current) zepper.send({ type: 'ui.openPopover', popover: { kind: 'downloads', anchor: rectOf(downloadsRef.current) } })
-  }, [])
-  useUiEvents(
-    useCallback(
-      (event: UiEvent) => {
-        if (event.type === 'downloads.open') openDownloads()
-      },
-      [openDownloads]
-    )
-  )
+  const openDownloads = (): void => zepper.send({ type: 'ui.downloads' })
 
   return (
     <div className="bottom-bar">

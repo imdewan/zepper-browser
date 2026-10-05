@@ -11,6 +11,7 @@ import { Palette } from './Palette'
 import { Peek } from './Peek'
 import { SettingsPanel } from './SettingsPanel'
 import { AboutPanel } from './AboutPanel'
+import { DownloadsPanel } from './DownloadsPanel'
 import { HistoryPanel } from './HistoryPanel'
 import { Popover } from './Popovers'
 import { Toasts } from './Toasts'
@@ -30,6 +31,7 @@ export function Overlay(): React.JSX.Element | null {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [about, setAbout] = useState<AboutInfo | null>(null)
+  const [downloadsOpen, setDownloadsOpen] = useState(false)
   const [creatingSpace, setCreatingSpace] = useState(false)
   const [peek, setPeek] = useState<'shown' | 'exiting' | null>(null)
   const [exiting, setExiting] = useState(false)
@@ -57,6 +59,10 @@ export function Overlay(): React.JSX.Element | null {
         setPalette(null)
         setPopover(null)
         setCreatingSpace(true)
+      } else if (event.type === 'downloads.open') {
+        setPalette(null)
+        setPopover(null)
+        setDownloadsOpen(true)
       } else if (event.type === 'about.open') {
         setPalette(null)
         setPopover(null)
@@ -74,6 +80,7 @@ export function Overlay(): React.JSX.Element | null {
         setSettingsOpen(false)
         setHistoryOpen(false)
         setAbout(null)
+        setDownloadsOpen(false)
         setCreatingSpace(false)
         setPeek((p) => (p ? 'exiting' : p))
         zepper.send({ type: 'ui.closePalette', refocus: true })
@@ -81,7 +88,7 @@ export function Overlay(): React.JSX.Element | null {
     }, [])
   )
 
-  const wantsFull = palette !== null || popover !== null || settingsOpen || historyOpen || about !== null || creatingSpace || exiting
+  const wantsFull = palette !== null || popover !== null || settingsOpen || historyOpen || downloadsOpen || about !== null || creatingSpace || exiting
   const mode: OverlayMode = wantsFull
     ? 'full'
     : peek
@@ -113,6 +120,11 @@ export function Overlay(): React.JSX.Element | null {
   const closeSettings = useCallback(() => {
     setExiting(true)
     setSettingsOpen(false)
+    zepper.send({ type: 'ui.closePalette', refocus: true })
+  }, [])
+  const closeDownloads = useCallback(() => {
+    setExiting(true)
+    setDownloadsOpen(false)
     zepper.send({ type: 'ui.closePalette', refocus: true })
   }, [])
   const closeAbout = useCallback(() => {
@@ -157,6 +169,7 @@ export function Overlay(): React.JSX.Element | null {
         {settingsOpen && <SettingsPanel key="settings" settings={snapshot.settings} widevine={snapshot.widevine} onClose={closeSettings} />}
         {historyOpen && <HistoryPanel key="history" onClose={closeHistory} />}
         {about && <AboutPanel key="about" info={about} onClose={closeAbout} />}
+        {downloadsOpen && <DownloadsPanel key="downloads" downloads={snapshot.downloads} onClose={closeDownloads} />}
         {creatingSpace && <CreateSpaceDialog
             key="create"
             systemDark={systemDark}
