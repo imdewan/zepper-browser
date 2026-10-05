@@ -16,13 +16,14 @@ import { cx, isMac } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
 import { Toggle } from './Toggle'
 
-type Section = 'appearance' | 'tabs' | 'media' | 'search' | 'gestures' | 'privacy' | 'extensions' | 'shortcuts'
+type Section = 'appearance' | 'tabs' | 'media' | 'search' | 'downloads' | 'gestures' | 'privacy' | 'extensions' | 'shortcuts'
 
 const SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: 'appearance', label: 'Appearance', icon: '🎨' },
   { id: 'tabs', label: 'Tabs', icon: '🗂️' },
   { id: 'media', label: 'Media', icon: '🎵' },
   { id: 'search', label: 'Search', icon: '🔎' },
+  { id: 'downloads', label: 'Downloads', icon: '⬇️' },
   { id: 'gestures', label: 'Spaces & Gestures', icon: '👆' },
   { id: 'privacy', label: 'Privacy', icon: '🛡️' },
   { id: 'extensions', label: 'Extensions', icon: '🧩' },
@@ -229,6 +230,16 @@ export function SettingsPanel({ settings, widevine, onClose }: SettingsPanelProp
                 <Row label="After closing a tab, go to the most recently used tab" hint="Otherwise the tab next to it.">
                   <Toggle checked={settings.closeSelectsRecent} onChange={(closeSelectsRecent) => set({ closeSelectsRecent })} />
                 </Row>
+                <Row label="New windows open" hint="⌘N. On this space brings its Essentials and pinned tabs along.">
+                  <Segmented
+                    value={settings.newWindowSpace}
+                    options={[
+                      ['current', 'On this space'],
+                      ['empty', 'Empty']
+                    ]}
+                    onChange={(newWindowSpace) => set({ newWindowSpace })}
+                  />
+                </Row>
               </>
             )}
 
@@ -294,6 +305,36 @@ export function SettingsPanel({ settings, widevine, onClose }: SettingsPanelProp
                 <Row label="Search suggestions" hint="Ask the search engine for suggestions while you type.">
                   <Toggle checked={settings.searchSuggestions} onChange={(searchSuggestions) => set({ searchSuggestions })} />
                 </Row>
+                <Row label="DuckDuckGo bangs" hint="Type !yt cats or !gh zepper to go straight to the site's search, without a detour.">
+                  <Toggle checked={settings.bangs} onChange={(bangs) => set({ bangs })} />
+                </Row>
+                <Row label="Recently visited sites" hint="An empty command bar lists sites you visited lately.">
+                  <Toggle checked={settings.paletteRecents} onChange={(paletteRecents) => set({ paletteRecents })} />
+                </Row>
+              </>
+            )}
+
+            {section === 'downloads' && (
+              <>
+                <h2>Downloads</h2>
+                <Row label="Save downloads to" hint={settings.downloadPath || 'Downloads folder'}>
+                  <button className="panel-button" onClick={() => zepper.send({ type: 'settings.chooseDownloadFolder' })}>
+                    Change…
+                  </button>
+                  {settings.downloadPath && (
+                    <button className="panel-button" onClick={() => set({ downloadPath: '' })}>
+                      Reset
+                    </button>
+                  )}
+                </Row>
+                <Row label="Ask where to save each file">
+                  <Toggle checked={settings.downloadAsk} onChange={(downloadAsk) => set({ downloadAsk })} />
+                </Row>
+                <Row label="Your downloads" hint="Progress, finished files and Show in Finder. ⌥⌘L">
+                  <button className="panel-button" onClick={() => zepper.send({ type: 'ui.downloads' })}>
+                    Show Downloads
+                  </button>
+                </Row>
               </>
             )}
 
@@ -344,6 +385,14 @@ export function SettingsPanel({ settings, widevine, onClose }: SettingsPanelProp
                 )}
                 <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
                   <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
+                </Row>
+                <Row label="Clear history when Zepper quits" hint="Your tabs, spaces and sign-ins stay.">
+                  <Toggle checked={settings.clearHistoryOnQuit} onChange={(clearHistoryOnQuit) => set({ clearHistoryOnQuit })} />
+                </Row>
+                <Row label="Browsing history" hint="Search it, open pages again or delete them. ⌘Y">
+                  <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openHistory' })}>
+                    Show History
+                  </button>
                 </Row>
                 <Row label="Identify as" hint="The browser websites think you’re using. Google sign-in needs Chrome or Edge.">
                   <select value={settings.userAgent} onChange={(e) => set({ userAgent: e.target.value as UserAgentChoice })}>

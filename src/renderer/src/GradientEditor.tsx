@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   HARMONIES,
   THEME_PRESETS,
@@ -23,7 +23,7 @@ interface GradientEditorProps {
 }
 
 /**
- * Arc/Zen-style gradient editor. Drag the large dot around the colour wheel;
+ * Gradient editor. Drag the large dot around the colour wheel;
  * the smaller dots follow according to the colour harmony. Up to three
  * colours, with intensity, grain and a light/dark mode for the space.
  */
@@ -35,9 +35,11 @@ export function GradientEditor({ theme, onChange }: GradientEditorProps): React.
   const pending = useRef<SpaceTheme | null>(null)
 
   // Follow outside changes (another window, undo) when not mid-drag.
-  useEffect(() => {
-    if (!dragging) setLocal(theme)
-  }, [theme, dragging])
+  const [followed, setFollowed] = useState(theme)
+  if (theme !== followed && !dragging) {
+    setFollowed(theme)
+    setLocal(theme)
+  }
 
   const dots = dotsForTheme(local)
   const harmony: Harmony = local.harmony && HARMONIES[local.harmony].offsets.length === dots.length - 1

@@ -63,7 +63,8 @@ function SiteSummary({ info, onShowCertificate, onShowData }: SiteSummaryProps):
   const [blocking, setBlocking] = useState(info.adblockSite)
   const web = /^https?:/.test(info.url)
   const cert = info.certificate
-  const expired = cert ? cert.validTo < Date.now() : false
+  const [openedAt] = useState(() => Date.now())
+  const expired = cert ? cert.validTo < openedAt : false
 
   const setPermission = (permission: string, state: PermissionState): void => {
     setPermissions((list) => list.map((p) => (p.permission === permission ? { ...p, state } : p)))
@@ -231,7 +232,7 @@ function CertificateViewer({ chain, onBack }: { chain: CertificateChain; onBack:
   const [selected, setSelected] = useState(0)
   const [copied, setCopied] = useState<string | null>(null)
   const entry = chain.entries[selected]
-  const now = Date.now()
+  const [now] = useState(() => Date.now())
   const valid = entry.validFrom <= now && now <= entry.validTo
   // Display the hierarchy root-first, like Keychain Access and Chrome.
   const hierarchy = chain.entries.map((e, i) => ({ e, i })).reverse()

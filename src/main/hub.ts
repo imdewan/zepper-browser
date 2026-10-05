@@ -2,8 +2,9 @@ import { BrowserWindow, components, ipcMain, nativeTheme, session, app, webConte
 import { join } from 'node:path'
 import { IPC, type Command, type WidevineStatus } from '@shared/types'
 import type { AdBlock } from './adblock'
-import { Browser, type BrowserKind } from './browser'
+import { Browser, type BrowserKind, type WindowSeed } from './browser'
 import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
+import { bangs } from './bangs'
 import { Downloads } from './downloads'
 import { Extensions } from './extensions'
 import type { History } from './history'
@@ -110,7 +111,10 @@ export class Hub {
   openWindow(kind: BrowserKind, url?: string): Browser {
     const ses = kind === 'private' ? session.fromPartition(`zepper-private-${++this.privateCount}`) : session.defaultSession
     this.attachSession(ses)
-    const browser = new Browser(this, kind, ses)
+    // A new window opens on the space you're in, at your window's size.
+    const from = kind === 'main' ? undefined : kind === 'blank' ? this.focusedNormal() : this.focused()
+    const seed: WindowSeed | undefined = from?.seedForNewWindow(kind === 'blank' && this.services.settings.get().newWindowSpace === 'current')
+    const browser = new Browser(this, kind, ses, seed)
     this.browsers.add(browser)
     if (kind === 'main') this.main = browser
     browser.start(url)
@@ -158,7 +162,7 @@ export class Hub {
   }
 
   /**
-   * A space's profile (its own cookies, logins, storage and cache, like a Zen container),
+   * A space's profile (its own cookies, logins, storage and cache),
    * wired up like every browsing session. 'default' is Electron's default session.
    */
   profileSession(profile: string): Session {
@@ -196,6 +200,7 @@ export class Hub {
   private applySettings(): void {
     const settings = this.services.settings.get()
     this.applyWidevine(settings.widevine)
+    bangs.enabled = settings.bangs
     this.services.adblock.setEnabled(settings.adblock)
     this.services.adblock.setAllowlist(settings.adblockAllowlist)
 

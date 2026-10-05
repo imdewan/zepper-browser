@@ -1,0 +1,6 @@
+out
+dist
+node_modules
+src/main/bangs-top.json
+package-lock.json
+.evs

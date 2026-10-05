@@ -24,8 +24,9 @@ export function PipControls(): React.JSX.Element {
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => setVisible(false), HIDE_AFTER_MS)
   }
+  // Controls start visible, then fade until the pointer comes back.
   useEffect(() => {
-    reveal()
+    timer.current = window.setTimeout(() => setVisible(false), HIDE_AFTER_MS)
     return () => window.clearTimeout(timer.current)
   }, [])
 

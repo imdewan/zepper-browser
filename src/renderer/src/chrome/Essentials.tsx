@@ -6,7 +6,7 @@ import { Equalizer, IconMuted } from '../icons'
 import { cx } from '../util'
 import { dragProps, useDragging, useDrop } from './dnd'
 
-/** Column count that keeps rows balanced, mirroring Zen's grid tweaks (5 → 3+2, 6 → 3+3, 9 → 3×3). */
+/** Column count that keeps rows balanced (5 → 3+2, 6 → 3+3, 9 → 3×3). */
 function columnsFor(count: number): number {
   if (count <= 4) return Math.max(count, 1)
   if (count === 5 || count === 6 || count === 9) return 3

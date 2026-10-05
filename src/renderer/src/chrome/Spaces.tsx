@@ -35,7 +35,7 @@ function renderRows(
 
 /**
  * A space's pinned area as a tree of folders and tabs. Collapsed folders still show the
- * tab you're on, like Zen.
+ * tab you're on.
  */
 function pinnedRows(
   items: string[],
@@ -92,7 +92,7 @@ const QUIET_MS = 140
 /**
  * All spaces laid side by side; the track slides to the active one with a
  * critically damped 250ms spring. Two-finger horizontal swipes drag the track
- * directly and switch once they pass a threshold, like Zen.
+ * directly and switch once they pass a threshold.
  *
  * Each wheel stream is classified once (vertical scrolling is left alone).
  * The sidebar decides the target space itself, so back-to-back swipes build on

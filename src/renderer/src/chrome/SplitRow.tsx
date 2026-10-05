@@ -11,7 +11,7 @@ interface SplitRowProps {
   activeTabId: string | null
 }
 
-/** A split view in the sidebar: its tabs side by side in one row, like Zen. */
+/** A split view in the sidebar: its tabs side by side in one row. */
 export const SplitRow = memo(function SplitRow({ split, tabs, activeTabId }: SplitRowProps): React.JSX.Element {
   const active = !!activeTabId && split.tabIds.includes(activeTabId)
   return (

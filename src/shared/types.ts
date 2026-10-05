@@ -67,7 +67,7 @@ export interface Space {
   /** The pinned area, top level: pinned tab ids and folder ids, in order. */
   pinnedItems: string[]
   /**
-   * Where this space keeps cookies, logins, storage and cache, like a Zen container:
+   * Where this space keeps cookies, logins, storage and cache:
    * 'default' (shared with Essentials and extensions) or its own store. History is shared.
    */
   profile: string
@@ -341,6 +341,7 @@ export type Command =
   | { type: 'site.setAdblock'; domain: string; enabled: boolean }
   | { type: 'widevine.respond'; host: string; choice: 'install' | 'later' | 'never' }
   | { type: 'app.relaunch' }
+  | { type: 'window.open'; kind: 'blank' | 'private' }
   /** Compact-mode peek: the card has slid in (show the traffic lights) or started leaving (hide them). */
   | { type: 'ui.peekLights'; visible: boolean }
   | { type: 'dialog.respond'; id: number; ok: boolean; value: string; suppress: boolean }
@@ -356,6 +357,7 @@ export type Command =
   | { type: 'download.show'; path: string }
   | { type: 'download.action'; id: string; action: 'open' | 'reveal' | 'pause' | 'resume' | 'cancel' | 'remove' }
   | { type: 'downloads.clear' }
+  | { type: 'settings.chooseDownloadFolder' }
   | { type: 'ui.downloads' }
   | { type: 'ui.openHistory' }
   | { type: 'ui.openAbout' }

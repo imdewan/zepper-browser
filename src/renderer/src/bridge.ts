@@ -43,10 +43,10 @@ function createMock(): ZepperApi {
     tabs: [
       tab({ id: 'e1', kind: 'essential', url: 'https://discord.com/app', title: 'Discord', pinned: pin('https://discord.com/app', 'Discord') }),
       tab({ id: 'e2', kind: 'essential', url: 'https://google.com', title: 'Google', pinned: pin('https://google.com', 'Google') }),
-      tab({ id: 'p1', kind: 'pinned', spaceId: 's1', url: 'https://www.reddit.com/r/zen_browser', title: 'Zen Browser', pinned: pin('https://www.reddit.com/r/zen_browser', 'Zen Browser') }),
+      tab({ id: 'p1', kind: 'pinned', spaceId: 's1', url: 'https://news.ycombinator.com', title: 'Hacker News', pinned: pin('https://news.ycombinator.com', 'Hacker News') }),
       tab({ id: 'p2', kind: 'pinned', spaceId: 's1', url: 'https://app.element.io/#/room/build', title: 'Element | build', pinned: pin('https://app.element.io', 'Element') }),
-      tab({ id: 'p3', kind: 'pinned', spaceId: 's1', url: 'https://github.com/zen-browser/desktop', title: 'zen-browser/desktop: Experience tranquillity', loaded: false, pinned: pin('https://github.com/zen-browser/desktop', 'zen-browser/desktop') }),
-      tab({ id: 'n1', kind: 'normal', spaceId: 's1', url: 'https://www.google.com/search?q=zen', title: 'Google' }),
+      tab({ id: 'p3', kind: 'pinned', spaceId: 's1', url: 'https://github.com/electron/electron', title: 'electron/electron: Build cross-platform desktop apps', loaded: false, pinned: pin('https://github.com/electron/electron', 'electron/electron') }),
+      tab({ id: 'n1', kind: 'normal', spaceId: 's1', url: 'https://www.google.com/search?q=spaces', title: 'Google' }),
       tab({
         id: 'n2',
         kind: 'normal',
@@ -157,8 +157,8 @@ function createMock(): ZepperApi {
       const now = Date.now()
       return [
         { url: 'https://news.ycombinator.com/', title: 'Hacker News', visits: 12, lastVisit: now - 5 * 60_000 },
-        { url: 'https://github.com/zen-browser/desktop', title: 'zen-browser/desktop', visits: 3, lastVisit: now - 3 * 3_600_000 },
-        { url: 'https://en.wikipedia.org/wiki/Zen', title: 'Zen - Wikipedia', visits: 1, lastVisit: now - 26 * 3_600_000 }
+        { url: 'https://github.com/electron/electron', title: 'electron/electron', visits: 3, lastVisit: now - 3 * 3_600_000 },
+        { url: 'https://en.wikipedia.org/wiki/Browser', title: 'Web browser - Wikipedia', visits: 1, lastVisit: now - 26 * 3_600_000 }
       ]
     },
     async suggest(text: string): Promise<Suggestion[]> {
@@ -166,7 +166,7 @@ function createMock(): ZepperApi {
       return [
         { kind: 'search', query: text, url: '', fromProvider: false },
         { kind: 'tab', tabId: 'n2', url: 'https://www.youtube.com', title: 'YouTube', favicon: favicon('youtube.com') },
-        { kind: 'history', url: 'https://github.com/zen-browser', title: 'Zen Browser · GitHub' },
+        { kind: 'history', url: 'https://github.com/electron', title: 'Electron · GitHub' },
         { kind: 'search', query: `${text} browser`, url: '', fromProvider: true }
       ]
     }

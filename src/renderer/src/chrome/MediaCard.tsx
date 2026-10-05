@@ -25,7 +25,7 @@ function nowPlaying(snapshot: Snapshot): Tab | undefined {
 }
 
 /**
- * Zen-style "now playing" card at the bottom of the sidebar for media in a
+ * "Now playing" card at the bottom of the sidebar for media in a
  * tab you're not looking at: artwork, title, play/pause, mute, and a click
  * to jump back to the tab.
  */

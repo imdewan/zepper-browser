@@ -65,7 +65,7 @@ export function AboutPanel({ info, onClose }: { info: AboutInfo; onClose: () => 
         <img className="about-logo" src={logo} alt="" draggable={false} />
         <h1 className="about-name">Zepper</h1>
         <div className="about-version">Version {info.version}</div>
-        <p className="about-tagline">A calm browser with Spaces, built-in ad blocking and Zen’s feel, on Chromium.</p>
+        <p className="about-tagline">A calm browser with Spaces and built-in ad blocking, on Chromium.</p>
         <dl className="about-rows">
           {rows.map(([label, value]) => (
             <div key={label} className="about-row">

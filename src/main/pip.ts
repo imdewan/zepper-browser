@@ -97,7 +97,7 @@ export class PipPlayer {
   /** Floats the tab's playing video. Returns false when the main frame has no playing video. */
   async enter(tabId: string, view: WebContentsView): Promise<boolean> {
     const wc = view.webContents
-    let size: { width: number; height: number } | null = null
+    let size: { width: number; height: number } | null
     try {
       size = await wc.executeJavaScript(MARK_SCRIPT)
     } catch {

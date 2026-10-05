@@ -64,7 +64,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
   )
 }
 
-/** Zen's top row: traffic lights, extensions, then back, forward and reload. */
+/** Top row: traffic lights, extensions, then back, forward and reload. */
 function TopRow({ tab, isPrivate, extensionsRow }: { tab: Tab | null; isPrivate: boolean; extensionsRow: boolean }): React.JSX.Element {
   const extensionsRef = useRef<HTMLButtonElement>(null)
   const extensions = useExtensions()
@@ -159,7 +159,7 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
   )
 }
 
-/** Zen's bottom bar: settings, the space switcher, and downloads. */
+/** Bottom bar: settings, the space switcher, and downloads. */
 function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
   const settingsRef = useRef<HTMLButtonElement>(null)
   const downloadsRef = useRef<HTMLButtonElement>(null)

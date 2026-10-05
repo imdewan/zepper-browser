@@ -15,8 +15,8 @@ interface PeekProps {
 }
 
 /**
- * Compact mode's floating sidebar: slides in from the window edge on hover,
- * like Zen. The hover area runs from the window edge to just past the card,
+ * Compact mode's floating sidebar: slides in from the window edge on hover.
+ * The hover area runs from the window edge to just past the card,
  * so resting the pointer against the edge (where you naturally push it) keeps
  * it open; it leaves shortly after the pointer moves away, and coming back
  * while it slides out brings it straight back.

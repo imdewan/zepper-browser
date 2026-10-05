@@ -21,7 +21,7 @@ export interface Settings {
   // Appearance
   colorScheme: 'system' | 'light' | 'dark'
   sidebarPosition: 'left' | 'right'
-  /** Gap around the web content card, in px (Zen's element separation). */
+  /** Gap around the web content card, in px. */
   contentGap: number
   /** Corner radius of the web content card, in px. */
   cornerRadius: number
@@ -49,6 +49,17 @@ export interface Settings {
   // Search
   searchEngine: SearchEngineId
   searchSuggestions: boolean
+  /** DuckDuckGo bangs (!yt, !gh…) go straight to the site. */
+  bangs: boolean
+  /** An empty command bar lists recently visited sites. */
+  paletteRecents: boolean
+  // Windows and downloads
+  /** ⌘N opens on the current space or an empty window. */
+  newWindowSpace: 'current' | 'empty'
+  /** Where downloads are saved ('' means the Downloads folder). */
+  downloadPath: string
+  /** Ask where to save each download. */
+  downloadAsk: boolean
   // Spaces and gestures
   swipeBetweenSpaces: boolean
   swipeToNavigate: boolean
@@ -59,6 +70,8 @@ export interface Settings {
   /** Sites (registrable domains, e.g. youtube.com) where ad blocking is turned off. */
   adblockAllowlist: string[]
   globalPrivacyControl: boolean
+  /** Forget browsing history when Zepper quits. */
+  clearHistoryOnQuit: boolean
   /** Which browser sites think you're using. */
   userAgent: UserAgentChoice
   customUserAgent: string
@@ -94,6 +107,11 @@ export const DEFAULT_SETTINGS: Settings = {
   otherMedia: 'offer',
   searchEngine: 'google',
   searchSuggestions: true,
+  bangs: true,
+  paletteRecents: true,
+  newWindowSpace: 'current',
+  downloadPath: '',
+  downloadAsk: false,
   swipeBetweenSpaces: true,
   swipeToNavigate: true,
   wrapSpaces: true,
@@ -101,6 +119,7 @@ export const DEFAULT_SETTINGS: Settings = {
   adblock: true,
   adblockAllowlist: [],
   globalPrivacyControl: true,
+  clearHistoryOnQuit: false,
   userAgent: 'chrome',
   customUserAgent: '',
   pinnedExtensions: [],

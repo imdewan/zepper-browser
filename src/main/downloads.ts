@@ -45,12 +45,21 @@ export class Downloads {
     this.entries = [entry, ...this.entries].slice(0, MAX_ENTRIES)
     this.active.set(entry.id, item)
     item.on('updated', (_event, state) => {
+      const saved = item.getSavePath()
+      if (saved && saved !== entry.path) {
+        entry.path = saved
+        entry.filename = basename(saved)
+      }
       entry.received = item.getReceivedBytes()
       entry.total = item.getTotalBytes()
       entry.state = state === 'interrupted' ? 'interrupted' : item.isPaused() ? 'paused' : 'progressing'
       this.changed()
     })
     item.once('done', (_event, state) => {
+      if (item.getSavePath()) {
+        entry.path = item.getSavePath()
+        entry.filename = basename(entry.path)
+      }
       entry.received = item.getReceivedBytes()
       entry.state = state
       this.active.delete(entry.id)

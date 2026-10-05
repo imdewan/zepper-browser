@@ -123,7 +123,7 @@ export function dotsForTheme(theme: SpaceTheme): { x: number; y: number }[] {
 }
 
 /**
- * Builds the CSS background for a space, following the shapes Zen uses:
+ * Builds the CSS background for a space, with these shapes:
  * one colour is flat, two are crossing linear gradients, three add radial
  * highlights in the top corners.
  */
@@ -153,7 +153,7 @@ function luminance([r, g, b]: [number, number, number]): number {
  * Whether chrome text should be light on this theme. The dominant colour is
  * blended over the platform material the way it appears on screen, then we
  * pick whichever of white or black text has more contrast, biased slightly
- * toward dark UI like Zen.
+ * toward dark UI.
  */
 export function prefersDarkUi(theme: SpaceTheme, systemDark: boolean): boolean {
   if (theme.scheme === 'dark') return true

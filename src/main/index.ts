@@ -68,6 +68,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.on('before-quit', () => {
+    if (hub?.services.settings.get().clearHistoryOnQuit) history.clearSince(0)
     hub?.persist()
     history.flush()
   })

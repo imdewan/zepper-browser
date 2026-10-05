@@ -469,7 +469,7 @@ button.site-button:active {
   background: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-/* Favicon-coloured glow showing around the active tile's rim (Zen's favicon background). */
+/* Favicon-coloured glow showing around the active tile's rim. */
 .essential-glow {
   position: absolute;
   inset: -50%;

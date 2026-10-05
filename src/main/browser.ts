@@ -233,6 +233,19 @@ function makeSpace(name: string, icon: string, theme: SpaceTheme = DEFAULT_THEME
 /** main: the persistent window; blank: temporary tabs, shared sign-ins; private: throwaway session. */
 export type BrowserKind = 'main' | 'blank' | 'private'
 
+/**
+ * What a new window starts from: the window you were in's current space (its look,
+ * sign-ins, Essentials and pinned tabs, unloaded), its size, and a fresh set of normal tabs.
+ */
+export interface WindowSeed {
+  bounds: Rectangle
+  sidebarWidth: number
+  compact: boolean
+  space?: Space
+  tabs?: Tab[]
+  folders?: Folder[]
+}
+
 export class Browser {
   private win!: BrowserWindow
   private overlay!: WebContentsView
@@ -297,7 +310,8 @@ export class Browser {
   constructor(
     private readonly hub: Hub,
     readonly kind: BrowserKind,
-    private readonly ses: Session
+    private readonly ses: Session,
+    private readonly seed?: WindowSeed
   ) {
     this.stateFile = kind === 'main' ? new JsonFile<PersistedState>('zepper-state.json', 800) : null
     this.permissions = kind === 'private' ? new SitePermissions(false) : hub.services.permissions
@@ -329,6 +343,14 @@ export class Browser {
       this.activeSpaceId = space.id
       this.sidebarWidth = DEFAULT_SIDEBAR
       this.compact = false
+    } else if (kind === 'blank' && seed?.space) {
+      this.spaces = [seed.space]
+      this.tabs = seed.tabs ?? []
+      this.folders = seed.folders ?? []
+      this.activeSpaceId = seed.space.id
+      this.sidebarWidth = seed.sidebarWidth
+      this.compact = seed.compact
+      this.normalizePinned()
     } else if (kind === 'blank') {
       const space = makeSpace('New Window', '🪟', DEFAULT_THEME, DEFAULT_PROFILE)
       this.spaces = [space]
@@ -441,7 +463,6 @@ export class Browser {
       const restore = this.restoreTabId && this.tab(this.restoreTabId)
       if (initialUrl) this.openTab(initialUrl)
       else if (restore) this.activateTab(restore.id)
-      else this.openPalette('new')
     })
 
     this.applySettings(this.settings, null)
@@ -475,7 +496,8 @@ export class Browser {
         showingDialog: this.showingDialog,
         showingPrompt: this.showingPrompt,
         pendingDialogs: this.pendingDialogs.map((d) => ({ id: d.id, tabId: d.tabId, kind: d.popover.kind })),
-        windows: BrowserWindow.getAllWindows().map((w) => ({ title: w.getTitle(), url: w.webContents.getURL().slice(0, 80), visible: w.isVisible() }))
+        windows: BrowserWindow.getAllWindows().map((w) => ({ title: w.getTitle(), url: w.webContents.getURL().slice(0, 80), visible: w.isVisible() })),
+        browsers: [...this.hub.browsers].map((b) => b.debugSummary())
       }),
       drag: (layer, from, to) => {
         const target = layer === 'chrome' ? this.win.webContents : layer === 'tab' ? this.activeWebContents() : this.overlay.webContents
@@ -543,8 +565,12 @@ export class Browser {
   }
 
   handleDownload(item: DownloadItem): void {
-    const path = uniquePath(join(app.getPath('downloads'), item.getFilename()))
-    item.setSavePath(path)
+    const { downloadAsk, downloadPath } = this.settings
+    const folder = downloadPath && existsSync(downloadPath) ? downloadPath : app.getPath('downloads')
+    const path = uniquePath(join(folder, item.getFilename()))
+    // Without a save path, Electron asks where to save it.
+    if (downloadAsk) item.setSaveDialogOptions({ defaultPath: path })
+    else item.setSavePath(path)
     const name = basename(path)
     // The downloads button shows progress; the list lives in the downloads panel.
     this.hub.downloads.track(item, path, this.kind === 'private')
@@ -554,17 +580,20 @@ export class Browser {
     })
     item.once('done', (_e, state) => {
       if (!this.win.isDestroyed()) this.win.setProgressBar(-1)
+      // Where it actually went (you may have picked another place).
+      const saved = item.getSavePath() || path
+      const savedName = basename(saved)
       if (state === 'completed') {
-        app.dock?.downloadFinished(path)
+        app.dock?.downloadFinished(saved)
         this.toast({
           id: `download-${name}`,
           message: 'Download complete',
-          description: name,
-          action: { label: 'Show', command: { type: 'download.show', path } },
+          description: savedName,
+          action: { label: 'Show', command: { type: 'download.show', path: saved } },
           timeout: 5000
         })
       } else if (state === 'interrupted') {
-        this.toast({ id: `download-${name}`, message: 'Download failed', description: name, timeout: 4000 })
+        this.toast({ id: `download-${name}`, message: 'Download failed', description: savedName, timeout: 4000 })
       }
     })
   }
@@ -592,7 +621,7 @@ export class Browser {
 
   suggestions(text: string): Promise<Suggestion[]> {
     // Private windows don't draw on (or show) browsing history.
-    return suggest(text, this.tabs, this.history, this.settings.searchSuggestions, this.kind === 'private')
+    return suggest(text, this.tabs, this.history, this.settings.searchSuggestions, this.kind === 'private', this.settings.paletteRecents)
   }
 
   /** Commands from this window's own UI (chrome, overlay, player controls) only, never from web pages. */
@@ -655,7 +684,7 @@ export class Browser {
    * screen), otherwise a comfortable default; other windows cascade from the default.
    */
   private initialBounds(): Partial<Rectangle> {
-    const saved = this.kind === 'main' ? this.savedWindow?.bounds : undefined
+    const saved = this.kind === 'main' ? this.savedWindow?.bounds : this.seed && { ...this.seed.bounds, x: this.seed.bounds.x + 24, y: this.seed.bounds.y + 24 }
     if (saved && saved.width >= 640 && saved.height >= 495) {
       const area = screen.getDisplayMatching(saved).workArea
       const visibleX = Math.min(saved.x + saved.width, area.x + area.width) - Math.max(saved.x, area.x)
@@ -666,6 +695,41 @@ export class Browser {
     const width = Math.min(this.kind === 'main' ? 1440 : 1280, area.width - 40)
     const height = Math.min(this.kind === 'main' ? 900 : 820, area.height - 40)
     return { width, height }
+  }
+
+  /** Development: what this window holds, for /state. */
+  debugSummary(): unknown {
+    const space = this.space(this.activeSpaceId)
+    const count = (kind: TabKind): number => this.tabs.filter((t) => t.kind === kind).length
+    return {
+      kind: this.kind,
+      bounds: this.win.isDestroyed() ? null : this.win.getBounds(),
+      space: space && `${space.icon} ${space.name} (${space.profile.slice(0, 8)})`,
+      essentials: count('essential'),
+      pinned: count('pinned'),
+      normal: count('normal'),
+      folders: this.folders.map((f) => f.name)
+    }
+  }
+
+  /** What a new window opened from this one starts with (see WindowSeed). */
+  seedForNewWindow(includeSpace: boolean): WindowSeed {
+    const bounds = this.win.getNormalBounds()
+    const base = { bounds, sidebarWidth: this.sidebarWidth, compact: this.compact }
+    const current = this.space(this.activeSpaceId)
+    if (!includeSpace || !current) return base
+    // Fresh ids: the new window's copies are its own (they load when you open them).
+    const ids = new Map<string, string>()
+    const idFor = (id: string): string => ids.get(id) ?? (ids.set(id, randomUUID()), ids.get(id)!)
+    const copyTab = (t: Tab): Tab => makeTab({ ...t, id: idFor(t.id), loaded: false, loading: false, audible: false, media: null })
+    const ours = this.folders.filter((f) => f.spaceId === current.id)
+    const space: Space = { ...current, id: idFor(current.id), lastTabId: null, pinnedItems: current.pinnedItems.map(idFor) }
+    const folders = ours.map((f) => ({ ...f, id: idFor(f.id), spaceId: space.id, items: f.items.map(idFor) }))
+    const tabs = [
+      ...this.tabs.filter((t) => t.kind === 'essential').map(copyTab),
+      ...this.tabs.filter((t) => t.kind === 'pinned' && t.spaceId === current.id).map((t) => ({ ...copyTab(t), spaceId: space.id }))
+    ]
+    return { ...base, space, tabs, folders }
   }
 
   window(): BrowserWindow {
@@ -781,6 +845,8 @@ export class Browser {
         return this.respondToWidevine(command.choice)
       case 'app.relaunch':
         return this.hub.relaunch()
+      case 'window.open':
+        return void this.hub.openWindow(command.kind)
       case 'site.setAdblock':
         return this.setSiteAdblock(command.domain, command.enabled)
       case 'media.seek': {
@@ -817,6 +883,8 @@ export class Browser {
       case 'find.stop':
         this.activeWebContents()?.stopFindInPage('clearSelection')
         return
+      case 'settings.chooseDownloadFolder':
+        return void this.chooseDownloadFolder()
       case 'download.action':
         return void this.hub.downloads[command.action](command.id)
       case 'downloads.clear':
@@ -964,7 +1032,7 @@ export class Browser {
       else this.activateTab(tab.id)
       return
     }
-    // Like Zen, navigating a pinned tab or Essential away from its site opens a new tab instead.
+    // Navigating a pinned tab or Essential away from its site opens a new tab instead.
     const leavesPin =
       current?.pinned && new URL(url).host !== safeHost(current.pinned.url) && where === 'current'
     if (where === 'new' || !current || leavesPin) {
@@ -1740,12 +1808,12 @@ export class Browser {
   }
 
   /**
-   * The session a tab's page lives in: its space's profile (Essentials use the default one,
-   * as in Zen). Private windows have their own throwaway session; other windows share the
+   * The session a tab's page lives in: its space's profile (Essentials use the default one).
+   * Private windows have their own throwaway session; other windows share the
    * default profile.
    */
   private sessionFor(tab: Tab): Session {
-    if (this.kind !== 'main') return this.ses
+    if (this.kind === 'private') return this.ses
     const profile = tab.kind === 'essential' || !tab.spaceId ? DEFAULT_PROFILE : (this.space(tab.spaceId)?.profile ?? DEFAULT_PROFILE)
     return this.hub.profileSession(profile)
   }
@@ -1914,7 +1982,7 @@ export class Browser {
   private async refreshMedia(tabId: string, wc: WebContents): Promise<void> {
     const tab = this.tab(tabId)
     if (!tab) return
-    let meta: { title: string; artist: string; artwork: string | null } | null = null
+    let meta: { title: string; artist: string; artwork: string | null } | null
     try {
       meta = await wc.executeJavaScript(MEDIA_METADATA_SCRIPT, true)
     } catch {
@@ -2324,7 +2392,7 @@ export class Browser {
   private siteInfo(): SiteInfo | null {
     const tab = this.tab(this.activeTabId)
     if (!tab) return null
-    let parsed: URL | null = null
+    let parsed: URL | null
     try {
       parsed = new URL(tab.url)
     } catch {
@@ -2746,6 +2814,15 @@ export class Browser {
     ]
   }
 
+  private async chooseDownloadFolder(): Promise<void> {
+    const { canceled, filePaths } = await dialog.showOpenDialog(this.win, {
+      title: 'Save downloads to',
+      defaultPath: this.settings.downloadPath || app.getPath('downloads'),
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (!canceled && filePaths[0]) this.settingsStore.update({ downloadPath: filePaths[0] })
+  }
+
   private async removeExtension(id: string): Promise<void> {
     const info = this.extensions?.list().find((e) => e.id === id)
     if (!info) return
@@ -2827,6 +2904,9 @@ export class Browser {
           click: () => this.settingsStore.update({ adblock: !this.settings.adblock })
         },
         { label: 'Compact Mode', type: 'checkbox', checked: this.compact, accelerator: 'CmdOrCtrl+S', click: () => this.toggleCompact() },
+        { type: 'separator' },
+        { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => this.handle({ type: 'window.open', kind: 'blank' }) },
+        { label: 'New Private Window', accelerator: 'Shift+CmdOrCtrl+N', click: () => this.handle({ type: 'window.open', kind: 'private' }) },
         { type: 'separator' },
         { label: 'History', accelerator: 'CmdOrCtrl+Y', click: () => this.handle({ type: 'ui.openHistory' }) },
         { label: 'Downloads', accelerator: 'Alt+CmdOrCtrl+L', click: () => this.handle({ type: 'ui.downloads' }) },
@@ -3192,7 +3272,7 @@ function evenSizes(n: number): number[] {
 
 /**
  * Pane rectangles for a split. Horizontal = side by side, vertical = stacked,
- * grid = Zen's 3 (A over B | C) and 4 (2×2) layouts.
+ * grid = 3 (A over B | C) and 4 (2×2) layouts.
  */
 function splitRects(split: Split, b: Rectangle, gap: number): Rectangle[] {
   const n = split.tabIds.length

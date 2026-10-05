@@ -6,7 +6,7 @@ import { Favicon } from '../Favicon'
 import { IconArrowRight, IconClock, IconGlobe, IconSearch } from '../icons'
 import { cx, hostOf } from '../util'
 
-/** Typed text survives closing the palette for 45 seconds, like Zen. */
+/** Typed text survives closing the palette for 45 seconds. */
 const KEEP_TYPED_MS = 45_000
 let lastTyped = { text: '', at: 0 }
 
@@ -20,8 +20,7 @@ interface PaletteProps {
 }
 
 export function Palette({ mode, currentUrl, onClose, insetLeft = 0, insetRight = 0 }: PaletteProps): React.JSX.Element {
-  const initial = currentUrl ?? (Date.now() - lastTyped.at < KEEP_TYPED_MS ? lastTyped.text : '')
-  const [text, setText] = useState(initial)
+  const [text, setText] = useState(() => currentUrl ?? (Date.now() - lastTyped.at < KEEP_TYPED_MS ? lastTyped.text : ''))
   const [results, setResults] = useState<Suggestion[]>([])
   const [selected, setSelected] = useState(0)
   const input = useRef<HTMLInputElement>(null)

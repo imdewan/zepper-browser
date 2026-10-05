@@ -16,7 +16,7 @@ interface FolderRowProps {
 }
 
 /**
- * A folder in a space's pinned area, like Zen's: click to collapse, double-click to
+ * A folder in a space's pinned area: click to collapse, double-click to
  * rename, drag to move, and drop tabs or folders onto its middle to put them inside.
  */
 export const FolderRow = memo(function FolderRow({ folder, place, count }: FolderRowProps): React.JSX.Element {

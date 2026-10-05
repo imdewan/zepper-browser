@@ -21,7 +21,7 @@ export function Toasts({ toasts, onDismiss }: ToastsProps): React.JSX.Element {
   )
 }
 
-/** A Zen toast: eases in, auto-hides (2s unless it says otherwise), pauses while hovered, and can be closed. */
+/** A toast: eases in, auto-hides (2s unless it says otherwise), pauses while hovered, and can be closed. */
 function Toast({ toast, onDismiss }: { toast: ToastSpec; onDismiss: () => void }): React.JSX.Element {
   const timer = useRef(0)
   const start = (): void => {

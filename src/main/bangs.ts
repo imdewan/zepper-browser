@@ -38,6 +38,8 @@ export interface ResolvedBang {
 }
 
 class Bangs {
+  /** Settings → Search → DuckDuckGo bangs. */
+  enabled = true
   private byTrigger = new Map<string, Bang>()
   /** Most used first, for completions. */
   private ranked: Bang[] = []
@@ -71,6 +73,7 @@ class Bangs {
 
   /** Where a query with a known bang goes; null when it has none. */
   resolve(input: string): ResolvedBang | null {
+    if (!this.enabled) return null
     const match = BANG.exec(input)
     const bang = match && this.byTrigger.get(match[1].toLowerCase())
     if (!match || !bang) return null
@@ -83,6 +86,7 @@ class Bangs {
 
   /** Bangs matching the one being typed at the end of the input, most used first. */
   complete(input: string, limit = 4): Bang[] {
+    if (!this.enabled) return []
     const match = PARTIAL.exec(input)
     if (!match) return []
     const prefix = match[1].toLowerCase()

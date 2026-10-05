@@ -33,7 +33,8 @@ export async function suggest(
   tabs: Tab[],
   history: History,
   useProvider = true,
-  skipHistory = false
+  skipHistory = false,
+  recents = true
 ): Promise<Suggestion[]> {
   const query = text.trim()
   if (!query) {
@@ -43,7 +44,7 @@ export async function suggest(
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
       .slice(0, 6)
       .map((t) => ({ kind: 'tab', tabId: t.id, url: t.url, title: t.title, favicon: t.favicon }))
-    if (skipHistory || recent.length >= 6) return recent
+    if (skipHistory || !recents || recent.length >= 6) return recent
     const open = new Set(tabs.map((t) => t.url))
     for (const visit of history.list('', 40)) {
       if (recent.length >= 6) break

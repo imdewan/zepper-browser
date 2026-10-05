@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { IconGlobe } from './icons'
 import { cx } from './util'
 
@@ -10,8 +10,9 @@ interface FaviconProps {
 
 /** A favicon that falls back to a neutral globe when missing or broken. */
 export function Favicon({ src, size = 16, className }: FaviconProps): React.JSX.Element {
-  const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [src])
+  // Which image failed to load; a new src gets a fresh try.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const failed = failedSrc !== null && failedSrc === src
   if (!src || failed) {
     return (
       <span className={cx('favicon', 'favicon-fallback', className)} style={{ width: size, height: size }}>
@@ -26,7 +27,7 @@ export function Favicon({ src, size = 16, className }: FaviconProps): React.JSX.
       width={size}
       height={size}
       draggable={false}
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(src ?? null)}
       alt=""
     />
   )
