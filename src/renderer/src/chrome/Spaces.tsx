@@ -192,6 +192,11 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
       }
 
       if (g.mode === 'idle') {
+        // Swiping over the space emojis scrolls them (when they overflow); it never switches spaces.
+        if (e.target instanceof Element && e.target.closest('.space-switcher')) {
+          g.mode = 'ignore'
+          return
+        }
         g.mode = 'pending'
         g.dx = g.dy = 0
       }
