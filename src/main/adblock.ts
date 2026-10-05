@@ -1,5 +1,14 @@
 import { ElectronBlocker } from '@ghostery/adblocker-electron'
-import { app, ipcMain, type Session } from 'electron'
+import {
+  app,
+  ipcMain,
+  type CallbackResponse,
+  type HeadersReceivedResponse,
+  type OnBeforeRequestListenerDetails,
+  type OnHeadersReceivedListenerDetails,
+  type Session,
+  type WebFrameMain
+} from 'electron'
 import { readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse } from 'tldts-experimental'
@@ -12,6 +21,25 @@ export const COSMETICS_DOM_CHANNEL = 'zepper:cosmetics-dom'
 export interface CosmeticsResponse {
   styles: string
   scripts: string[]
+}
+
+/** The top-level page a request or frame belongs to; ad blocking is decided per site. */
+function pageUrlOf(details: OnBeforeRequestListenerDetails | OnHeadersReceivedListenerDetails): string | undefined {
+  if (details.resourceType === 'mainFrame') return details.url
+  try {
+    return details.frame?.top?.url || details.webContents?.getURL()
+  } catch {
+    // The frame went away mid-request.
+    return undefined
+  }
+}
+
+function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): string {
+  try {
+    return frame?.top?.url || fallback
+  } catch {
+    return fallback
+  }
 }
 
 /**
@@ -29,14 +57,16 @@ export class AdBlock {
   private blocker: ElectronBlocker | null = null
   private readonly cachePath = join(app.getPath('userData'), 'adblock-engine.bin')
   private enabled = true
+  /** Registrable domains where blocking is off. */
+  private allowlist = new Set<string>()
   private readonly sessions = new Set<Session>()
 
   constructor(private readonly onBlocked: (webContentsId: number) => void) {
     ipcMain.on(COSMETICS_CHANNEL, (event, url: string) => {
-      event.returnValue = this.cosmetics(url)
+      event.returnValue = this.blocksOn(topUrlOf(event.senderFrame, url)) ? this.cosmetics(url) : { styles: '', scripts: [] }
     })
-    ipcMain.handle(COSMETICS_DOM_CHANNEL, (_event, payload: { url: string; classes: string[]; ids: string[]; hrefs: string[] }) =>
-      this.domCosmetics(payload)
+    ipcMain.handle(COSMETICS_DOM_CHANNEL, (event, payload: { url: string; classes: string[]; ids: string[]; hrefs: string[] }) =>
+      this.blocksOn(topUrlOf(event.senderFrame, payload.url)) ? this.domCosmetics(payload) : { styles: '', scripts: [] }
     )
   }
 
@@ -49,7 +79,6 @@ export class AdBlock {
         write: (path, buffer) => writeFile(path, buffer)
       })
       this.blocker.on('request-blocked', (request) => this.onBlocked(request.tabId))
-      this.applyNetworkBlocking()
     } catch (error) {
       console.error('[adblock] failed to load filter lists', error)
     }
@@ -61,26 +90,44 @@ export class AdBlock {
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled
-    this.applyNetworkBlocking()
+  }
+
+  /** Sites (registrable domains) where blocking is off. */
+  setAllowlist(domains: string[]): void {
+    this.allowlist = new Set(domains)
+  }
+
+  /** Whether blocking applies to a page, by its top-level URL. */
+  blocksOn(pageUrl: string | undefined): boolean {
+    if (!this.enabled) return false
+    if (!pageUrl || this.allowlist.size === 0) return true
+    const { domain, hostname } = parse(pageUrl)
+    const site = domain || hostname
+    return !site || !this.allowlist.has(site)
   }
 
   /** Blocks in another session too (e.g. a private window's). */
   attachSession(session: Session): void {
+    if (this.sessions.has(session)) return
     this.sessions.add(session)
-    this.applyNetworkBlocking()
+    session.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, this.onBeforeRequest)
+    session.webRequest.onHeadersReceived({ urls: ['<all_urls>'] }, this.onHeadersReceived)
   }
 
-  private applyNetworkBlocking(): void {
-    const blocker = this.blocker
-    for (const session of this.sessions) {
-      if (blocker && this.enabled) {
-        session.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, blocker.onBeforeRequest)
-        session.webRequest.onHeadersReceived({ urls: ['<all_urls>'] }, blocker.onHeadersReceived)
-      } else {
-        session.webRequest.onBeforeRequest(null)
-        session.webRequest.onHeadersReceived(null)
-      }
-    }
+  private readonly onBeforeRequest = (
+    details: OnBeforeRequestListenerDetails,
+    callback: (response: CallbackResponse) => void
+  ): void => {
+    if (!this.blocker || !this.blocksOn(pageUrlOf(details))) return callback({})
+    this.blocker.onBeforeRequest(details, callback)
+  }
+
+  private readonly onHeadersReceived = (
+    details: OnHeadersReceivedListenerDetails,
+    callback: (response: HeadersReceivedResponse) => void
+  ): void => {
+    if (!this.blocker || !this.blocksOn(pageUrlOf(details))) return callback({})
+    this.blocker.onHeadersReceived(details, callback)
   }
 
   /** Hostname-specific hiding rules, generic base rules and scriptlets for a page. */

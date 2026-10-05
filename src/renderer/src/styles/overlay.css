@@ -453,15 +453,15 @@
 
 .site-row-label {
   flex: 1;
+  min-width: 0;
 }
 
-.site-count {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--element);
+.site-row-sub {
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--text-3);
 }
+
 
 .permission-row {
   display: flex;
@@ -746,6 +746,64 @@
   color: var(--text);
   font: inherit;
   outline: none;
+}
+
+/* Rows whose control sits under the label (text fields, lists). */
+.settings-row-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.settings-input {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 0;
+  background: var(--element);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  outline: none;
+}
+
+.settings-input:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 50%);
+}
+
+.site-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.site-chip {
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  background: var(--element);
+}
+
+.site-chip button {
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease;
+}
+
+.site-chip button:hover {
+  background: var(--press);
+  color: var(--text);
 }
 
 .toggle {
@@ -1364,4 +1422,101 @@
 .site-data-footer .panel-button.subtle {
   margin-top: 0;
   margin-right: auto;
+}
+
+/* ---- Extensions panel ---------------------------------------------------------- */
+
+.popover-extensions {
+  transform-origin: bottom left;
+}
+
+.extensions-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.extension-row {
+  height: 36px;
+  padding: 0 4px 0 8px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  cursor: default;
+  transition: background-color 0.1s ease;
+}
+
+.extension-row:hover {
+  background: var(--element);
+}
+
+.extension-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  object-fit: contain;
+}
+
+.extension-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.extension-pin {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  opacity: 0;
+  transition:
+    opacity 0.1s ease,
+    background-color 0.1s ease,
+    color 0.1s ease;
+}
+
+.extension-row:hover .extension-pin,
+.extension-pin.pinned {
+  opacity: 1;
+}
+
+.extension-pin.pinned {
+  color: var(--accent);
+}
+
+.extension-pin:hover {
+  background: var(--press);
+  color: var(--text);
+}
+
+.extension-pin.pinned svg {
+  fill: currentColor;
+}
+
+.extensions-empty {
+  margin: 4px 8px 10px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.extensions-store {
+  width: 100%;
+  margin-top: 6px;
+  padding: 9px 8px 3px;
+  border-top: 1px solid var(--separator);
+  text-align: left;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.extensions-store:hover {
+  text-decoration: underline;
 }

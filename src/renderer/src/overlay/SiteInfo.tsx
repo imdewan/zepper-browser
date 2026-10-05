@@ -4,6 +4,7 @@ import type { CertificateChain, PermissionPrompt, PermissionState, SiteInfo } fr
 import { zepper } from '../bridge'
 import { IconArrowRight, IconBack, IconCookie, IconGlobe, IconLock, IconShield, IconTrash } from '../icons'
 import { cx } from '../util'
+import { Toggle } from './Toggle'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 
@@ -59,6 +60,8 @@ interface SiteSummaryProps {
 
 function SiteSummary({ info, onShowCertificate, onShowData }: SiteSummaryProps): React.JSX.Element {
   const [permissions, setPermissions] = useState(info.permissions)
+  const [blocking, setBlocking] = useState(info.adblockSite)
+  const web = /^https?:/.test(info.url)
   const cert = info.certificate
   const expired = cert ? cert.validTo < Date.now() : false
 
@@ -99,11 +102,30 @@ function SiteSummary({ info, onShowCertificate, onShowData }: SiteSummaryProps):
         </section>
       )}
 
-      <section className="site-section site-row">
-        <IconShield size={15} className="site-row-icon" />
-        <span className="site-row-label">{info.adblockEnabled ? 'Ads & trackers blocked' : 'Ad blocking is off'}</span>
-        {info.adblockEnabled && <span className="site-count">{info.blockedCount}</span>}
-      </section>
+      {web && (
+        <section className="site-section site-row">
+          <IconShield size={15} className="site-row-icon" />
+          <div className="site-row-label">
+            <div>Block ads &amp; trackers</div>
+            <div className="site-row-sub">
+              {!info.adblockEnabled
+                ? 'Turned off for all sites in Settings'
+                : blocking
+                  ? `${info.blockedCount} blocked on this page`
+                  : `Off on ${info.siteDomain}`}
+            </div>
+          </div>
+          {info.adblockEnabled && (
+            <Toggle
+              checked={blocking}
+              onChange={(enabled) => {
+                setBlocking(enabled)
+                zepper.send({ type: 'site.setAdblock', domain: info.siteDomain, enabled })
+              }}
+            />
+          )}
+        </section>
+      )}
 
       {permissions.length > 0 && (
         <section className="site-section">

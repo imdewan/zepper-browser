@@ -18,6 +18,7 @@ import {
   type WebContents,
   type WindowOpenHandlerResponse
 } from 'electron'
+import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
@@ -144,6 +145,23 @@ const EXIT_AUTO_PIP_SCRIPT = `(() => {
   return true
 })()`
 
+/** Finger travel (trackpad px, momentum excluded) that navigates back or forward. */
+const SWIPE_DISTANCE = 170
+/** A quick flick navigates with less travel. */
+const FLICK_DISTANCE = 70
+const FLICK_SPEED = 24
+
+/** macOS natural scrolling (on unless explicitly turned off); re-read at most every 30s. */
+let naturalScrolling = true
+let naturalScrollingReadAt = 0
+function readNaturalScrolling(): void {
+  if (process.platform !== 'darwin' || Date.now() - naturalScrollingReadAt < 30_000) return
+  naturalScrollingReadAt = Date.now()
+  execFile('defaults', ['read', '-g', 'com.apple.swipescrolldirection'], (error, stdout) => {
+    naturalScrolling = error ? true : stdout.trim() !== '0'
+  })
+}
+
 /** How long a playing tab must stay out of view before its video floats. */
 const PIP_DELAY_MS = 250
 
@@ -221,6 +239,11 @@ export class Browser {
   private peeking = false
   /** Horizontal offset applied to the active view while a swipe gesture is in progress. */
   private swipeOffset = 0
+  private swipeAnimation: NodeJS.Timeout | null = null
+  /** The tab whose swipe is in progress. */
+  private swipeTabId: string | null = null
+  /** After a swipe navigates, its momentum tail is ignored until the trackpad goes quiet. */
+  private swipeCooldown: { tabId: string; until: number } | null = null
   private layoutAnimation: NodeJS.Timeout | null = null
   private pip!: PipPlayer
   private readonly disposers: (() => void)[] = []
@@ -303,8 +326,9 @@ export class Browser {
   // ---------------------------------------------------------------------------
   // Window lifecycle
 
-  start(): void {
+  start(initialUrl?: string): void {
     const { rendererUrl, rendererDir } = this.hub.services
+    readNaturalScrolling()
     const preload = join(__dirname, '../preload/index.js')
     const uiPrefs = { preload, contextIsolation: true, sandbox: true, partition: 'zepper-ui' }
 
@@ -363,7 +387,8 @@ export class Browser {
 
     this.overlay.webContents.once('did-finish-load', () => {
       const restore = this.restoreTabId && this.tab(this.restoreTabId)
-      if (restore) this.activateTab(restore.id)
+      if (initialUrl) this.openTab(initialUrl)
+      else if (restore) this.activateTab(restore.id)
       else this.openPalette('new')
     })
 
@@ -651,6 +676,8 @@ export class Browser {
         return void clipboard.writeText(command.text)
       case 'media.toggle':
         return void this.views.get(command.tabId)?.webContents.executeJavaScript(MEDIA_TOGGLE_SCRIPT, true).catch(() => {})
+      case 'site.setAdblock':
+        return this.setSiteAdblock(command.domain, command.enabled)
       case 'media.seek': {
         const wc = this.views.get(command.tabId)?.webContents
         const seconds = Math.max(-600, Math.min(600, Number(command.seconds) || 0))
@@ -825,6 +852,10 @@ export class Browser {
       this.activeSpaceId = tab.spaceId
     }
     if (this.pip.activeTabId === id) this.pip.exit()
+    if (this.swipeOffset !== 0) {
+      this.stopSwipeAnimation()
+      this.swipeOffset = 0
+    }
     this.activeTabId = id
     const view = this.ensureView(tab)
     this.syncAttachedViews()
@@ -1621,38 +1652,83 @@ export class Browser {
    * with the fingers to reveal a back/forward arrow, and navigates once the
    * swipe passes the threshold.
    */
-  onPageSwipe(webContentsId: number, phase: 'update' | 'end', dx: number): void {
+  onPageSwipe(webContentsId: number, phase: 'update' | 'end', rawDx: number, peak: number): void {
     const tabId = this.tabByWebContents.get(webContentsId)
-    if (!this.settings.swipeToNavigate || tabId !== this.activeTabId || this.htmlFullscreen) return
-    const wc = this.activeWebContents()
+    if (!tabId || !this.settings.swipeToNavigate || this.htmlFullscreen || !this.attached.has(tabId)) return
+    const now = Date.now()
+    // The momentum tail of a swipe that just navigated lands on the next page looking like a new
+    // swipe. Ignore it until the trackpad goes quiet.
+    if (this.swipeCooldown?.tabId === tabId && now < this.swipeCooldown.until) {
+      this.swipeCooldown.until = now + 250
+      return
+    }
+    const wc = this.views.get(tabId)?.webContents
     if (!wc) return
+    if (this.swipeTabId !== tabId) {
+      this.swipeTabId = tabId
+      readNaturalScrolling()
+    }
+    // Swipe right is back either way; with natural scrolling off the wheel deltas are mirrored.
+    const dx = naturalScrolling ? rawDx : -rawDx
     const direction = dx < 0 ? 'back' : 'forward'
     const allowed = direction === 'back' ? wc.navigationHistory.canGoBack() : wc.navigationHistory.canGoForward()
-    const progress = Math.min(1, Math.abs(dx) / 240)
+    const progress = Math.min(1, Math.abs(dx) / SWIPE_DISTANCE)
+    // The page itself slides only when it's alone on screen (not in split view).
+    const slides = this.attached.size === 1
+
     if (phase === 'update') {
-      const travel = allowed ? 64 * (1 - Math.pow(1 - progress, 3)) : 10 * progress
-      this.swipeOffset = direction === 'back' ? travel : -travel
+      this.stopSwipeAnimation()
+      const travel = allowed ? 72 * (1 - Math.pow(1 - progress, 3)) : 12 * progress
+      this.swipeOffset = slides ? (direction === 'back' ? travel : -travel) : 0
       this.layout()
       this.emit({ type: 'swipe.progress', direction, progress, allowed }, 'chrome')
       return
     }
-    if (allowed && progress >= 1) {
-      if (direction === 'back') wc.navigationHistory.goBack()
-      else wc.navigationHistory.goForward()
-    }
+
+    this.swipeTabId = null
     this.emit({ type: 'swipe.progress', direction, progress: 0, allowed }, 'chrome')
-    this.animateSwipeBack()
+    const flick = peak >= FLICK_SPEED && Math.abs(dx) >= FLICK_DISTANCE
+    if (!allowed || (progress < 1 && !flick)) return this.animateSwipeOffset(0, 220)
+
+    this.swipeCooldown = { tabId, until: now + 400 }
+    // Slide a little further, swap pages while the old one is out of the way, then settle back.
+    if (slides) this.animateSwipeOffset(direction === 'back' ? 110 : -110, 110)
+    let settled = false
+    const settle = (): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(fallback)
+      wc.removeListener('did-navigate', settle)
+      wc.removeListener('did-navigate-in-page', onInPage)
+      wc.removeListener('did-fail-load', settle)
+      if (!wc.isDestroyed()) this.animateSwipeOffset(0, 240)
+    }
+    const onInPage = (_event: unknown, _url: string, isMainFrame: boolean): void => {
+      if (isMainFrame) settle()
+    }
+    const fallback = setTimeout(settle, 650)
+    wc.on('did-navigate', settle)
+    wc.on('did-navigate-in-page', onInPage)
+    wc.on('did-fail-load', settle)
+    if (direction === 'back') wc.navigationHistory.goBack()
+    else wc.navigationHistory.goForward()
   }
 
-  private animateSwipeBack(): void {
+  private stopSwipeAnimation(): void {
+    if (this.swipeAnimation) clearTimeout(this.swipeAnimation)
+    this.swipeAnimation = null
+  }
+
+  /** Eases the swipe offset of the active page to a value. */
+  private animateSwipeOffset(to: number, duration: number): void {
+    this.stopSwipeAnimation()
     const from = this.swipeOffset
     const start = Date.now()
-    const duration = 220
     const tick = (): void => {
       const t = Math.min(1, (Date.now() - start) / duration)
-      this.swipeOffset = from * Math.pow(1 - t, 3)
+      this.swipeOffset = from + (to - from) * (1 - Math.pow(1 - t, 3))
       this.layout()
-      if (t < 1) setTimeout(tick, 8)
+      this.swipeAnimation = t < 1 ? setTimeout(tick, 8) : null
     }
     tick()
   }
@@ -1740,7 +1816,9 @@ export class Browser {
       chain: https ? this.certificates.chain(host) : null,
       siteData: [],
       blockedCount: tab.blockedCount,
-      adblockEnabled: this.adblock.isEnabled(),
+      adblockEnabled: this.settings.adblock,
+      adblockSite: this.adblock.blocksOn(tab.url),
+      siteDomain: parseDomain(tab.url).domain || host,
       permissions: /^https?:/.test(tab.url) ? this.permissions.list(origin) : []
     }
   }
@@ -1750,6 +1828,17 @@ export class Browser {
     if (!info) return
     if (/^https?:/.test(info.url)) info.siteData = await this.siteData(info.url)
     this.handle({ type: 'ui.openPopover', popover: { kind: 'siteInfo', anchor, info } })
+  }
+
+  /** Turns ad blocking off (or back on) for one site, then reloads its tabs so it takes effect. */
+  private setSiteAdblock(domain: string, enabled: boolean): void {
+    if (!domain) return
+    const list = this.settings.adblockAllowlist.filter((d) => d !== domain)
+    this.settingsStore.update({ adblockAllowlist: enabled ? list : [...list, domain] })
+    for (const tab of this.tabs) {
+      if (!tab.loaded || (parseDomain(tab.url).domain || safeHost(tab.url)) !== domain) continue
+      this.views.get(tab.id)?.webContents.reload()
+    }
   }
 
   private async exportCertificate(index: number): Promise<void> {
@@ -1963,6 +2052,30 @@ export class Browser {
     )
   }
 
+  /** "Open Link in Space ▸": the other spaces; the link opens there in the background. */
+  private openInSpaceItems(url: string, currentSpaceId: string | null): MenuItemConstructorOptions[] {
+    const others = this.spaces.filter((space) => space.id !== currentSpaceId)
+    if (others.length === 0) return []
+    return [
+      {
+        label: 'Open Link in Space',
+        submenu: others.map((space) => ({
+          label: `${space.icon}  ${space.name}`,
+          click: () => {
+            this.openTab(url, { background: true, spaceId: space.id })
+            this.toast({
+              id: 'opened-in-space',
+              message: `Opened in ${space.name}`,
+              description: safeHost(url),
+              action: { label: 'Switch', command: { type: 'space.switch', spaceId: space.id } },
+              timeout: 3000
+            })
+          }
+        }))
+      }
+    ]
+  }
+
   private pageContextMenu(tabId: string, wc: WebContents, params: ContextMenuParams): void {
     const items: (MenuItemConstructorOptions | Electron.MenuItem)[] = []
     const tab = this.tab(tabId)
@@ -1985,6 +2098,10 @@ export class Browser {
             this.openInput(params.linkURL, 'split')
           }
         },
+        ...this.openInSpaceItems(params.linkURL, tab?.spaceId ?? null),
+        { label: 'Open Link in New Window', click: () => void this.hub.openWindow('blank', params.linkURL) },
+        { label: 'Open Link in Private Window', click: () => void this.hub.openWindow('private', params.linkURL) },
+        { type: 'separator' },
         { label: 'Copy Link', click: () => clipboard.writeText(params.linkURL) },
         { type: 'separator' }
       )

@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Snapshot, Tab, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconBack, IconForward, IconGlobe, IconLock, IconPlus, IconPrivate, IconReload, IconSearch, IconSettings, IconSidebar } from '../icons'
+import { ExtensionButton, useExtensions } from '../extensions'
+import { IconBack, IconForward, IconGlobe, IconLock, IconPlus, IconPrivate, IconPuzzle, IconReload, IconSearch, IconSettings, IconSidebar } from '../icons'
 import { useUiEvents } from '../useSnapshot'
 import { cx, hostOf, rectOf } from '../util'
 import { Essentials } from './Essentials'
@@ -94,14 +95,6 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
             {secure ? <IconLock size={12} /> : <IconGlobe size={12} />}
           </button>
           <span className="url-pill-host">{hostOf(tab.url)}</span>
-          <span className="url-pill-extensions" onClick={(e) => e.stopPropagation()}>
-            <browser-action-list partition="zepper-browsing" alignment="bottom left" />
-          </span>
-          {tab.blockedCount > 0 && (
-            <span className="url-pill-blocked" title={`${tab.blockedCount} ads and trackers blocked`}>
-              {tab.blockedCount}
-            </span>
-          )}
         </>
       ) : (
         <>
@@ -118,6 +111,9 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
 function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
   const settingsRef = useRef<HTMLButtonElement>(null)
   const newRef = useRef<HTMLButtonElement>(null)
+  const extensionsRef = useRef<HTMLButtonElement>(null)
+  const extensions = useExtensions()
+  const pinned = snapshot.settings.pinnedExtensions.filter((id) => extensions.actions.some((a) => a.id === id))
   return (
     <div className="bottom-bar">
       <button
@@ -128,27 +124,25 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
       >
         <IconSettings size={16} />
       </button>
-      <div className="space-switcher">
-        {snapshot.spaces.length > 1 &&
-          snapshot.spaces.map((space) => (
-            <button
-              key={space.id}
-              className={cx(
-                'space-dot',
-                space.id === snapshot.activeSpaceId && 'active',
-                snapshot.tabs.some((t) => t.spaceId === space.id && t.audible) && 'has-audio'
-              )}
-              title={space.name}
-              onClick={() => zepper.send({ type: 'space.switch', spaceId: space.id })}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                zepper.send({ type: 'space.contextMenu', spaceId: space.id, anchor: rectOf(e.currentTarget) })
-              }}
-            >
-              {space.icon}
-            </button>
+      {extensions.actions.length > 0 && snapshot.kind !== 'private' && (
+        <div className="bottom-extensions">
+          <button
+            ref={extensionsRef}
+            className="icon-button"
+            title="Extensions"
+            onClick={() =>
+              extensionsRef.current &&
+              zepper.send({ type: 'ui.openPopover', popover: { kind: 'extensions', anchor: rectOf(extensionsRef.current) } })
+            }
+          >
+            <IconPuzzle size={16} />
+          </button>
+          {pinned.map((id) => (
+            <ExtensionButton key={id} id={id} tabId={extensions.activeTabId} version={extensions} />
           ))}
-      </div>
+        </div>
+      )}
+      <SpaceSwitcher snapshot={snapshot} />
       <button
         ref={newRef}
         className="icon-button"
@@ -157,6 +151,61 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
       >
         <IconPlus size={17} />
       </button>
+    </div>
+  )
+}
+
+/**
+ * The space dots. Centred when they fit; when they don't, they scroll (never
+ * clip), the edges with more dots fade, and the active space stays in view.
+ */
+function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element | null {
+  const list = useRef<HTMLDivElement>(null)
+  const [fade, setFade] = useState({ start: false, end: false })
+
+  useEffect(() => {
+    const el = list.current
+    if (!el) return
+    const update = (): void => {
+      const start = el.scrollLeft > 1
+      const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1
+      setFade((f) => (f.start === start && f.end === end ? f : { start, end }))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    el.addEventListener('scroll', update, { passive: true })
+    return () => {
+      observer.disconnect()
+      el.removeEventListener('scroll', update)
+    }
+  }, [snapshot.spaces.length])
+
+  useEffect(() => {
+    list.current?.querySelector('.space-dot.active')?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+  }, [snapshot.activeSpaceId])
+
+  if (snapshot.spaces.length < 2) return <div className="space-switcher" />
+  return (
+    <div ref={list} className={cx('space-switcher', fade.start && 'fade-start', fade.end && 'fade-end')}>
+      {snapshot.spaces.map((space) => (
+        <button
+          key={space.id}
+          className={cx(
+            'space-dot',
+            space.id === snapshot.activeSpaceId && 'active',
+            snapshot.tabs.some((t) => t.spaceId === space.id && t.audible) && 'has-audio'
+          )}
+          title={space.name}
+          onClick={() => zepper.send({ type: 'space.switch', spaceId: space.id })}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            zepper.send({ type: 'space.contextMenu', spaceId: space.id, anchor: rectOf(e.currentTarget) })
+          }}
+        >
+          {space.icon}
+        </button>
+      ))}
     </div>
   )
 }

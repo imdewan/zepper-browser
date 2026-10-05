@@ -132,7 +132,15 @@ export function Overlay(): React.JSX.Element | null {
         {settingsOpen && <SettingsPanel key="settings" settings={snapshot.settings} onClose={closeSettings} />}
         {creatingSpace && <CreateSpaceDialog key="create" systemDark={systemDark} onClose={closeCreate} />}
         {palette && <Palette key={palette.key} mode={palette.mode} currentUrl={palette.currentUrl} onClose={closePalette} />}
-        {popover && <Popover key="popover" popover={popover} space={popoverSpace} onClose={closePopover} />}
+        {popover && (
+          <Popover
+            key="popover"
+            popover={popover}
+            space={popoverSpace}
+            pinnedExtensions={snapshot?.settings.pinnedExtensions ?? []}
+            onClose={closePopover}
+          />
+        )}
       </AnimatePresence>
       <div className="corner">
         <AnimatePresence>{find && <FindBar key="find" result={find.result} focusKey={find.key} onClose={closeFind} />}</AnimatePresence>

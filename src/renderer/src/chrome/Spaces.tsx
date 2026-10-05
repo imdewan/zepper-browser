@@ -47,10 +47,19 @@ interface SpacesViewportProps {
   onStartRename: (spaceId: string) => void
 }
 
+/** A pause this long ends a wheel stream. */
+const QUIET_MS = 140
+
 /**
  * All spaces laid side by side; the track slides to the active one with a
  * critically damped 250ms spring. Two-finger horizontal swipes drag the track
  * directly and switch once they pass a threshold, like Zen.
+ *
+ * Each wheel stream is classified once (vertical scrolling is left alone).
+ * The sidebar decides the target space itself, so back-to-back swipes build on
+ * where the track visually is instead of waiting for the main process. After
+ * a switch, the momentum tail is ignored, but a new swipe is recognised at
+ * once: momentum only ever shrinks, a new swipe grows.
  */
 export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRename }: SpacesViewportProps): React.JSX.Element {
   const viewport = useRef<HTMLDivElement>(null)
@@ -58,18 +67,45 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
   const index = Math.max(0, snapshot.spaces.findIndex((s) => s.id === snapshot.activeSpaceId))
   const count = snapshot.spaces.length
   const x = useMotionValue(0)
-  const gesture = useRef({ active: false, offset: 0, locked: false, timer: 0 })
+  const gesture = useRef({
+    mode: 'idle' as 'idle' | 'pending' | 'drag' | 'ignore' | 'locked',
+    /** After a switch: still the same swipe ('finger'), or its momentum ('momentum'). */
+    lockPhase: 'finger' as 'finger' | 'momentum',
+    dx: 0,
+    dy: 0,
+    offset: 0,
+    lastDelta: 0,
+    shrinking: 0,
+    rising: 0,
+    timer: 0,
+    /** The space we've switched to but the snapshot hasn't caught up with yet. */
+    pending: null as number | null,
+    pendingAt: 0,
+    /** Where the track is heading, so a snapshot confirming it doesn't restart the spring. */
+    target: -1
+  })
   const indexRef = useRef(index)
   indexRef.current = index
-  const firstLayout = useRef(true)
+  const spaceIds = useRef<string[]>([])
+  spaceIds.current = snapshot.spaces.map((s) => s.id)
+  const laidOutWidth = useRef(0)
 
   useEffect(() => {
-    if (!width || gesture.current.active) return
-    if (firstLayout.current) {
-      firstLayout.current = false
+    const g = gesture.current
+    // A confirmed switch clears the pending one; a stale one (the main process went elsewhere) expires.
+    if (g.pending !== null && (index === g.pending || Date.now() - g.pendingAt > 1000)) g.pending = null
+    if (!width || g.mode === 'drag' || g.pending !== null) return
+    if (laidOutWidth.current !== width) {
+      // First layout or a sidebar resize: place the track, no animation.
+      laidOutWidth.current = width
+      x.stop()
       x.set(-index * width)
+      g.target = index
       return
     }
+    // Already heading there (we switched locally): let the running spring finish.
+    if (g.target === index) return
+    g.target = index
     void animate(x, -index * width, SWITCH_SPRING)
   }, [index, width, x])
 
@@ -80,51 +116,130 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
     const el = viewport.current?.closest<HTMLElement>('.sidebar') ?? viewport.current
     if (!el || !width || !swipeEnabled) return
     const g = gesture.current
-    const settle = (): void => {
-      g.active = false
-      g.locked = false
-      if (Math.abs(g.offset) > width * 0.15 && count > 1) {
-        commit(g.offset < 0 ? 1 : -1)
-      } else {
-        void animate(x, -indexRef.current * width, SWITCH_SPRING)
+    const current = (): number => g.pending ?? indexRef.current
+
+    const slideTo = (target: number): void => {
+      g.target = target
+      void animate(x, -target * width, SWITCH_SPRING)
+    }
+    /** Switches by one space from where the track is, wrapping if allowed. */
+    const commit = (delta: number): void => {
+      const from = current()
+      let target = from + delta
+      if (target < 0 || target >= count) {
+        if (!wrap || count < 2) return slideTo(from)
+        target = (target + count) % count
+        // Wrapping: start the new space just past the edge it comes in from, rather than
+        // flying across every space in between.
+        x.set(-target * width + (delta > 0 ? width : -width) + (x.get() + from * width))
       }
+      g.pending = target
+      g.pendingAt = Date.now()
+      slideTo(target)
+      const id = spaceIds.current[target]
+      if (id) zepper.send({ type: 'space.switch', spaceId: id })
+    }
+    /** Fingers lifted (or paused): switch if dragged far enough, otherwise spring back. */
+    const release = (): void => {
+      if (g.mode !== 'drag') return
+      if (Math.abs(g.offset) > width * 0.15 && count > 1) commit(g.offset < 0 ? 1 : -1)
+      else slideTo(current())
+      g.mode = 'idle'
       g.offset = 0
     }
-    const commit = (delta: number): void => {
-      const target = indexRef.current + delta
-      if (!wrap && (target < 0 || target >= count)) {
-        void animate(x, -indexRef.current * width, SWITCH_SPRING)
-        return
-      }
-      // The main process wraps past the ends when "Wrap around spaces" is on.
-      zepper.send({ type: 'space.switchRelative', delta })
+    const endStream = (): void => {
+      release()
+      g.mode = 'idle'
+      g.dx = g.dy = g.lastDelta = g.shrinking = g.rising = 0
     }
+    const startDrag = (): void => {
+      x.stop()
+      g.mode = 'drag'
+      // Pick up from wherever the track is, even mid-animation.
+      g.offset = x.get() + current() * width
+      g.shrinking = 0
+    }
+
     const onWheel = (e: WheelEvent): void => {
-      const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY)
-      if (!g.active && !g.locked && !horizontal) return
-      e.preventDefault()
+      if (e.ctrlKey) return
       window.clearTimeout(g.timer)
-      if (g.locked) {
-        // Ignore trailing momentum after a committed switch.
-        g.timer = window.setTimeout(() => (g.locked = false), 180)
+      g.timer = window.setTimeout(endStream, QUIET_MS)
+      const delta = Math.abs(e.deltaX)
+
+      if (g.mode === 'ignore') return
+      if (g.mode === 'locked') {
+        e.preventDefault()
+        if (g.lockPhase === 'finger') {
+          // Still the swipe that switched; once it starts decaying, it's momentum.
+          g.shrinking = delta < g.lastDelta ? g.shrinking + 1 : 0
+          if (g.shrinking >= 3) {
+            g.lockPhase = 'momentum'
+            g.rising = 0
+          }
+        } else {
+          // Momentum only shrinks; growing deltas mean new fingers: a new swipe.
+          g.rising = delta > g.lastDelta + 1 ? g.rising + 1 : 0
+          if (g.rising >= 2) {
+            g.lastDelta = delta
+            startDrag()
+            g.offset -= e.deltaX
+            x.set(-current() * width + g.offset)
+            return
+          }
+        }
+        g.lastDelta = delta
         return
       }
-      g.active = true
-      g.offset -= e.deltaX
-      const atStart = !wrap && indexRef.current === 0 && g.offset > 0
-      const atEnd = !wrap && indexRef.current === count - 1 && g.offset < 0
+
+      if (g.mode === 'idle') {
+        g.mode = 'pending'
+        g.dx = g.dy = 0
+      }
+      if (g.mode === 'pending') {
+        g.dx += e.deltaX
+        g.dy += e.deltaY
+        const ax = Math.abs(g.dx)
+        const ay = Math.abs(g.dy)
+        if (ay > 6 && ay >= ax * 0.8) {
+          g.mode = 'ignore' // Scrolling the tab list.
+          return
+        }
+        if (ax < 6) return
+        if (ax < ay * 1.5) {
+          g.mode = 'ignore'
+          return
+        }
+        startDrag()
+        g.offset -= g.dx
+      } else {
+        g.offset -= e.deltaX
+        // Momentum after the fingers lift: decide now instead of when it dies out.
+        g.shrinking = delta > 0 && delta < g.lastDelta ? g.shrinking + 1 : delta === g.lastDelta ? g.shrinking : 0
+        if (g.shrinking >= 4) {
+          e.preventDefault()
+          release()
+          g.mode = 'locked'
+          g.lockPhase = 'momentum'
+          g.lastDelta = delta
+          g.rising = 0
+          return
+        }
+      }
+      e.preventDefault()
+      g.lastDelta = delta
+
+      const from = current()
+      const atStart = !wrap && from === 0 && g.offset > 0
+      const atEnd = !wrap && from === count - 1 && g.offset < 0
       const shown = atStart || atEnd ? g.offset * 0.25 : g.offset
-      x.set(-indexRef.current * width + Math.max(-width, Math.min(width, shown)))
-      if (!atStart && !atEnd && Math.abs(g.offset) > width * 0.3) {
-        const delta = g.offset < 0 ? 1 : -1
-        g.active = false
-        g.locked = true
+      x.set(-from * width + Math.max(-width, Math.min(width, shown)))
+      if (!atStart && !atEnd && count > 1 && Math.abs(g.offset) > width * 0.3) {
+        commit(g.offset < 0 ? 1 : -1)
         g.offset = 0
-        commit(delta)
-        g.timer = window.setTimeout(() => (g.locked = false), 180)
-        return
+        g.mode = 'locked'
+        g.lockPhase = 'finger'
+        g.shrinking = 0
       }
-      g.timer = window.setTimeout(settle, 140)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => {

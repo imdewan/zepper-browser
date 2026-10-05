@@ -11,20 +11,41 @@ import { contextBridge, ipcRenderer, webFrame } from 'electron'
  *    for what the page actually renders.
  * 2. Gestures (top frame only): reports two-finger horizontal swipes the page
  *    can't scroll itself, so the browser can slide back/forward.
- * 3. Google sign-in compatibility (accounts.google.com only), see main/compat.ts.
+ * 3. Site compatibility (see main/compat.ts): hides Chromium-only APIs when
+ *    presenting as Firefox or Safari, and the Google sign-in fix.
  */
 
 const COSMETICS_CHANNEL = 'zepper:cosmetics'
 const COSMETICS_DOM_CHANNEL = 'zepper:cosmetics-dom'
 const SWIPE_CHANNEL = 'zepper:swipe'
-const SIGN_IN_COMPAT_CHANNEL = 'zepper:sign-in-compat'
+const PAGE_CONFIG_CHANNEL = 'zepper:page-config'
+
+interface PageConfig {
+  signInCompat: boolean
+  hideChromium: boolean
+  vendor: string
+}
 
 interface CosmeticsResponse {
   styles: string
   scripts: string[]
 }
 
-// ---- Google sign-in compatibility ----------------------------------------------
+// ---- Site compatibility -----------------------------------------------------------
+
+/** Runs in the page's main world when presenting as Firefox or Safari: no Chromium-only APIs. */
+function hideChromiumShim(vendor: string): void {
+  const value = (target: object, prop: string, v: unknown): void => {
+    try {
+      Object.defineProperty(target, prop, { get: () => v, configurable: true })
+    } catch {
+      // Some properties can't be redefined; leave them.
+    }
+  }
+  value(Navigator.prototype, 'userAgentData', undefined)
+  value(Navigator.prototype, 'vendor', vendor)
+  delete (window as unknown as { chrome?: unknown }).chrome
+}
 
 /** Runs in the page's main world: makes `window.chrome` look like real Chrome's and hides passkeys. */
 function signInPageShim(): void {
@@ -65,12 +86,14 @@ function signInPageShim(): void {
   delete w.PublicKeyCredential
 }
 
-function applySignInCompat(): void {
-  if (location.hostname !== 'accounts.google.com') return
+function applyCompat(): void {
+  if (!/^https?:/.test(location.href)) return
   try {
-    if (ipcRenderer.sendSync(SIGN_IN_COMPAT_CHANNEL) === true) contextBridge.executeInMainWorld({ func: signInPageShim })
+    const config = ipcRenderer.sendSync(PAGE_CONFIG_CHANNEL) as PageConfig
+    if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
+    if (config.signInCompat && location.hostname === 'accounts.google.com') contextBridge.executeInMainWorld({ func: signInPageShim })
   } catch {
-    // Never break the sign-in page over this.
+    // Never break a page over this.
   }
 }
 
@@ -150,7 +173,7 @@ function watchDomForGenericRules(): void {
   })
 }
 
-applySignInCompat()
+applyCompat()
 applyCosmetics()
 
 // ---- Picture-in-picture: "back to tab" -------------------------------------
@@ -169,8 +192,20 @@ window.addEventListener(
 )
 
 // ---- Gestures: swipe to navigate -------------------------------------------
+//
+// A trackpad swipe arrives as a stream of wheel events: finger movement, then
+// (after the fingers lift) momentum that decays smoothly. Each stream is
+// classified once, from its first few events: vertical scrolling, scrolling
+// something horizontally, or a swipe. Only a swipe is reported, and only its
+// finger phase; momentum never pushes a swipe over the line, and the browser
+// ignores the momentum tail that lands on the next page.
 
-const END_AFTER_MS = 140
+/** A pause this long ends a wheel stream. */
+const QUIET_MS = 160
+/** Horizontal travel needed before a stream is classified. */
+const DECIDE_PX = 8
+/** Consecutive smoothly shrinking deltas that mean the fingers have lifted. */
+const MOMENTUM_STEPS = 4
 
 function canScrollHorizontally(target: EventTarget | null, delta: number): boolean {
   const scrollable = (el: Element): boolean => {
@@ -185,30 +220,90 @@ function canScrollHorizontally(target: EventTarget | null, delta: number): boole
   return !!root && scrollable(root)
 }
 
-if (window.top === window) {
-  let active = false
+function watchSwipes(): void {
+  let mode: 'idle' | 'pending' | 'swipe' | 'ignore' = 'idle'
+  let target: EventTarget | null = null
   let dx = 0
-  let timer = 0
+  let dy = 0
+  let lastDelta = 0
+  let shrinking = 0
+  let dxBeforeShrink = 0
+  let peak = 0
+  let released = false
+  let quietTimer = 0
+
+  const send = (phase: 'update' | 'end', distance: number): void => ipcRenderer.send(SWIPE_CHANNEL, phase, distance, peak)
+  const reset = (): void => {
+    mode = 'idle'
+    dx = dy = lastDelta = shrinking = dxBeforeShrink = peak = 0
+    released = false
+  }
+  const finish = (): void => {
+    if (mode === 'swipe' && !released) send('end', dx)
+    reset()
+  }
 
   window.addEventListener(
     'wheel',
     (event) => {
       if (event.ctrlKey || event.deltaMode !== 0) return
-      if (!active) {
-        const horizontal = Math.abs(event.deltaX) > 3 && Math.abs(event.deltaX) > Math.abs(event.deltaY) * 1.5
-        if (!horizontal || canScrollHorizontally(event.target, event.deltaX)) return
-        active = true
-        dx = 0
+      window.clearTimeout(quietTimer)
+      quietTimer = window.setTimeout(finish, QUIET_MS)
+      if (mode === 'ignore') return
+
+      if (mode === 'idle') {
+        mode = 'pending'
+        target = event.target
       }
+      if (mode === 'pending') {
+        dx += event.deltaX
+        dy += event.deltaY
+        const ax = Math.abs(dx)
+        const ay = Math.abs(dy)
+        if (ay > 6 && ay >= ax * 0.8) mode = 'ignore' // Scrolling vertically.
+        else if (ax < DECIDE_PX) return
+        else if (ax < ay * 2 || canScrollHorizontally(target, dx)) mode = 'ignore'
+        else {
+          mode = 'swipe'
+          lastDelta = Math.abs(event.deltaX)
+          peak = lastDelta
+          send('update', dx)
+        }
+        return
+      }
+
+      // Swiping. Once momentum starts, the decision is made; the rest is ignored.
+      if (released) return
+      const delta = Math.abs(event.deltaX)
+      if (delta > 0 && delta < lastDelta && delta >= lastDelta * 0.5) {
+        if (shrinking === 0) dxBeforeShrink = dx
+        shrinking++
+      } else if (delta !== lastDelta) {
+        shrinking = 0 // Repeated values (common in momentum) neither count nor reset.
+      }
+      lastDelta = delta
       dx += event.deltaX
-      ipcRenderer.send(SWIPE_CHANNEL, 'update', dx)
-      window.clearTimeout(timer)
-      timer = window.setTimeout(() => {
-        ipcRenderer.send(SWIPE_CHANNEL, 'end', dx)
-        active = false
-        dx = 0
-      }, END_AFTER_MS)
+      if (shrinking === 0) peak = Math.max(peak, delta)
+      if (shrinking >= MOMENTUM_STEPS) {
+        released = true
+        send('end', dxBeforeShrink)
+        return
+      }
+      send('update', dx)
     },
     { passive: true, capture: true }
   )
+
+  // Pages that handle horizontal wheel themselves (maps, sliders, editors) win.
+  window.addEventListener(
+    'wheel',
+    (event) => {
+      if (!event.defaultPrevented || mode === 'idle' || mode === 'ignore') return
+      if (mode === 'swipe' && !released) send('end', 0)
+      mode = 'ignore'
+    },
+    { passive: true }
+  )
 }
+
+watchSwipes()

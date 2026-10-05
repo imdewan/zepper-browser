@@ -1,5 +1,15 @@
 export type PinnedCloseBehavior = 'reset-unload-switch' | 'unload-switch' | 'reset-switch' | 'switch' | 'reset' | 'close'
 
+export type UserAgentChoice = 'chrome' | 'edge' | 'firefox' | 'safari' | 'custom'
+
+export const USER_AGENT_LABELS: Record<UserAgentChoice, string> = {
+  chrome: 'Chrome (recommended)',
+  edge: 'Microsoft Edge',
+  firefox: 'Firefox',
+  safari: 'Safari',
+  custom: 'Custom…'
+}
+
 export type PipSize = 'small' | 'medium' | 'large'
 
 /** Share of the screen's width the floating player starts at. */
@@ -42,7 +52,15 @@ export interface Settings {
   compactRevealOnHover: boolean
   // Privacy
   adblock: boolean
+  /** Sites (registrable domains, e.g. youtube.com) where ad blocking is turned off. */
+  adblockAllowlist: string[]
   globalPrivacyControl: boolean
+  /** Which browser sites think you're using. */
+  userAgent: UserAgentChoice
+  customUserAgent: string
+  // Extensions
+  /** Extensions shown in the bottom bar; the rest live in the extensions panel. */
+  pinnedExtensions: string[]
   /** Make Google's sign-in page accept Zepper (see main/compat.ts). */
   googleSignInCompat: boolean
 }
@@ -71,7 +89,11 @@ export const DEFAULT_SETTINGS: Settings = {
   wrapSpaces: true,
   compactRevealOnHover: true,
   adblock: true,
+  adblockAllowlist: [],
   globalPrivacyControl: true,
+  userAgent: 'chrome',
+  customUserAgent: '',
+  pinnedExtensions: [],
   googleSignInCompat: true
 }
 

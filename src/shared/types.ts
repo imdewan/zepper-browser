@@ -171,7 +171,12 @@ export interface SiteInfo {
   /** Domains under this site that store cookies or data on this device. */
   siteData: { domain: string; cookies: number }[]
   blockedCount: number
+  /** Ad blocking is on globally. */
   adblockEnabled: boolean
+  /** Ad blocking is on for this site (not on the allowlist). */
+  adblockSite: boolean
+  /** The site the per-site switch applies to, e.g. youtube.com. */
+  siteDomain: string
   permissions: { permission: string; label: string; state: PermissionState }[]
 }
 
@@ -188,6 +193,7 @@ export type PopoverSpec =
   | { kind: 'theme'; spaceId: string; anchor: Rect }
   | { kind: 'siteInfo'; anchor: Rect; info: SiteInfo }
   | { kind: 'permission'; anchor: Rect; prompt: PermissionPrompt }
+  | { kind: 'extensions'; anchor: Rect }
 
 export interface FindResult {
   active: number
@@ -242,6 +248,7 @@ export type Command =
   | { type: 'clipboard.write'; text: string }
   | { type: 'media.toggle'; tabId: string }
   | { type: 'media.seek'; tabId: string; seconds: number }
+  | { type: 'site.setAdblock'; domain: string; enabled: boolean }
   | { type: 'media.dismiss'; tabId: string }
   | { type: 'media.pauseOthers'; keepTabId: string }
   | { type: 'site.setPermission'; origin: string; permission: string; state: PermissionState }

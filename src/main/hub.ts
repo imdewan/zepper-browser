@@ -1,9 +1,9 @@
-import { BrowserWindow, ipcMain, nativeTheme, session, app, type Session, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, nativeTheme, session, app, webContents, type Session, type WebContents } from 'electron'
 import { join } from 'node:path'
 import { IPC, type Command } from '@shared/types'
 import type { AdBlock } from './adblock'
 import { Browser, type BrowserKind } from './browser'
-import { serveSignInCompat } from './compat'
+import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
 import { Extensions } from './extensions'
 import type { History } from './history'
 import type { SettingsStore } from './settings-store'
@@ -31,7 +31,10 @@ export class Hub {
   readonly services: Services
   private main: Browser | null = null
   private privateCount = 0
-  private readonly sessions = new WeakSet<Session>()
+  private readonly sessions = new Set<Session>()
+  /** Our plain Chrome user agent, before any identity choice. */
+  private readonly chromeUa = app.userAgentFallback
+  private userAgent = app.userAgentFallback
 
   constructor(services: Omit<Services, 'extensions' | 'certificates' | 'permissions'>) {
     this.services = { ...services, permissions: new SitePermissions(), certificates: new CertificateStore(), extensions: null }
@@ -39,15 +42,19 @@ export class Hub {
     ipcMain.handle(IPC.getSnapshot, (event) => this.owner(event.sender)?.publicSnapshot() ?? null)
     ipcMain.handle(IPC.suggest, (event, text: string) => this.owner(event.sender)?.suggestions(text) ?? [])
     ipcMain.on(IPC.command, (event, command: Command) => this.owner(event.sender)?.handleFromUi(event.sender, command))
-    ipcMain.on(IPC.swipe, (event, phase: 'update' | 'end', dx: number) =>
-      this.owner(event.sender)?.onPageSwipe(event.sender.id, phase, dx)
+    ipcMain.on(IPC.swipe, (event, phase: 'update' | 'end', dx: number, peak: number) =>
+      this.owner(event.sender)?.onPageSwipe(event.sender.id, phase, Number(dx) || 0, Number(peak) || 0)
     )
     ipcMain.on(IPC.pipBack, (event) => this.owner(event.sender)?.onNativePipBack(event.sender.id))
-    serveSignInCompat(services.settings)
+    servePageConfig(services.settings, () => this.userAgent)
 
     nativeTheme.on('updated', () => this.applyAppIcon())
-    services.settings.onChange(() => this.applyAppIcon())
+    services.settings.onChange(() => {
+      this.applyAppIcon()
+      this.applySettings()
+    })
     this.applyAppIcon()
+    this.applySettings()
   }
 
   /** Chrome extensions live in the shared session; they act on the focused normal window. */
@@ -65,13 +72,14 @@ export class Hub {
     void extensions.start()
   }
 
-  openWindow(kind: BrowserKind): Browser {
+  /** Opens a window; with a URL it starts on that page instead of the command bar. */
+  openWindow(kind: BrowserKind, url?: string): Browser {
     const ses = kind === 'private' ? session.fromPartition(`zepper-private-${++this.privateCount}`) : session.defaultSession
     this.attachSession(ses)
     const browser = new Browser(this, kind, ses)
     this.browsers.add(browser)
     if (kind === 'main') this.main = browser
-    browser.start()
+    browser.start(url)
     return browser
   }
 
@@ -118,12 +126,13 @@ export class Hub {
   private attachSession(ses: Session): void {
     if (this.sessions.has(ses)) return
     this.sessions.add(ses)
+    ses.setUserAgent(this.userAgent)
     const { certificates, adblock, settings } = this.services
     certificates.attach(ses)
     adblock.attachSession(ses)
     ses.registerPreloadScript({ type: 'frame', filePath: join(__dirname, '../preload/page.js') })
     ses.webRequest.onBeforeSendHeaders((details, callback) => {
-      const headers = details.requestHeaders
+      const headers = clientHintHeaders(details.requestHeaders, this.userAgent)
       callback({ requestHeaders: settings.get().globalPrivacyControl ? { ...headers, 'Sec-GPC': '1', DNT: '1' } : headers })
     })
     ses.setPermissionRequestHandler((wc, permission, callback, details) => {
@@ -136,6 +145,23 @@ export class Hub {
       return browser ? browser.checkPermission(permission, requestingOrigin, details) : false
     })
     ses.on('will-download', (_event, item, wc) => (this.owner(wc) ?? this.focused())?.handleDownload(item))
+  }
+
+  /** Ad blocking switches and the browser identity, from settings. */
+  private applySettings(): void {
+    const settings = this.services.settings.get()
+    this.services.adblock.setEnabled(settings.adblock)
+    this.services.adblock.setAllowlist(settings.adblockAllowlist)
+
+    const ua = userAgentFor(settings, this.chromeUa)
+    if (ua === this.userAgent) return
+    this.userAgent = ua
+    app.userAgentFallback = ua
+    for (const ses of this.sessions) ses.setUserAgent(ua)
+    // Open pages pick it up on their next load.
+    for (const wc of webContents.getAllWebContents()) {
+      if (!wc.isDestroyed() && this.sessions.has(wc.session)) wc.setUserAgent(ua)
+    }
   }
 
   private applyAppIcon(): void {

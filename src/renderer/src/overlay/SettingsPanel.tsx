@@ -3,13 +3,16 @@ import { motion } from 'motion/react'
 import {
   PINNED_CLOSE_LABELS,
   SEARCH_ENGINES,
+  USER_AGENT_LABELS,
   type PinnedCloseBehavior,
   type SearchEngineId,
-  type Settings
+  type Settings,
+  type UserAgentChoice
 } from '@shared/settings'
 import { zepper } from '../bridge'
 import { IconClose } from '../icons'
 import { cx, isMac } from '../util'
+import { Toggle } from './Toggle'
 
 type Section = 'appearance' | 'tabs' | 'media' | 'search' | 'gestures' | 'privacy' | 'shortcuts'
 
@@ -283,9 +286,40 @@ export function SettingsPanel({ settings, onClose }: SettingsPanelProps): React.
                 <Row label="Block ads and trackers" hint="uBlock Origin’s filter lists, built in.">
                   <Toggle checked={settings.adblock} onChange={(adblock) => set({ adblock })} />
                 </Row>
+                {settings.adblockAllowlist.length > 0 && (
+                  <div className="settings-row settings-row-stacked">
+                    <div className="settings-row-text">
+                      <div className="settings-row-label">Blocking is off on</div>
+                      <div className="settings-row-hint">Turn it back on here, or from the site panel behind the lock icon.</div>
+                    </div>
+                    <div className="site-chips">
+                      {settings.adblockAllowlist.map((domain) => (
+                        <span key={domain} className="site-chip">
+                          {domain}
+                          <button
+                            title={`Block ads on ${domain} again`}
+                            onClick={() => zepper.send({ type: 'site.setAdblock', domain, enabled: true })}
+                          >
+                            <IconClose size={9} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
                   <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
                 </Row>
+                <Row label="Identify as" hint="The browser websites think you’re using. Google sign-in needs Chrome or Edge.">
+                  <select value={settings.userAgent} onChange={(e) => set({ userAgent: e.target.value as UserAgentChoice })}>
+                    {Object.entries(USER_AGENT_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </Row>
+                {settings.userAgent === 'custom' && <CustomUserAgent value={settings.customUserAgent} onChange={(customUserAgent) => set({ customUserAgent })} />}
                 <Row label="Google sign-in compatibility" hint="Lets Google’s sign-in page accept Zepper. Only affects accounts.google.com.">
                   <Toggle checked={settings.googleSignInCompat} onChange={(googleSignInCompat) => set({ googleSignInCompat })} />
                 </Row>
@@ -324,11 +358,28 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
   )
 }
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }): React.JSX.Element {
+/** The custom user agent field; saved when you leave it or press Return, not on every keystroke. */
+function CustomUserAgent({ value, onChange }: { value: string; onChange: (value: string) => void }): React.JSX.Element {
+  const [draft, setDraft] = useState(value)
+  const commit = (): void => {
+    if (draft.trim() !== value) onChange(draft.trim())
+  }
   return (
-    <button role="switch" aria-checked={checked} className={cx('toggle', checked && 'on')} onClick={() => onChange(!checked)}>
-      <motion.span className="toggle-knob" layout transition={{ type: 'spring', bounce: 0.25, duration: 0.3 }} />
-    </button>
+    <div className="settings-row settings-row-stacked">
+      <div className="settings-row-text">
+        <div className="settings-row-label">Custom user agent</div>
+        <div className="settings-row-hint">Takes effect as pages load. Leave empty to use Chrome’s.</div>
+      </div>
+      <input
+        className="settings-input"
+        value={draft}
+        spellCheck={false}
+        placeholder="Mozilla/5.0 (Macintosh; …)"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
+      />
+    </div>
   )
 }
 

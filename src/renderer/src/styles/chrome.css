@@ -206,6 +206,7 @@
   display: flex;
   flex-direction: column;
   padding: 0 6px 6px 8px;
+  container: sidebar / inline-size;
 }
 
 .top-row {
@@ -341,22 +342,6 @@ button.site-button:active {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.url-pill-blocked {
-  flex: none;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-2);
-  background: var(--element);
-  padding: 2px 6px;
-  border-radius: 6px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.url-pill:hover .url-pill-blocked {
-  opacity: 1;
 }
 
 /* ---- Essentials ---------------------------------------------------------- */
@@ -820,11 +805,24 @@ button.site-button:active {
   flex: 1;
   min-width: 0;
   display: flex;
-  justify-content: center;
+  /* "safe": centred when the dots fit, start-aligned (so scrollable, not clipped) when they don't. */
+  justify-content: safe center;
   gap: 3px;
   overflow-x: auto;
   scrollbar-width: none;
+  --fade-start: black;
+  --fade-end: black;
+  mask-image: linear-gradient(to right, var(--fade-start), black 16px, black calc(100% - 16px), var(--fade-end));
 }
+
+.space-switcher.fade-start {
+  --fade-start: transparent;
+}
+
+.space-switcher.fade-end {
+  --fade-end: transparent;
+}
+
 
 .space-dot {
   width: 28px;
@@ -856,6 +854,24 @@ button.site-button:active {
 .space-dot.active {
   filter: none;
   opacity: 1;
+}
+
+/* Narrow sidebars: tighter buttons and dots so more fit before anything scrolls. */
+@container sidebar (max-width: 215px) {
+  .bottom-bar {
+    gap: 2px;
+  }
+  .bottom-bar .icon-button,
+  .bottom-bar .extension-button {
+    width: 26px;
+  }
+  .space-dot {
+    width: 24px;
+    font-size: 13px;
+  }
+  .space-switcher {
+    gap: 1px;
+  }
 }
 
 .resize-handle {
@@ -1244,34 +1260,64 @@ button.site-button:active {
   background: var(--element-hover);
 }
 
-/* Extension buttons (Chrome Web Store extensions) inside the URL pill. */
-.url-pill-extensions {
+/* Extensions: the puzzle button and pinned extensions in the bottom bar. */
+.bottom-extensions {
   display: flex;
   align-items: center;
-  flex: none;
-}
-
-.url-pill-extensions browser-action-list {
-  display: flex;
   gap: 2px;
+  flex: none;
+  min-width: 0;
 }
 
-browser-action-list::part(action) {
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+.extension-slot {
+  display: contents;
+}
+
+.extension-button {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
   background-color: transparent;
-  background-size: 15px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 16px;
   transition: background-color 0.1s ease;
 }
 
-browser-action-list::part(action):hover {
+.extension-button:hover {
   background-color: var(--press);
 }
 
-browser-action-list::part(badge) {
-  font-size: 8px;
+.extension-button.no-icon::after {
+  content: attr(data-letter);
+  position: absolute;
+  inset: 6px;
   border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--text-3);
+}
+
+.extension-button .badge {
+  position: absolute;
+  right: 0;
+  bottom: 1px;
+  max-width: 100%;
+  height: 11px;
+  padding: 0 3px;
+  border-radius: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 /* Solid window base under the gradient; its opacity is the inverse of the transparency setting. */
