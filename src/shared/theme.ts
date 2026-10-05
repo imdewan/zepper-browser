@@ -43,7 +43,16 @@ function schemeColors(theme: SpaceTheme): string[] {
 }
 
 export function rgbToHex([r, g, b]: [number, number, number]): string {
-  return '#' + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('')
+  return (
+    '#' +
+    [r, g, b]
+      .map((v) =>
+        Math.round(Math.max(0, Math.min(255, v)))
+          .toString(16)
+          .padStart(2, '0')
+      )
+      .join('')
+  )
 }
 
 export function hslToHex(h: number, s: number, l: number): string {

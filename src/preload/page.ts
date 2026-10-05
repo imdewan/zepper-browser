@@ -253,7 +253,12 @@ function watchDomForGenericRules(): void {
 
   document.addEventListener('DOMContentLoaded', () => {
     void flush()
-    new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'id'] })
+    new MutationObserver(schedule).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'id']
+    })
   })
 }
 
@@ -345,7 +350,8 @@ function watchSwipes(): void {
         dy += event.deltaY
         const ax = Math.abs(dx)
         const ay = Math.abs(dy)
-        if (ay > 6 && ay >= ax * 0.8) mode = 'ignore' // Scrolling vertically.
+        if (ay > 6 && ay >= ax * 0.8)
+          mode = 'ignore' // Scrolling vertically.
         else if (ax < DECIDE_PX) return
         else if (ax < ay * 2 || canScrollHorizontally(target, dx)) mode = 'ignore'
         else {

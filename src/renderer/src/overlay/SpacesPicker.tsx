@@ -7,7 +7,12 @@ import { cx, isMac } from '../util'
 /** Drop-down from the space header's chevron: every space, the current one checked. Arrows and Return work too. */
 export function SpacesPicker({ snapshot, onClose }: { snapshot: Snapshot; onClose: () => void }): React.JSX.Element {
   const { spaces, tabs, activeSpaceId } = snapshot
-  const [selected, setSelected] = useState(Math.max(0, spaces.findIndex((s) => s.id === activeSpaceId)))
+  const [selected, setSelected] = useState(
+    Math.max(
+      0,
+      spaces.findIndex((s) => s.id === activeSpaceId)
+    )
+  )
 
   const choose = (spaceId: string): void => {
     if (spaceId !== activeSpaceId) zepper.send({ type: 'space.switch', spaceId })

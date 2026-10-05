@@ -15,7 +15,7 @@ async function fetchSearchSuggestions(text: string): Promise<string[]> {
     const res = await fetch(url, { signal: controller.signal })
     const data = (await res.json()) as unknown
     if (Array.isArray(data) && Array.isArray(data[1])) return (data[1] as unknown[]).map(String)
-    if (Array.isArray(data)) return data.map((d) => (typeof d === 'string' ? d : (d as { phrase?: string }).phrase ?? '')).filter(Boolean)
+    if (Array.isArray(data)) return data.map((d) => (typeof d === 'string' ? d : ((d as { phrase?: string }).phrase ?? ''))).filter(Boolean)
     return []
   } catch {
     return []
@@ -76,9 +76,7 @@ export async function suggest(
   }
 
   const lower = query.toLowerCase()
-  const tabMatches = tabs
-    .filter((t) => `${t.title} ${t.url}`.toLowerCase().includes(lower))
-    .slice(0, 3)
+  const tabMatches = tabs.filter((t) => `${t.title} ${t.url}`.toLowerCase().includes(lower)).slice(0, 3)
   for (const t of tabMatches) {
     results.push({ kind: 'tab', tabId: t.id, url: t.url, title: t.title, favicon: t.favicon })
   }

@@ -81,7 +81,11 @@ export function PipControls(): React.JSX.Element {
         <button className="pip-skip" title="Back 10 seconds (←)" onClick={() => skip(-10)}>
           <IconSkipBack size={22} />
         </button>
-        <button className="pip-play" title={playing ? 'Pause (Space)' : 'Play (Space)'} onClick={() => zepper.send({ type: 'media.toggle', tabId })}>
+        <button
+          className="pip-play"
+          title={playing ? 'Pause (Space)' : 'Play (Space)'}
+          onClick={() => zepper.send({ type: 'media.toggle', tabId })}
+        >
           {playing ? <IconPause size={26} /> : <IconPlay size={26} />}
         </button>
         <button className="pip-skip" title="Forward 10 seconds (→)" onClick={() => skip(10)}>
@@ -95,7 +99,11 @@ export function PipControls(): React.JSX.Element {
       )}
       <div className="pip-bottom">
         <span className="pip-title">{title}</span>
-        <button className="pip-button" title={tab?.muted ? 'Unmute' : 'Mute'} onClick={() => zepper.send({ type: 'tab.toggleMute', tabId })}>
+        <button
+          className="pip-button"
+          title={tab?.muted ? 'Unmute' : 'Mute'}
+          onClick={() => zepper.send({ type: 'tab.toggleMute', tabId })}
+        >
           {tab?.muted ? <IconMuted size={15} /> : <IconSpeaker size={15} />}
         </button>
       </div>

@@ -33,12 +33,19 @@ export function AboutPanel({ info, onClose }: { info: AboutInfo; onClose: () => 
     ['Chromium', info.chromium],
     ['Electron', `${info.electron} (castLabs ECS)`],
     ['Widevine', widevineLabel(info)],
-    ['Ad blocking', info.filtersUpdatedAt ? `uBlock Origin lists · updated ${dateFormat.format(info.filtersUpdatedAt)}` : 'uBlock Origin lists'],
+    [
+      'Ad blocking',
+      info.filtersUpdatedAt ? `uBlock Origin lists · updated ${dateFormat.format(info.filtersUpdatedAt)}` : 'uBlock Origin lists'
+    ],
     ['V8 · Node', `${info.v8} · ${info.node}`]
   ]
 
   const copy = (): void => {
-    const text = [`Zepper ${info.version}`, ...rows.map(([k, v]) => `${k}: ${v}`), `macOS ${navigator.userAgent.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g, '.') ?? ''}`].join('\n')
+    const text = [
+      `Zepper ${info.version}`,
+      ...rows.map(([k, v]) => `${k}: ${v}`),
+      `macOS ${navigator.userAgent.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g, '.') ?? ''}`
+    ].join('\n')
     zepper.send({ type: 'clipboard.write', text })
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)

@@ -35,12 +35,15 @@ export function Palette({ mode, currentUrl, onClose, insetLeft = 0, insetRight =
   useEffect(() => {
     const id = ++request.current
     const query = text === currentUrl ? '' : text
-    const timer = setTimeout(async () => {
-      const next = await zepper.suggest(query)
-      if (id !== request.current) return
-      setResults(next)
-      setSelected(0)
-    }, query ? 35 : 0)
+    const timer = setTimeout(
+      async () => {
+        const next = await zepper.suggest(query)
+        if (id !== request.current) return
+        setResults(next)
+        setSelected(0)
+      },
+      query ? 35 : 0
+    )
     return () => clearTimeout(timer)
   }, [text, currentUrl])
 

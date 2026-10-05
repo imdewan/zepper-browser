@@ -96,7 +96,12 @@ export function CreateSpaceDialog({ systemDark, spaces, activeSpaceId, onClose }
           </div>
 
           <div className="create-name">
-            <button type="button" className={cx('create-icon', pickingIcon && 'open')} onClick={() => setPickingIcon((v) => !v)} title="Choose an icon">
+            <button
+              type="button"
+              className={cx('create-icon', pickingIcon && 'open')}
+              onClick={() => setPickingIcon((v) => !v)}
+              title="Choose an icon"
+            >
               {icon}
             </button>
             <input autoFocus placeholder="Space name" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />

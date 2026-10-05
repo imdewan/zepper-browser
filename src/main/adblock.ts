@@ -123,10 +123,7 @@ export class AdBlock {
     session.webRequest.onHeadersReceived({ urls: ['<all_urls>'] }, this.onHeadersReceived)
   }
 
-  private readonly onBeforeRequest = (
-    details: OnBeforeRequestListenerDetails,
-    callback: (response: CallbackResponse) => void
-  ): void => {
+  private readonly onBeforeRequest = (details: OnBeforeRequestListenerDetails, callback: (response: CallbackResponse) => void): void => {
     if (!this.blocker || !this.blocksOn(pageUrlOf(details))) return callback({})
     this.blocker.onBeforeRequest(details, callback)
   }

@@ -50,10 +50,7 @@ export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }:
   const width = popover.kind === 'spaces' ? Math.max(250, anchor.width) : (POPOVER_WIDTHS[popover.kind] ?? 300)
   const left = beside
     ? Math.min(anchor.x + anchor.width + 12, window.innerWidth - width - 12)
-    : Math.min(
-        Math.max(12, above ? anchor.x - 6 : anchor.x),
-        window.innerWidth - width - 12
-      )
+    : Math.min(Math.max(12, above ? anchor.x - 6 : anchor.x), window.innerWidth - width - 12)
   const estimatedHeight = popover.kind === 'theme' ? 600 : 420
   // Page dialogs sit centred at the top of the page, like Chrome's.
   const position = modal

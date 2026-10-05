@@ -56,15 +56,27 @@ export function buildMenu(hub: Hub): Menu {
         { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: run((browser) => browser.handle({ type: 'ui.openPalette', mode: 'new' })) },
         { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => void hub.openWindow('blank') },
         { label: 'New Private Window', accelerator: 'CmdOrCtrl+Shift+N', click: () => void hub.openWindow('private') },
-        { label: 'Open Location…', accelerator: 'CmdOrCtrl+L', click: run((browser) => browser.handle({ type: 'ui.openPalette', mode: 'current' })) },
+        {
+          label: 'Open Location…',
+          accelerator: 'CmdOrCtrl+L',
+          click: run((browser) => browser.handle({ type: 'ui.openPalette', mode: 'current' }))
+        },
         { type: 'separator' },
         { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: run((browser) => browser.closeActive()) },
-        { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', click: run((browser) => browser.handle({ type: 'tab.reopenClosed' })) },
+        {
+          label: 'Reopen Closed Tab',
+          accelerator: 'CmdOrCtrl+Shift+T',
+          click: run((browser) => browser.handle({ type: 'tab.reopenClosed' }))
+        },
         { type: 'separator' },
         { label: 'Take Screenshot', accelerator: 'CmdOrCtrl+Shift+2', click: run((browser) => void browser.screenshot()) },
         { type: 'separator' },
         { label: 'Copy Current URL', accelerator: 'CmdOrCtrl+Shift+C', click: run((browser) => browser.handle({ type: 'ui.copyUrl' })) },
-        { label: 'Copy URL as Markdown', accelerator: 'CmdOrCtrl+Alt+Shift+C', click: run((browser) => browser.handle({ type: 'ui.copyUrl', markdown: true })) }
+        {
+          label: 'Copy URL as Markdown',
+          accelerator: 'CmdOrCtrl+Alt+Shift+C',
+          click: run((browser) => browser.handle({ type: 'ui.copyUrl', markdown: true }))
+        }
       ]
     },
     {
@@ -99,7 +111,13 @@ export function buildMenu(hub: Hub): Menu {
         { type: 'separator' },
         { label: 'Developer Tools', accelerator: 'CmdOrCtrl+Alt+I', click: run((browser) => browser.toggleDevTools()) },
         ...(isDev
-          ? [{ label: 'Browser UI DevTools', accelerator: 'CmdOrCtrl+Alt+Shift+I', click: run((browser) => browser.toggleChromeDevTools()) }]
+          ? [
+              {
+                label: 'Browser UI DevTools',
+                accelerator: 'CmdOrCtrl+Alt+Shift+I',
+                click: run((browser) => browser.toggleChromeDevTools())
+              }
+            ]
           : []),
         { type: 'separator' },
         { role: 'togglefullscreen' }

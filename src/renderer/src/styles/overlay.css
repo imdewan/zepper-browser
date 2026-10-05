@@ -462,7 +462,6 @@
   color: var(--text-3);
 }
 
-
 .permission-row {
   display: flex;
   align-items: center;
@@ -628,7 +627,6 @@
     0 12px 40px rgba(0, 0, 0, 0.35),
     0 0 0 0.5px var(--panel-border);
 }
-
 
 .peek-background {
   position: absolute;

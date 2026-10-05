@@ -22,7 +22,9 @@ export class Downloads {
 
   constructor(private readonly onChange: () => void) {
     // Anything still running when Zepper quit didn't finish.
-    this.entries = (this.file.read() ?? []).map((e) => (e.state === 'progressing' || e.state === 'paused' ? { ...e, state: 'interrupted' } : e))
+    this.entries = (this.file.read() ?? []).map((e) =>
+      e.state === 'progressing' || e.state === 'paused' ? { ...e, state: 'interrupted' } : e
+    )
   }
 
   /** What a window shows: private windows see their own downloads too. */

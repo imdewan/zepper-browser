@@ -75,7 +75,10 @@ function sameRow(a: TabRowProps, b: TabRowProps): boolean {
 
 export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps): React.JSX.Element {
   const changed = isPinnedChanged(tab)
-  const drop = useDrop({ key: `tab:${tab.id}`, target: (position, item) => (place && item.id !== tab.id ? dropBeside(place, position, item) : null) })
+  const drop = useDrop({
+    key: `tab:${tab.id}`,
+    target: (position, item) => (place && item.id !== tab.id ? dropBeside(place, position, item) : null)
+  })
   const [resetHover, setResetHover] = useState(false)
   const metaHeld = useMetaKey(resetHover)
 

@@ -21,11 +21,7 @@ export function SiteInfoPanel({ info, onClose }: { info: SiteInfo; onClose: () =
           exit={{ opacity: 0, x: -24 }}
           transition={{ type: 'spring', bounce: 0, duration: 0.28 }}
         >
-          <SiteSummary
-            info={info}
-            onShowCertificate={() => setView('certificate')}
-            onShowData={() => setView('data')}
-          />
+          <SiteSummary info={info} onShowCertificate={() => setView('certificate')} onShowData={() => setView('data')} />
         </motion.div>
       ) : view === 'data' ? (
         <motion.div
@@ -336,7 +332,15 @@ function CertificateViewer({ chain, onBack }: { chain: CertificateChain; onBack:
   )
 }
 
-function CertSection({ title, fields, mono }: { title: string; fields: { label: string; value: string }[]; mono?: boolean }): React.JSX.Element | null {
+function CertSection({
+  title,
+  fields,
+  mono
+}: {
+  title: string
+  fields: { label: string; value: string }[]
+  mono?: boolean
+}): React.JSX.Element | null {
   if (fields.length === 0) return null
   return (
     <div className="cert-section">

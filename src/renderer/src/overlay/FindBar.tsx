@@ -19,8 +19,7 @@ export function FindBar({ result, focusKey, onClose }: FindBarProps): React.JSX.
     input.current?.select()
   }, [focusKey])
 
-  const query = (forward: boolean, findNext: boolean): void =>
-    zepper.send({ type: 'find.query', text, forward, findNext })
+  const query = (forward: boolean, findNext: boolean): void => zepper.send({ type: 'find.query', text, forward, findNext })
 
   return (
     <motion.div

@@ -22,7 +22,10 @@ export function ExtensionsSettings({ settings }: { settings: Settings }): React.
   }
   const togglePin = (id: string): void => {
     const pinned = settings.pinnedExtensions
-    zepper.send({ type: 'settings.update', patch: { pinnedExtensions: pinned.includes(id) ? pinned.filter((p) => p !== id) : [...pinned, id] } })
+    zepper.send({
+      type: 'settings.update',
+      patch: { pinnedExtensions: pinned.includes(id) ? pinned.filter((p) => p !== id) : [...pinned, id] }
+    })
   }
 
   return (
@@ -34,7 +37,10 @@ export function ExtensionsSettings({ settings }: { settings: Settings }): React.
           <div className="settings-row-hint">Pinned extensions get their own row under the address bar.</div>
         </div>
         <div className="settings-row-control">
-          <Toggle checked={settings.extensionsRow} onChange={(extensionsRow) => zepper.send({ type: 'settings.update', patch: { extensionsRow } })} />
+          <Toggle
+            checked={settings.extensionsRow}
+            onChange={(extensionsRow) => zepper.send({ type: 'settings.update', patch: { extensionsRow } })}
+          />
         </div>
       </div>
       <div className="ext-list">
@@ -70,7 +76,10 @@ export function ExtensionsSettings({ settings }: { settings: Settings }): React.
           )
         })}
       </div>
-      <button className="ext-store" onClick={() => zepper.send({ type: 'tab.open', input: 'https://chromewebstore.google.com', where: 'new' })}>
+      <button
+        className="ext-store"
+        onClick={() => zepper.send({ type: 'tab.open', input: 'https://chromewebstore.google.com', where: 'new' })}
+      >
         Get extensions from the Chrome Web Store
       </button>
     </>

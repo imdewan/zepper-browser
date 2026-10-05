@@ -32,7 +32,11 @@ export function startDebugServer(target: DebugTarget): void {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost')
       if (url.pathname === '/move') {
-        target.move(url.searchParams.get('layer') ?? 'overlay', Number(url.searchParams.get('x') ?? 0), Number(url.searchParams.get('y') ?? 0))
+        target.move(
+          url.searchParams.get('layer') ?? 'overlay',
+          Number(url.searchParams.get('x') ?? 0),
+          Number(url.searchParams.get('y') ?? 0)
+        )
         res.end('ok')
       } else if (url.pathname === '/state') {
         res.setHeader('content-type', 'application/json')

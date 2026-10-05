@@ -180,8 +180,7 @@ kbd {
 html[data-mock] body {
   background:
     radial-gradient(ellipse at 20% 85%, rgba(120, 104, 70, 0.55), transparent 60%),
-    radial-gradient(ellipse at 80% 10%, rgba(90, 110, 130, 0.45), transparent 55%),
-    linear-gradient(160deg, #3d352c, #29241f 55%, #1e1b18);
+    radial-gradient(ellipse at 80% 10%, rgba(90, 110, 130, 0.45), transparent 55%), linear-gradient(160deg, #3d352c, #29241f 55%, #1e1b18);
 }
 
 @media (prefers-color-scheme: light) {

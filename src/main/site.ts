@@ -149,9 +149,7 @@ export class CertificateStore {
     const captured = this.certs.get(host)
     if (!captured) return null
     const { certificate } = captured
-    const issuer = [certificate.issuer.commonName, certificate.issuer.organizations?.[0]]
-      .filter(Boolean)
-      .join(' · ')
+    const issuer = [certificate.issuer.commonName, certificate.issuer.organizations?.[0]].filter(Boolean).join(' · ')
     return {
       subject: certificate.subject.commonName || certificate.subjectName,
       issuer: issuer || certificate.issuerName,
@@ -161,7 +159,6 @@ export class CertificateStore {
     }
   }
 }
-
 
 const NAME_LABELS: Record<string, string> = {
   CN: 'Common Name',

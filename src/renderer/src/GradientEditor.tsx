@@ -42,9 +42,10 @@ export function GradientEditor({ theme, onChange }: GradientEditorProps): React.
   }
 
   const dots = dotsForTheme(local)
-  const harmony: Harmony = local.harmony && HARMONIES[local.harmony].offsets.length === dots.length - 1
-    ? local.harmony
-    : (harmoniesFor(Math.max(1, dots.length))[0] ?? 'floating')
+  const harmony: Harmony =
+    local.harmony && HARMONIES[local.harmony].offsets.length === dots.length - 1
+      ? local.harmony
+      : (harmoniesFor(Math.max(1, dots.length))[0] ?? 'floating')
 
   /** Applies locally right away and forwards at most once per frame. */
   const update = (next: SpaceTheme): void => {
@@ -110,13 +111,7 @@ export function GradientEditor({ theme, onChange }: GradientEditorProps): React.
         <div className="wheel" />
         <svg className="wheel-links" viewBox="-1 -1 2 2" preserveAspectRatio="none">
           {dots.slice(1).map((d, i) => (
-            <line
-              key={i}
-              x1={dots[0].x * WHEEL * 2}
-              y1={dots[0].y * WHEEL * 2}
-              x2={d.x * WHEEL * 2}
-              y2={d.y * WHEEL * 2}
-            />
+            <line key={i} x1={dots[0].x * WHEEL * 2} y1={dots[0].y * WHEEL * 2} x2={d.x * WHEEL * 2} y2={d.y * WHEEL * 2} />
           ))}
         </svg>
         {dots.map((d, i) => (
@@ -137,7 +132,12 @@ export function GradientEditor({ theme, onChange }: GradientEditorProps): React.
         <button className="wheel-tool" title="Remove a colour" disabled={dots.length === 0} onClick={() => setCount(dots.length - 1)}>
           <IconMinus size={14} />
         </button>
-        <button className="wheel-harmony" disabled={harmoniesFor(dots.length).length < 2} onClick={cycleHarmony} title="Change colour harmony">
+        <button
+          className="wheel-harmony"
+          disabled={harmoniesFor(dots.length).length < 2}
+          onClick={cycleHarmony}
+          title="Change colour harmony"
+        >
           {dots.length === 0 ? 'Default' : HARMONIES[harmony].label}
         </button>
         <button className="wheel-tool" title="Add a colour" disabled={dots.length >= 3} onClick={() => setCount(dots.length + 1)}>

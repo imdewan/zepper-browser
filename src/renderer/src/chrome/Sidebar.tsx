@@ -104,7 +104,12 @@ function TopRow({ tab, isPrivate, extensionsRow }: { tab: Tab | null; isPrivate:
       <button className="icon-button" title="Back (⌘[)" disabled={!tab?.canGoBack} onClick={() => zepper.send({ type: 'nav.back' })}>
         <IconBack size={17} />
       </button>
-      <button className="icon-button" title="Forward (⌘])" disabled={!tab?.canGoForward} onClick={() => zepper.send({ type: 'nav.forward' })}>
+      <button
+        className="icon-button"
+        title="Forward (⌘])"
+        disabled={!tab?.canGoForward}
+        onClick={() => zepper.send({ type: 'nav.forward' })}
+      >
         <IconForward size={17} />
       </button>
       <button className="icon-button" title="Reload (⌘R)" disabled={!tab} onClick={() => zepper.send({ type: 'nav.reload' })}>
@@ -180,11 +185,18 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
         <IconSettings size={16} />
       </button>
       <SpaceSwitcher snapshot={snapshot} />
-      <button ref={downloadsRef} className={cx('icon-button', 'downloads-button', running.length > 0 && 'active')} title="Downloads (⌥⌘L)" onClick={openDownloads}>
+      <button
+        ref={downloadsRef}
+        className={cx('icon-button', 'downloads-button', running.length > 0 && 'active')}
+        title="Downloads (⌥⌘L)"
+        onClick={openDownloads}
+      >
         {running.length > 0 && (
           <svg className="downloads-ring" viewBox="0 0 28 28" aria-hidden="true">
             <circle cx="14" cy="14" r="12" />
-            {progress !== null && <circle className="downloads-ring-fill" cx="14" cy="14" r="12" style={{ strokeDashoffset: 75.4 * (1 - progress) }} />}
+            {progress !== null && (
+              <circle className="downloads-ring-fill" cx="14" cy="14" r="12" style={{ strokeDashoffset: 75.4 * (1 - progress) }} />
+            )}
           </svg>
         )}
         <IconDownload size={16} />
@@ -271,7 +283,11 @@ function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element 
 
 /** A space in the bottom bar: click to switch, drop a tab or folder on it to move it there. */
 function SpaceDot({ space, active, playing }: { space: Snapshot['spaces'][number]; active: boolean; playing: boolean }): React.JSX.Element {
-  const drop = useDrop({ key: `space-dot:${space.id}`, whole: 'into', target: () => (active ? null : { zone: 'space', spaceId: space.id }) })
+  const drop = useDrop({
+    key: `space-dot:${space.id}`,
+    whole: 'into',
+    target: () => (active ? null : { zone: 'space', spaceId: space.id })
+  })
   return (
     <button
       {...drop.props}

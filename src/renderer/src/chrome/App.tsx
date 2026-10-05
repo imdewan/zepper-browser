@@ -74,41 +74,41 @@ export function App(): React.JSX.Element | null {
 
   return (
     <MotionConfig reducedMotion={snapshot.settings.reduceMotion ? 'always' : 'never'}>
-    <div
-      className="window"
-      data-ui={dark ? 'dark' : 'light'}
-      data-focused={snapshot.focused}
-      data-compact={!showSidebar}
-      data-animating={animating}
-      {...uiAttributes(snapshot.settings)}
-      style={layoutVars(snapshot, sidebarWidth, accent)}
-    >
-      <Background theme={space.theme} spaceKey={space.id} transparency={snapshot.settings.windowTransparency} />
-      <div className="drag-strip drag" />
-      <AnimatePresence initial={false}>
-        {showSidebar && (
-          <motion.div
-            key="sidebar"
-            className="sidebar-slot"
-            initial={{ x: snapshot.settings.sidebarPosition === 'right' ? 40 : -40, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: snapshot.settings.sidebarPosition === 'right' ? 40 : -40, opacity: 0, transition: { duration: 0.18 } }}
-            transition={{ type: 'spring', bounce: 0, duration: 0.28 }}
-          >
-            <Sidebar snapshot={snapshot} width={sidebarWidth} onResize={setDragWidth} />
-          </motion.div>
+      <div
+        className="window"
+        data-ui={dark ? 'dark' : 'light'}
+        data-focused={snapshot.focused}
+        data-compact={!showSidebar}
+        data-animating={animating}
+        {...uiAttributes(snapshot.settings)}
+        style={layoutVars(snapshot, sidebarWidth, accent)}
+      >
+        <Background theme={space.theme} spaceKey={space.id} transparency={snapshot.settings.windowTransparency} />
+        <div className="drag-strip drag" />
+        <AnimatePresence initial={false}>
+          {showSidebar && (
+            <motion.div
+              key="sidebar"
+              className="sidebar-slot"
+              initial={{ x: snapshot.settings.sidebarPosition === 'right' ? 40 : -40, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: snapshot.settings.sidebarPosition === 'right' ? 40 : -40, opacity: 0, transition: { duration: 0.18 } }}
+              transition={{ type: 'spring', bounce: 0, duration: 0.28 }}
+            >
+              <Sidebar snapshot={snapshot} width={sidebarWidth} onResize={setDragWidth} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {snapshot.compact && !snapshot.fullscreen && snapshot.settings.compactRevealOnHover && (
+          <div className="edge-hotzone" onMouseEnter={() => zepper.send({ type: 'ui.peekSidebar', show: true })} />
         )}
-      </AnimatePresence>
-      {snapshot.compact && !snapshot.fullscreen && snapshot.settings.compactRevealOnHover && (
-        <div className="edge-hotzone" onMouseEnter={() => zepper.send({ type: 'ui.peekSidebar', show: true })} />
-      )}
-      {snapshot.panes.length > 1 ? (
-        <SplitPanes snapshot={snapshot} />
-      ) : (
-        <ContentCard tab={activeTab} isPrivate={snapshot.kind === 'private'} quiet={snapshot.paletteOpen} />
-      )}
-      <SwipeIndicator />
-    </div>
+        {snapshot.panes.length > 1 ? (
+          <SplitPanes snapshot={snapshot} />
+        ) : (
+          <ContentCard tab={activeTab} isPrivate={snapshot.kind === 'private'} quiet={snapshot.paletteOpen} />
+        )}
+        <SwipeIndicator />
+      </div>
     </MotionConfig>
   )
 }
@@ -154,8 +154,8 @@ function ContentCard({ tab, isPrivate, quiet }: { tab: Tab | null; isPrivate: bo
             </div>
             <div className="private-title">You're browsing privately</div>
             <p className="private-text">
-              Zepper won't save your history, and this window's cookies, site data and permissions are erased when you close it.
-              Files you download stay on your Mac, and ads and trackers are still blocked.
+              Zepper won't save your history, and this window's cookies, site data and permissions are erased when you close it. Files you
+              download stay on your Mac, and ads and trackers are still blocked.
             </p>
             <div className="empty-hint">
               Press <kbd>⌘</kbd>
