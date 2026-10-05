@@ -3291,7 +3291,8 @@ export class Browser {
         { type: 'separator' }
       )
     }
-    const extensionItems = this.extensions?.api.getContextMenuItems(wc, params) ?? []
+    // Extensions live in the default profile; pages in a space's own profile have no extension items.
+    const extensionItems = this.usesExtensions(wc) ? (this.extensions?.api.getContextMenuItems(wc, params) ?? []) : []
     if (extensionItems.length > 0) items.push(...extensionItems, { type: 'separator' })
     items.push({ label: 'Inspect Element', click: () => wc.inspectElement(params.x, params.y) })
     this.popup(items)
