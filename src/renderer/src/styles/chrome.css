@@ -225,8 +225,22 @@
   flex: none;
 }
 
-.compact-toggle {
+.extensions-button {
   margin-left: 4px;
+}
+
+/* Pinned extensions beside the puzzle; they step aside when the row gets tight. */
+.top-row-extensions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+@container (max-width: 280px) {
+  .top-row-extensions {
+    display: none;
+  }
 }
 
 /* Narrow sidebars: every control stays; the buttons shrink to share the row instead
@@ -235,7 +249,7 @@
   .top-row {
     gap: 0;
   }
-  .top-row .compact-toggle {
+  .top-row .extensions-button {
     margin-left: 0;
   }
   .top-row .icon-button {
@@ -952,6 +966,57 @@ button.site-button:active {
   }
 }
 
+/* Downloads: a ring fills around the button while files download. */
+.downloads-button {
+  position: relative;
+}
+
+.downloads-button.active {
+  color: var(--text);
+}
+
+.downloads-ring {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.downloads-ring circle {
+  fill: none;
+  stroke: var(--separator);
+  stroke-width: 2;
+}
+
+.downloads-ring .downloads-ring-fill {
+  stroke: var(--accent);
+  stroke-dasharray: 75.4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+/* New space, after the space dots. */
+.space-add {
+  width: 22px;
+  height: 28px;
+  flex: none;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  opacity: 0.7;
+  transition:
+    opacity 0.12s ease,
+    background-color 0.1s ease,
+    color 0.1s ease;
+}
+
+.space-add:hover {
+  opacity: 1;
+  color: var(--text);
+  background: var(--hover);
+}
+
 .resize-handle {
   position: absolute;
   top: 8px;
@@ -1338,14 +1403,7 @@ button.site-button:active {
   background: var(--element-hover);
 }
 
-/* Extensions: the puzzle button and pinned extensions in the bottom bar. */
-.bottom-extensions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: none;
-  min-width: 0;
-}
+/* Pinned extension buttons (the library's <button is="browser-action">). */
 
 .extension-slot {
   display: contents;

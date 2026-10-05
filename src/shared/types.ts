@@ -64,7 +64,18 @@ export interface Space {
   theme: SpaceTheme
   collapsedPins: boolean
   lastTabId: string | null
+  /**
+   * Where this space keeps cookies, logins, storage and cache, like a Zen container:
+   * 'default' (shared with Essentials and extensions) or its own store. History is shared.
+   */
+  profile: string
 }
+
+/**
+ * A space's sign-ins: a fresh profile, a fresh profile seeded with another space's cookies
+ * (starts signed in, stays separate), or the same profile as another space (always in sync).
+ */
+export type ProfileChoice = { mode: 'new' } | { mode: 'copy' | 'share'; from: string }
 
 export type SplitLayout = 'horizontal' | 'vertical' | 'grid'
 
@@ -80,6 +91,21 @@ export interface Split {
 export interface Pane {
   tabId: string
   rect: Rect
+}
+
+/** A download, for the downloads panel. */
+export interface DownloadEntry {
+  id: string
+  filename: string
+  url: string
+  path: string
+  state: 'progressing' | 'paused' | 'completed' | 'cancelled' | 'interrupted'
+  received: number
+  /** 0 when the size isn't known. */
+  total: number
+  startedAt: number
+  /** From a private window: only shown there, never saved. */
+  private: boolean
 }
 
 /** Google Widevine (DRM): not in this build, turned off, downloading, usable, or failed to install. */
@@ -103,6 +129,9 @@ export interface Snapshot {
   /** Window type: the main window, a temporary window, or a private window. */
   kind: 'main' | 'blank' | 'private'
   widevine: WidevineStatus
+  downloads: DownloadEntry[]
+  /** Window content size, so floating UI can line up with the window's background. */
+  windowSize: { width: number; height: number }
   splits: Split[]
   /** Where each visible web view sits in the window; more than one while a split is shown. */
   panes: Pane[]
@@ -226,6 +255,7 @@ export type PopoverSpec =
   | { kind: 'permission'; anchor: Rect; prompt: PermissionPrompt }
   | { kind: 'extensions'; anchor: Rect }
   | { kind: 'spaces'; anchor: Rect }
+  | { kind: 'downloads'; anchor: Rect }
   | { kind: 'widevine'; anchor: Rect; host: string; restart: boolean }
   | { kind: 'jsDialog'; anchor: Rect; dialog: JsDialogSpec }
   | { kind: 'auth'; anchor: Rect; auth: AuthSpec }
@@ -261,7 +291,8 @@ export type Command =
   | { type: 'nav.reload' }
   | { type: 'space.switch'; spaceId: string }
   | { type: 'space.switchRelative'; delta: number }
-  | { type: 'space.create'; name: string; icon: string; theme: SpaceTheme }
+  | { type: 'space.create'; name: string; icon: string; theme: SpaceTheme; profile?: ProfileChoice }
+  | { type: 'space.setProfile'; spaceId: string; profile: ProfileChoice }
   | {
       type: 'space.update'
       spaceId: string
@@ -299,6 +330,13 @@ export type Command =
   | { type: 'find.query'; text: string; forward: boolean; findNext: boolean }
   | { type: 'find.stop' }
   | { type: 'download.show'; path: string }
+  | { type: 'download.action'; id: string; action: 'open' | 'reveal' | 'pause' | 'resume' | 'cancel' | 'remove' }
+  | { type: 'downloads.clear' }
+  | { type: 'ui.downloads' }
+  | { type: 'ui.openHistory' }
+  | { type: 'history.remove'; url: string }
+  /** Forget history since a time; 0 clears it all. */
+  | { type: 'history.clear'; since: number }
   | { type: 'settings.update'; patch: Partial<Settings> }
   | { type: 'ui.openSettings' }
   | { type: 'ui.peekSidebar'; show: boolean }
@@ -316,6 +354,9 @@ export type Command =
 export type UiEvent =
   | { type: 'palette.open'; mode: 'new' | 'current' | 'split'; currentUrl: string | null }
   | { type: 'toast'; toast: ToastSpec }
+  | { type: 'history.open' }
+  /** Open the downloads panel from the sidebar's downloads button. */
+  | { type: 'downloads.open' }
   | { type: 'space.startRename'; spaceId: string }
   | { type: 'space.startCreate' }
   | { type: 'popover.open'; popover: PopoverSpec }
@@ -333,6 +374,15 @@ export interface ZepperApi {
   onEvent(callback: (event: UiEvent) => void): () => void
   send(command: Command): void
   suggest(text: string): Promise<Suggestion[]>
+  /** History page entries, newest first. */
+  history(query: string): Promise<HistoryEntry[]>
+}
+
+export interface HistoryEntry {
+  url: string
+  title: string
+  visits: number
+  lastVisit: number
 }
 
 export const IPC = {
@@ -342,5 +392,6 @@ export const IPC = {
   getSnapshot: 'zepper:get-snapshot',
   event: 'zepper:event',
   command: 'zepper:command',
-  suggest: 'zepper:suggest'
+  suggest: 'zepper:suggest',
+  history: 'zepper:history'
 } as const

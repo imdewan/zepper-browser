@@ -1,6 +1,6 @@
 import { JsonFile } from './persist'
 
-interface Visit {
+export interface Visit {
   url: string
   title: string
   visits: number
@@ -57,6 +57,25 @@ export class History {
     }
     scored.sort((a, b) => b.score - a.score)
     return scored.slice(0, limit).map((s) => s.visit)
+  }
+
+  /** For the history page: newest first, optionally filtered by every word of a query. */
+  list(query: string, limit: number): Visit[] {
+    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean)
+    const matches = [...this.entries.values()].filter(
+      (v) => tokens.length === 0 || tokens.every((t) => `${v.url} ${v.title}`.toLowerCase().includes(t))
+    )
+    return matches.sort((a, b) => b.lastVisit - a.lastVisit).slice(0, limit)
+  }
+
+  remove(url: string): void {
+    if (this.entries.delete(url)) this.save()
+  }
+
+  /** Forgets everything visited since a time (0: all history). */
+  clearSince(since: number): void {
+    for (const [url, visit] of this.entries) if (visit.lastVisit >= since) this.entries.delete(url)
+    this.save()
   }
 
   flush(): void {

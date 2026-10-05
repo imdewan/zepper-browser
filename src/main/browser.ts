@@ -7,6 +7,7 @@ import {
   clipboard,
   dialog,
   nativeTheme,
+  session,
   shell,
   type AuthInfo,
   type ContextMenuParams,
@@ -42,6 +43,7 @@ import {
   type AuthSpec,
   type JsDialogSpec,
   type PopoverSpec,
+  type ProfileChoice,
   type Split,
   type SplitLayout,
   type Suggestion,
@@ -65,7 +67,7 @@ const TITLEBAR_STRIP = 34
 const TRAFFIC_LIGHTS = { x: 17, y: 17 }
 /** The compact-mode peek card's inset from the window edge (overlay.css .peek-card). */
 const PEEK_INSET = 6
-const MIN_SIDEBAR = 170
+const MIN_SIDEBAR = 190
 const MAX_SIDEBAR = 500
 const DEFAULT_SIDEBAR = 250
 const MAX_ESSENTIALS = 12
@@ -208,8 +210,12 @@ const MEDIA_TOGGLE_SCRIPT = `(() => {
   return 'playing'
 })()`
 
-function makeSpace(name: string, icon: string, theme: SpaceTheme = DEFAULT_THEME): Space {
-  return { id: randomUUID(), name, icon, theme, collapsedPins: false, lastTabId: null }
+/** The profile Essentials, extensions and your first space use (Electron's default session). */
+export const DEFAULT_PROFILE = 'default'
+
+/** New spaces get their own profile: separate cookies, logins, storage and cache. */
+function makeSpace(name: string, icon: string, theme: SpaceTheme = DEFAULT_THEME, profile: string = randomUUID()): Space {
+  return { id: randomUUID(), name, icon, theme, collapsedPins: false, lastTabId: null, profile }
 }
 
 /**
@@ -288,7 +294,9 @@ export class Browser {
     this.permissions = kind === 'private' ? new SitePermissions(false) : hub.services.permissions
     const saved = this.stateFile?.read()
     if (saved?.version === 1 && saved.spaces.length > 0) {
-      this.spaces = saved.spaces
+      // Spaces from before profiles keep sharing the existing sign-ins (as they did); you can
+      // separate any of them from its context menu (Sign-ins).
+      this.spaces = saved.spaces.map((space) => ({ ...space, profile: space.profile ?? DEFAULT_PROFILE }))
       this.tabs = saved.tabs.map((t) => makeTab(t))
       this.activeSpaceId = saved.spaces.some((s) => s.id === saved.activeSpaceId)
         ? saved.activeSpaceId
@@ -301,21 +309,21 @@ export class Browser {
       this.sidebarWidth = Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, saved.sidebarWidth ?? DEFAULT_SIDEBAR))
       this.compact = saved.compact ?? false
     } else if (kind === 'private') {
-      const space = makeSpace('Private', '🕶️', { colors: ['#3b2a6b', '#1b1934'], opacity: 0.7, texture: 0.15, scheme: 'dark' })
+      const space = makeSpace('Private', '🕶️', { colors: ['#3b2a6b', '#1b1934'], opacity: 0.7, texture: 0.15, scheme: 'dark' }, DEFAULT_PROFILE)
       this.spaces = [space]
       this.tabs = []
       this.activeSpaceId = space.id
       this.sidebarWidth = DEFAULT_SIDEBAR
       this.compact = false
     } else if (kind === 'blank') {
-      const space = makeSpace('New Window', '🪟')
+      const space = makeSpace('New Window', '🪟', DEFAULT_THEME, DEFAULT_PROFILE)
       this.spaces = [space]
       this.tabs = []
       this.activeSpaceId = space.id
       this.sidebarWidth = DEFAULT_SIDEBAR
       this.compact = false
     } else {
-      const space = makeSpace('Personal', '😀')
+      const space = makeSpace('Personal', '😀', DEFAULT_THEME, DEFAULT_PROFILE)
       this.spaces = [space]
       this.tabs = []
       this.activeSpaceId = space.id
@@ -391,7 +399,10 @@ export class Browser {
     load(this.overlay.webContents, 'overlay.html')
 
     this.win.once('ready-to-show', () => this.win.show())
-    this.win.on('resize', () => this.layout())
+    this.win.on('resize', () => {
+      this.layout()
+      this.broadcast()
+    })
     this.win.on('focus', () => this.broadcast())
     // macOS puts the traffic lights back at their default spot after full screen.
     this.win.on('leave-full-screen', () => this.showTrafficLights(!this.compact || this.peeking))
@@ -517,7 +528,8 @@ export class Browser {
     const path = uniquePath(join(app.getPath('downloads'), item.getFilename()))
     item.setSavePath(path)
     const name = basename(path)
-    this.toast({ id: `download-${name}`, message: 'Downloading…', description: name, timeout: 2500 })
+    // The downloads button shows progress; the list lives in the downloads panel.
+    this.hub.downloads.track(item, path, this.kind === 'private')
     item.on('updated', () => {
       const total = item.getTotalBytes()
       if (total > 0 && !this.win.isDestroyed()) this.win.setProgressBar(item.getReceivedBytes() / total)
@@ -672,7 +684,9 @@ export class Browser {
       case 'space.switchRelative':
         return this.switchSpaceRelative(command.delta)
       case 'space.create':
-        return this.createSpace(command.name, command.icon, command.theme)
+        return void this.createSpace(command.name, command.icon, command.theme, command.profile ?? { mode: 'new' })
+      case 'space.setProfile':
+        return void this.setSpaceProfile(command.spaceId, command.profile)
       case 'space.update':
         return this.updateSpace(command.spaceId, command.patch)
       case 'space.contextMenu':
@@ -759,6 +773,24 @@ export class Browser {
       case 'find.stop':
         this.activeWebContents()?.stopFindInPage('clearSelection')
         return
+      case 'download.action':
+        return void this.hub.downloads[command.action](command.id)
+      case 'downloads.clear':
+        return this.hub.downloads.clear()
+      case 'ui.openHistory':
+        this.setOverlayMode('full')
+        this.overlay.webContents.focus()
+        return this.emit({ type: 'history.open' }, 'overlay')
+      case 'history.remove':
+        return this.history.remove(command.url)
+      case 'history.clear':
+        return this.history.clearSince(command.since)
+      case 'ui.downloads': {
+        // From the sidebar's button; with the sidebar hidden, from the bottom corner.
+        if (!this.compact) return this.emit({ type: 'downloads.open' }, 'chrome')
+        const [, height] = this.win.getContentSize()
+        return this.handle({ type: 'ui.openPopover', popover: { kind: 'downloads', anchor: { x: 12, y: height - 12, width: 0, height: 0 } } })
+      }
       case 'download.show':
         return shell.showItemInFolder(command.path)
       case 'settings.update':
@@ -915,7 +947,7 @@ export class Browser {
     if (space) space.lastTabId = id
     this.layout()
     if (!this.paletteOpen && this.overlayMode !== 'full') view.webContents.focus()
-    this.extensions?.api.selectTab(view.webContents)
+    if (this.usesExtensions(view.webContents)) this.extensions?.api.selectTab(view.webContents)
     this.broadcast()
     this.showNextPrompt()
     this.showNextDialog()
@@ -1164,6 +1196,7 @@ export class Browser {
     tab.spaceId = null
     tab.pinned ??= { url: tab.url, title: tab.title, favicon: tab.favicon }
     this.moveToEnd(tab)
+    this.rehome(tab)
     this.broadcast()
   }
 
@@ -1174,6 +1207,7 @@ export class Browser {
     tab.spaceId = this.activeSpaceId
     tab.pinned = null
     this.moveToFront(tab)
+    this.rehome(tab)
     this.broadcast()
   }
 
@@ -1183,6 +1217,7 @@ export class Browser {
     tab.spaceId = spaceId
     if (tab.kind === 'pinned') this.moveToEnd(tab)
     else this.moveToFront(tab)
+    this.rehome(tab)
     this.activateTab(tab.id)
   }
 
@@ -1359,7 +1394,7 @@ export class Browser {
             sandbox: true,
             contextIsolation: true,
             nodeIntegration: false,
-            session: this.ses,
+            session: this.sessionFor(tab),
             scrollBounce: true,
             spellcheck: true
           }
@@ -1371,10 +1406,46 @@ export class Browser {
     this.views.set(tab.id, view)
     this.tabByWebContents.set(view.webContents.id, tab.id)
     this.wire(tab.id, view.webContents)
-    this.extensions?.api.addTab(view.webContents, this.win)
+    if (this.usesExtensions(view.webContents)) this.extensions?.api.addTab(view.webContents, this.win)
     tab.loaded = true
     if (!adopt) void view.webContents.loadURL(tab.url).catch(() => {})
     return view
+  }
+
+  /**
+   * The session a tab's page lives in: its space's profile (Essentials use the default one,
+   * as in Zen). Private windows have their own throwaway session; other windows share the
+   * default profile.
+   */
+  private sessionFor(tab: Tab): Session {
+    if (this.kind !== 'main') return this.ses
+    const profile = tab.kind === 'essential' || !tab.spaceId ? DEFAULT_PROFILE : (this.space(tab.spaceId)?.profile ?? DEFAULT_PROFILE)
+    return this.hub.profileSession(profile)
+  }
+
+  /** Extensions are installed in the default profile only. */
+  private usesExtensions(wc: WebContents): boolean {
+    return wc.session === session.defaultSession
+  }
+
+  /**
+   * After a tab moves to another space (or in or out of Essentials), a page in the wrong
+   * profile is reloaded in the right one; a page can't change session.
+   */
+  private rehome(tab: Tab): void {
+    const view = this.views.get(tab.id)
+    if (!view || view.webContents.session === this.sessionFor(tab)) return
+    const visible = this.attached.has(tab.id)
+    this.destroyView(tab)
+    if (visible) {
+      this.ensureView(tab)
+      this.syncAttachedViews()
+    }
+  }
+
+  /** The session of the page you're looking at (site data and certificate panels). */
+  private activeSession(): Session {
+    return this.activeWebContents()?.session ?? this.ses
   }
 
   private destroyView(tab: Tab): void {
@@ -1414,7 +1485,7 @@ export class Browser {
       if (tab) tab.lastActiveAt = Date.now()
       const space = this.space(this.activeSpaceId)
       if (space) space.lastTabId = tabId
-      this.extensions?.api.selectTab(wc)
+      if (this.usesExtensions(wc)) this.extensions?.api.selectTab(wc)
       this.broadcast()
     })
     // A page with unsaved changes asks before it's left, as in Chrome (Electron would otherwise cancel silently).
@@ -1572,11 +1643,70 @@ export class Browser {
     if (space) this.switchSpace(space.id)
   }
 
-  private createSpace(name: string, icon: string, theme: SpaceTheme): void {
+  private async createSpace(name: string, icon: string, theme: SpaceTheme, choice: ProfileChoice): Promise<void> {
     const space = makeSpace(name.trim() || 'Space', icon || '✨', theme)
+    // Sign-ins are set up before the space opens, so its first page already has them.
+    if (this.kind === 'main') await this.profileFor(choice, space)
+    else space.profile = DEFAULT_PROFILE
     const index = this.spaces.findIndex((s) => s.id === this.activeSpaceId)
     this.spaces.splice(index + 1, 0, space)
     this.switchSpace(space.id)
+  }
+
+  /** Gives a space the chosen sign-ins: shared with another space, or its own (fresh or copied). */
+  private async profileFor(choice: ProfileChoice, space: Space): Promise<void> {
+    const from = choice.mode === 'new' ? undefined : this.space(choice.from)
+    if (choice.mode === 'share' && from) {
+      space.profile = from.profile
+      return
+    }
+    space.profile = randomUUID()
+    if (choice.mode === 'copy' && from) await this.copyCookies(from.profile, space.profile)
+  }
+
+  /** Changes an existing space's sign-ins; its open pages reload in the new profile. */
+  private async setSpaceProfile(id: string, choice: ProfileChoice): Promise<void> {
+    const space = this.space(id)
+    if (!space || this.kind !== 'main') return
+    const previous = space.profile
+    await this.profileFor(choice, space)
+    if (space.profile === previous) return
+    for (const tab of this.tabs.filter((t) => t.spaceId === id)) this.rehome(tab)
+    // A profile nothing uses any more is cleared (the default one always stays).
+    if (previous !== DEFAULT_PROFILE && !this.spaces.some((s) => s.profile === previous)) void this.clearProfile(previous)
+    this.broadcast()
+    const label = choice.mode === 'share' ? `Sharing sign-ins with ${this.space(choice.from)?.name}` : choice.mode === 'copy' ? 'Copied sign-ins' : 'Started fresh'
+    this.toast({ id: 'space-profile', message: label, description: space.name })
+  }
+
+  /**
+   * Seeds a profile with another's cookies, which is how most sites keep you signed in
+   * (site storage like localStorage isn't copied).
+   */
+  private async copyCookies(fromProfile: string, toProfile: string): Promise<void> {
+    const source = this.hub.profileSession(fromProfile)
+    const target = this.hub.profileSession(toProfile)
+    const cookies = await source.cookies.get({})
+    await Promise.all(
+      cookies.map((c) => {
+        const host = (c.domain ?? '').replace(/^\./, '')
+        if (!host) return Promise.resolve()
+        return target.cookies
+          .set({
+            url: `${c.secure ? 'https' : 'http'}://${host}${c.path ?? '/'}`,
+            name: c.name,
+            value: c.value,
+            domain: c.hostOnly ? undefined : c.domain,
+            path: c.path,
+            secure: c.secure,
+            httpOnly: c.httpOnly,
+            expirationDate: c.expirationDate,
+            sameSite: c.sameSite
+          })
+          .catch(() => {})
+      })
+    )
+    await target.cookies.flushStore().catch(() => {})
   }
 
   private updateSpace(id: string, patch: Partial<Pick<Space, 'name' | 'icon' | 'theme' | 'collapsedPins'>>): void {
@@ -1607,6 +1737,10 @@ export class Browser {
     if (this.activeTabId && !this.tab(this.activeTabId)) this.activeTabId = null
     const wasActive = this.activeSpaceId === id
     this.spaces = this.spaces.filter((s) => s.id !== id)
+    // Its own profile goes with it (the default profile is shared, so it stays).
+    if (this.kind === 'main' && space.profile !== DEFAULT_PROFILE && !this.spaces.some((s) => s.profile === space.profile)) {
+      void this.clearProfile(space.profile)
+    }
     if (wasActive) {
       this.activeSpaceId = '' // forces switchSpace to run
       this.switchSpace(this.spaces[0].id)
@@ -1841,7 +1975,7 @@ export class Browser {
     const site = parseDomain(url).domain
     if (!site) return []
     const counts = new Map<string, number>()
-    for (const cookie of await this.ses.cookies.get({})) {
+    for (const cookie of await this.activeSession().cookies.get({})) {
       const domain = (cookie.domain ?? '').replace(/^\./, '')
       if (domain === site || domain.endsWith(`.${site}`)) counts.set(domain, (counts.get(domain) ?? 0) + 1)
     }
@@ -1849,7 +1983,7 @@ export class Browser {
   }
 
   private async clearDomain(domain: string): Promise<void> {
-    const ses = this.ses
+    const ses = this.activeSession()
     const cookies = (await ses.cookies.get({})).filter((c) => (c.domain ?? '').replace(/^\./, '') === domain)
     await Promise.all(
       cookies.map((c) => ses.cookies.remove(`http${c.secure ? 's' : ''}://${domain}${c.path ?? '/'}`, c.name).catch(() => {}))
@@ -1976,8 +2110,9 @@ export class Browser {
   }
 
   private async clearSiteData(origin: string): Promise<void> {
-    await this.ses.clearStorageData({ origin })
-    await this.ses.clearCache()
+    const ses = this.activeSession()
+    await ses.clearStorageData({ origin })
+    await ses.clearCache()
     this.toast({ id: 'site-data-cleared', message: 'Site data cleared', description: safeHost(origin) })
     this.activeWebContents()?.reload()
   }
@@ -2244,10 +2379,71 @@ export class Browser {
       { label: 'Edit Theme…', click: () => this.handle({ type: 'ui.openPopover', popover: { kind: 'theme', spaceId: id, anchor } }) },
       { type: 'separator' },
       { label: 'Unload Space', click: () => this.unloadSpace(id) },
+      ...(this.kind === 'main' ? this.profileMenuItems(space) : []),
       { type: 'separator' },
       { label: 'Create Space', click: () => this.handle({ type: 'ui.createSpace' }) },
       { label: 'Delete Space', enabled: this.spaces.length > 1, click: () => void this.deleteSpace(id) }
     ])
+  }
+
+  /** "Sign-ins ▸": keep separate, share with or copy from another space, or clear this space's data. */
+  private profileMenuItems(space: Space): MenuItemConstructorOptions[] {
+    const others = this.spaces.filter((s) => s.id !== space.id)
+    const sharing = others.filter((s) => s.profile === space.profile)
+    const choose = (profile: ProfileChoice) => () => void this.setSpaceProfile(space.id, profile)
+    return [
+      {
+        label: 'Sign-ins',
+        submenu: [
+          {
+            label: sharing.length > 0 ? `Shared with ${sharing.map((s) => s.name).join(', ')}` : 'Separate from other spaces',
+            enabled: false
+          },
+          { type: 'separator' },
+          { label: 'Start Fresh (Separate)', click: choose({ mode: 'new' }) },
+          ...(others.length > 0
+            ? ([
+                { label: 'Share With', submenu: others.map((s) => ({ label: `${s.icon}  ${s.name}`, type: 'checkbox', checked: s.profile === space.profile, click: choose({ mode: 'share', from: s.id }) })) },
+                { label: 'Copy From', submenu: others.map((s) => ({ label: `${s.icon}  ${s.name}`, click: choose({ mode: 'copy', from: s.id }) })) }
+              ] satisfies MenuItemConstructorOptions[])
+            : []),
+          { type: 'separator' },
+          { label: 'Clear Space Data…', click: () => void this.confirmClearSpaceData(space.id) }
+        ]
+      }
+    ]
+  }
+
+  private async confirmClearSpaceData(id: string): Promise<void> {
+    const space = this.space(id)
+    if (!space) return
+    const sharedWith = [
+      ...this.spaces.filter((s) => s.id !== id && s.profile === space.profile).map((s) => s.name),
+      ...(space.profile === DEFAULT_PROFILE ? ['Essentials and extensions'] : [])
+    ]
+    const { response } = await dialog.showMessageBox(this.win, {
+      type: 'warning',
+      message: `Clear cookies and site data in “${space.name}”?`,
+      detail:
+        sharedWith.length > 0
+          ? `This space shares its sign-ins with ${sharedWith.join(', ')}; you’ll be signed out there too. History is kept.`
+          : 'You’ll be signed out of sites in this space. Other spaces and your history aren’t affected.',
+      buttons: ['Clear Data', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1
+    })
+    if (response !== 0) return
+    await this.clearProfile(space.profile)
+    for (const tab of this.tabs) {
+      if (tab.loaded && this.sessionFor(tab) === this.hub.profileSession(space.profile)) this.views.get(tab.id)?.webContents.reload()
+    }
+    this.toast({ id: 'space-data-cleared', message: 'Space data cleared', description: space.name })
+  }
+
+  private async clearProfile(profile: string): Promise<void> {
+    const ses = this.hub.profileSession(profile)
+    await ses.clearStorageData().catch(() => {})
+    await ses.clearCache().catch(() => {})
   }
 
   private newMenu(anchor: Rect): void {
@@ -2270,6 +2466,9 @@ export class Browser {
           click: () => this.settingsStore.update({ adblock: !this.settings.adblock })
         },
         { label: 'Compact Mode', type: 'checkbox', checked: this.compact, accelerator: 'CmdOrCtrl+S', click: () => this.toggleCompact() },
+        { type: 'separator' },
+        { label: 'History', accelerator: 'CmdOrCtrl+Y', click: () => this.handle({ type: 'ui.openHistory' }) },
+        { label: 'Downloads', accelerator: 'Alt+CmdOrCtrl+L', click: () => this.handle({ type: 'ui.downloads' }) },
         { type: 'separator' },
         { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => this.handle({ type: 'ui.openSettings' }) }
       ],
@@ -2475,6 +2674,7 @@ export class Browser {
     split.tabIds.push(tab.id)
     split.sizes = evenSizes(split.layout === 'grid' ? 1 : split.tabIds.length)
     if (tab.spaceId !== active.spaceId && active.spaceId) tab.spaceId = active.spaceId
+    this.rehome(tab)
     this.activateTab(tab.id)
   }
 
@@ -2566,6 +2766,8 @@ export class Browser {
       settings: this.settings,
       kind: this.kind,
       widevine: this.hub.widevine,
+      downloads: this.hub.downloads.list(this.kind === 'private'),
+      windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : []
     }

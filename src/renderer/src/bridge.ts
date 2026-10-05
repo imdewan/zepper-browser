@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from '@shared/settings'
-import type { Command, Snapshot, Space, Suggestion, Tab, UiEvent, ZepperApi } from '@shared/types'
+import type { Command, HistoryEntry, Snapshot, Space, Suggestion, Tab, UiEvent, ZepperApi } from '@shared/types'
 
 /**
  * The preload exposes `window.zepper` inside Electron. When the renderer is
@@ -33,9 +33,9 @@ function createMock(): ZepperApi {
     ...fields
   })
   const spaces: Space[] = [
-    { id: 's1', name: 'Personal', icon: '😀', theme: { colors: [], opacity: 0.5, texture: 0 }, collapsedPins: false, lastTabId: 'e1' },
-    { id: 's2', name: 'Work', icon: '💼', theme: { colors: ['#7b6cf6', '#c06cf6', '#f66cb4'], opacity: 0.6, texture: 0.15 }, collapsedPins: false, lastTabId: null },
-    { id: 's3', name: 'Reading', icon: '📚', theme: { colors: ['#e07a2d', '#f2b134'], opacity: 0.55, texture: 0 }, collapsedPins: false, lastTabId: null }
+    { id: 's1', name: 'Personal', icon: '😀', theme: { colors: [], opacity: 0.5, texture: 0 }, collapsedPins: false, lastTabId: 'e1', profile: 'default' },
+    { id: 's2', name: 'Work', icon: '💼', theme: { colors: ['#7b6cf6', '#c06cf6', '#f66cb4'], opacity: 0.6, texture: 0.15 }, collapsedPins: false, lastTabId: null, profile: crypto.randomUUID() },
+    { id: 's3', name: 'Reading', icon: '📚', theme: { colors: ['#e07a2d', '#f2b134'], opacity: 0.55, texture: 0 }, collapsedPins: false, lastTabId: null, profile: crypto.randomUUID() }
   ]
   const pin = (url: string, title: string): Tab['pinned'] => ({ url, title, favicon: favicon(new URL(url).hostname) })
   let snapshot: Snapshot = {
@@ -70,6 +70,8 @@ function createMock(): ZepperApi {
     settings: DEFAULT_SETTINGS,
     kind: 'main',
     widevine: { state: 'off', version: null },
+    downloads: [],
+    windowSize: { width: window.innerWidth, height: window.innerHeight },
     splits: [],
     panes: []
   }
@@ -112,7 +114,7 @@ function createMock(): ZepperApi {
         set({ spaces: snapshot.spaces.map((s) => (s.id === command.spaceId ? { ...s, ...command.patch } : s)) })
         break
       case 'space.create': {
-        const space: Space = { id: `s${Date.now()}`, name: command.name, icon: command.icon, theme: command.theme, collapsedPins: false, lastTabId: null }
+        const space: Space = { id: `s${Date.now()}`, name: command.name, icon: command.icon, theme: command.theme, collapsedPins: false, lastTabId: null, profile: crypto.randomUUID() }
         set({ spaces: [...snapshot.spaces, space], activeSpaceId: space.id, activeTabId: null })
         break
       }
@@ -146,6 +148,14 @@ function createMock(): ZepperApi {
       return () => eventListeners.delete(callback)
     },
     send: handle,
+    async history(): Promise<HistoryEntry[]> {
+      const now = Date.now()
+      return [
+        { url: 'https://news.ycombinator.com/', title: 'Hacker News', visits: 12, lastVisit: now - 5 * 60_000 },
+        { url: 'https://github.com/zen-browser/desktop', title: 'zen-browser/desktop', visits: 3, lastVisit: now - 3 * 3_600_000 },
+        { url: 'https://en.wikipedia.org/wiki/Zen', title: 'Zen - Wikipedia', visits: 1, lastVisit: now - 26 * 3_600_000 }
+      ]
+    },
     async suggest(text: string): Promise<Suggestion[]> {
       if (!text) return []
       return [

@@ -109,7 +109,10 @@ export function buildMenu(hub: Hub): Menu {
       label: 'History',
       submenu: [
         { label: 'Back', accelerator: 'CmdOrCtrl+[', click: run((browser) => browser.handle({ type: 'nav.back' })) },
-        { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: run((browser) => browser.handle({ type: 'nav.forward' })) }
+        { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: run((browser) => browser.handle({ type: 'nav.forward' })) },
+        { type: 'separator' },
+        { label: 'Show All History', accelerator: 'CmdOrCtrl+Y', click: run((browser) => browser.handle({ type: 'ui.openHistory' })) },
+        { label: 'Downloads', accelerator: 'Alt+CmdOrCtrl+L', click: run((browser) => browser.handle({ type: 'ui.downloads' })) }
       ]
     },
     {

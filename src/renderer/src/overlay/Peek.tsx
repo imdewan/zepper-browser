@@ -1,8 +1,8 @@
 import { useRef } from 'react'
 import { motion } from 'motion/react'
-import { themeBackground } from '@shared/theme'
 import type { Snapshot } from '@shared/types'
 import { zepper } from '../bridge'
+import { Background } from '../chrome/App'
 import { Sidebar } from '../chrome/Sidebar'
 
 const HIDE_DELAY_MS = 250
@@ -52,7 +52,14 @@ export function Peek({ snapshot, onHide, onShow }: PeekProps): React.JSX.Element
       }}
     >
       <div className="peek-card">
-        <div className="peek-background" style={{ background: themeBackground(space.theme) }} />
+        {/* The window's own background, window-sized and offset, so the card shows exactly the slice
+            the docked sidebar does (solid: there's no desktop to see through over a page). */}
+        <div
+          className={`peek-background${right ? ' right' : ''}`}
+          style={{ width: snapshot.windowSize.width || '100vw', height: snapshot.windowSize.height || '100vh' }}
+        >
+          <Background theme={space.theme} spaceKey={space.id} transparency={0} />
+        </div>
         <Sidebar snapshot={snapshot} width={snapshot.sidebarWidth} onResize={() => {}} floating />
       </div>
     </motion.div>

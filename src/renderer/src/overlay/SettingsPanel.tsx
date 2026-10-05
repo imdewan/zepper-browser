@@ -49,6 +49,7 @@ const SHORTCUTS: [string, string][] = [
   ['Unsplit all', '⌥⌘U'],
   ['Screenshot', '⇧⌘2'],
   ['Find in page', '⌘F'],
+  ['History / downloads', '⌘Y / ⌥⌘L'],
   ['Back / forward', '⌘[ / ⌘]'],
   ['Zoom in / out / reset', '⌘+ / ⌘− / ⌘0'],
   ['Developer tools', '⌥⌘I'],

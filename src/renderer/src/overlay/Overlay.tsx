@@ -10,6 +10,7 @@ import { FindBar } from './FindBar'
 import { Palette } from './Palette'
 import { Peek } from './Peek'
 import { SettingsPanel } from './SettingsPanel'
+import { HistoryPanel } from './HistoryPanel'
 import { Popover } from './Popovers'
 import { Toasts } from './Toasts'
 
@@ -26,6 +27,7 @@ export function Overlay(): React.JSX.Element | null {
   const [toasts, setToasts] = useState<ToastSpec[]>([])
   const [find, setFind] = useState<{ key: number; result: FindResult } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [creatingSpace, setCreatingSpace] = useState(false)
   const [peek, setPeek] = useState<'shown' | 'exiting' | null>(null)
   const [exiting, setExiting] = useState(false)
@@ -53,12 +55,18 @@ export function Overlay(): React.JSX.Element | null {
         setPalette(null)
         setPopover(null)
         setCreatingSpace(true)
+      } else if (event.type === 'history.open') {
+        setPalette(null)
+        setPopover(null)
+        setSettingsOpen(false)
+        setHistoryOpen(true)
       } else if (event.type === 'peek.show') {
         setPeek('shown')
       } else if (event.type === 'overlay.dismiss') {
         setPalette(null)
         setPopover(null)
         setSettingsOpen(false)
+        setHistoryOpen(false)
         setCreatingSpace(false)
         setPeek((p) => (p ? 'exiting' : p))
         zepper.send({ type: 'ui.closePalette', refocus: true })
@@ -66,7 +74,7 @@ export function Overlay(): React.JSX.Element | null {
     }, [])
   )
 
-  const wantsFull = palette !== null || popover !== null || settingsOpen || creatingSpace || exiting
+  const wantsFull = palette !== null || popover !== null || settingsOpen || historyOpen || creatingSpace || exiting
   const mode: OverlayMode = wantsFull
     ? 'full'
     : peek
@@ -100,6 +108,11 @@ export function Overlay(): React.JSX.Element | null {
     setSettingsOpen(false)
     zepper.send({ type: 'ui.closePalette', refocus: true })
   }, [])
+  const closeHistory = useCallback(() => {
+    setExiting(true)
+    setHistoryOpen(false)
+    zepper.send({ type: 'ui.closePalette', refocus: true })
+  }, [])
   const closePopover = useCallback(() => {
     setExiting(true)
     setPopover(null)
@@ -130,7 +143,14 @@ export function Overlay(): React.JSX.Element | null {
       </AnimatePresence>
       <AnimatePresence onExitComplete={() => setExiting(false)}>
         {settingsOpen && <SettingsPanel key="settings" settings={snapshot.settings} widevine={snapshot.widevine} onClose={closeSettings} />}
-        {creatingSpace && <CreateSpaceDialog key="create" systemDark={systemDark} onClose={closeCreate} />}
+        {historyOpen && <HistoryPanel key="history" onClose={closeHistory} />}
+        {creatingSpace && <CreateSpaceDialog
+            key="create"
+            systemDark={systemDark}
+            spaces={snapshot.spaces}
+            activeSpaceId={snapshot.activeSpaceId}
+            onClose={closeCreate}
+          />}
         {palette && <Palette key={palette.key} mode={palette.mode} currentUrl={palette.currentUrl} onClose={closePalette} />}
         {popover && (
           <Popover

@@ -6,6 +6,7 @@ import {
   IconBack,
   IconCheck,
   IconCopy,
+  IconDownload,
   IconForward,
   IconGlobe,
   IconLock,
@@ -14,10 +15,9 @@ import {
   IconPuzzle,
   IconReload,
   IconSearch,
-  IconSettings,
-  IconSidebar
+  IconSettings
 } from '../icons'
-import { useUiEvents } from '../useSnapshot'
+import { useSnapshot, useUiEvents } from '../useSnapshot'
 import { cx, hostOf, rectOf } from '../util'
 import { Essentials } from './Essentials'
 import { MediaCard } from './MediaCard'
@@ -62,13 +62,34 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
   )
 }
 
+/** Zen's top row: traffic lights, extensions, then back, forward and reload. */
 function TopRow({ tab, isPrivate }: { tab: Tab | null; isPrivate: boolean }): React.JSX.Element {
+  const extensionsRef = useRef<HTMLButtonElement>(null)
+  const extensions = useExtensions()
+  const pinned = useSnapshotPinnedExtensions(extensions)
   return (
     <div className="top-row drag">
       <div className="traffic-light-space" />
-      <button className="icon-button compact-toggle" title="Toggle compact mode (⌘S)" onClick={() => zepper.send({ type: 'ui.toggleCompact' })}>
-        <IconSidebar size={16} />
-      </button>
+      {!isPrivate && extensions.actions.length > 0 && (
+        <>
+          <button
+            ref={extensionsRef}
+            className="icon-button extensions-button"
+            title="Extensions"
+            onClick={() =>
+              extensionsRef.current &&
+              zepper.send({ type: 'ui.openPopover', popover: { kind: 'extensions', anchor: rectOf(extensionsRef.current) } })
+            }
+          >
+            <IconPuzzle size={16} />
+          </button>
+          <span className="top-row-extensions">
+            {pinned.map((id) => (
+              <ExtensionButton key={id} id={id} tabId={extensions.activeTabId} version={extensions} />
+            ))}
+          </span>
+        </>
+      )}
       {isPrivate && (
         <span className="private-badge" title="Private window: history, cookies and site data are discarded when it closes">
           <IconPrivate size={13} />
@@ -79,7 +100,7 @@ function TopRow({ tab, isPrivate }: { tab: Tab | null; isPrivate: boolean }): Re
       <button className="icon-button" title="Back (⌘[)" disabled={!tab?.canGoBack} onClick={() => zepper.send({ type: 'nav.back' })}>
         <IconBack size={17} />
       </button>
-      <button className="icon-button forward-button" title="Forward (⌘])" disabled={!tab?.canGoForward} onClick={() => zepper.send({ type: 'nav.forward' })}>
+      <button className="icon-button" title="Forward (⌘])" disabled={!tab?.canGoForward} onClick={() => zepper.send({ type: 'nav.forward' })}>
         <IconForward size={17} />
       </button>
       <button className="icon-button" title="Reload (⌘R)" disabled={!tab} onClick={() => zepper.send({ type: 'nav.reload' })}>
@@ -134,12 +155,26 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
   )
 }
 
+/** Zen's bottom bar: settings, the space switcher, and downloads. */
 function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
   const settingsRef = useRef<HTMLButtonElement>(null)
-  const newRef = useRef<HTMLButtonElement>(null)
-  const extensionsRef = useRef<HTMLButtonElement>(null)
-  const extensions = useExtensions()
-  const pinned = snapshot.settings.pinnedExtensions.filter((id) => extensions.actions.some((a) => a.id === id))
+  const downloadsRef = useRef<HTMLButtonElement>(null)
+  const running = snapshot.downloads.filter((d) => d.state === 'progressing' || d.state === 'paused')
+  const known = running.filter((d) => d.total > 0)
+  const progress = known.length > 0 ? known.reduce((a, d) => a + d.received, 0) / known.reduce((a, d) => a + d.total, 0) : null
+
+  const openDownloads = useCallback(() => {
+    if (downloadsRef.current) zepper.send({ type: 'ui.openPopover', popover: { kind: 'downloads', anchor: rectOf(downloadsRef.current) } })
+  }, [])
+  useUiEvents(
+    useCallback(
+      (event: UiEvent) => {
+        if (event.type === 'downloads.open') openDownloads()
+      },
+      [openDownloads]
+    )
+  )
+
   return (
     <div className="bottom-bar">
       <button
@@ -150,35 +185,24 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
       >
         <IconSettings size={16} />
       </button>
-      {extensions.actions.length > 0 && snapshot.kind !== 'private' && (
-        <div className="bottom-extensions">
-          <button
-            ref={extensionsRef}
-            className="icon-button"
-            title="Extensions"
-            onClick={() =>
-              extensionsRef.current &&
-              zepper.send({ type: 'ui.openPopover', popover: { kind: 'extensions', anchor: rectOf(extensionsRef.current) } })
-            }
-          >
-            <IconPuzzle size={16} />
-          </button>
-          {pinned.map((id) => (
-            <ExtensionButton key={id} id={id} tabId={extensions.activeTabId} version={extensions} />
-          ))}
-        </div>
-      )}
       <SpaceSwitcher snapshot={snapshot} />
-      <button
-        ref={newRef}
-        className="icon-button"
-        title="New"
-        onClick={() => newRef.current && zepper.send({ type: 'ui.newMenu', anchor: rectOf(newRef.current) })}
-      >
-        <IconPlus size={17} />
+      <button ref={downloadsRef} className={cx('icon-button', 'downloads-button', running.length > 0 && 'active')} title="Downloads (⌥⌘L)" onClick={openDownloads}>
+        {running.length > 0 && (
+          <svg className="downloads-ring" viewBox="0 0 28 28" aria-hidden="true">
+            <circle cx="14" cy="14" r="12" />
+            {progress !== null && <circle className="downloads-ring-fill" cx="14" cy="14" r="12" style={{ strokeDashoffset: 75.4 * (1 - progress) }} />}
+          </svg>
+        )}
+        <IconDownload size={16} />
       </button>
     </div>
   )
+}
+
+/** Pinned extensions that are still installed. */
+function useSnapshotPinnedExtensions(extensions: ReturnType<typeof useExtensions>): string[] {
+  const snapshot = useSnapshot()
+  return (snapshot?.settings.pinnedExtensions ?? []).filter((id) => extensions.actions.some((a) => a.id === id))
 }
 
 /**
@@ -211,7 +235,15 @@ function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element 
     list.current?.querySelector('.space-dot.active')?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
   }, [snapshot.activeSpaceId])
 
-  if (snapshot.spaces.length < 2) return <div className="space-switcher" />
+  if (snapshot.spaces.length < 2) {
+    return (
+      <div className="space-switcher">
+        <button className="space-add" title="New space" onClick={() => zepper.send({ type: 'ui.createSpace' })}>
+          <IconPlus size={13} />
+        </button>
+      </div>
+    )
+  }
   return (
     <div ref={list} className={cx('space-switcher', fade.start && 'fade-start', fade.end && 'fade-end')}>
       {snapshot.spaces.map((space) => (
@@ -232,6 +264,9 @@ function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element 
           {space.icon}
         </button>
       ))}
+      <button className="space-add" title="New space" onClick={() => zepper.send({ type: 'ui.createSpace' })}>
+        <IconPlus size={13} />
+      </button>
     </div>
   )
 }
@@ -259,7 +294,7 @@ function ResizeHandle({ width, side, onResize }: ResizeHandleProps): React.JSX.E
       onPointerMove={(e) => {
         if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
         const delta = (e.clientX - start.current.x) * (side === 'right' ? -1 : 1)
-        const next = Math.min(500, Math.max(170, start.current.width + delta))
+        const next = Math.min(500, Math.max(190, start.current.width + delta))
         onResize(next)
         zepper.send({ type: 'ui.setSidebarWidth', width: next })
       }}

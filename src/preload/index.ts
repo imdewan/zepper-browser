@@ -16,7 +16,8 @@ const api: ZepperApi = {
     return () => ipcRenderer.removeListener(IPC.event, listener)
   },
   send: (command: Command) => ipcRenderer.send(IPC.command, command),
-  suggest: (text: string) => ipcRenderer.invoke(IPC.suggest, text)
+  suggest: (text: string) => ipcRenderer.invoke(IPC.suggest, text),
+  history: (query: string) => ipcRenderer.invoke(IPC.history, query)
 }
 
 contextBridge.exposeInMainWorld('zepper', api)

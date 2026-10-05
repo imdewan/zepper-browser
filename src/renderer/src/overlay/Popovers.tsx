@@ -7,11 +7,19 @@ import { GradientEditor } from '../GradientEditor'
 import { IconClose } from '../icons'
 import { cx } from '../util'
 import { AuthDialog, JsDialog } from './Dialogs'
+import { DownloadsPanel } from './DownloadsPanel'
 import { ExtensionsPanel } from './ExtensionsPanel'
 import { PermissionPanel, SiteInfoPanel, WidevinePrompt } from './SiteInfo'
 import { SpacesPicker } from './SpacesPicker'
 
-const POPOVER_WIDTHS: Partial<Record<PopoverSpec['kind'], number>> = { jsDialog: 420, auth: 360, widevine: 360, siteInfo: 340, theme: 352 }
+const POPOVER_WIDTHS: Partial<Record<PopoverSpec['kind'], number>> = {
+  jsDialog: 420,
+  auth: 360,
+  widevine: 360,
+  siteInfo: 340,
+  theme: 352,
+  downloads: 340
+}
 
 interface PopoverProps {
   popover: PopoverSpec
@@ -39,11 +47,14 @@ export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }:
   // Space pickers open beside the sidebar, the extensions panel rises from the bottom bar,
   // and site panels drop down from their anchor.
   const beside = needsSpace
-  const above = popover.kind === 'extensions'
+  const above = popover.kind === 'extensions' || popover.kind === 'downloads'
   const width = popover.kind === 'spaces' ? Math.max(250, anchor.width) : (POPOVER_WIDTHS[popover.kind] ?? 300)
   const left = beside
     ? Math.min(anchor.x + anchor.width + 12, window.innerWidth - width - 12)
-    : Math.min(Math.max(12, above ? anchor.x - 6 : anchor.x), window.innerWidth - width - 12)
+    : Math.min(
+        Math.max(12, popover.kind === 'downloads' ? anchor.x + anchor.width + 6 - width : above ? anchor.x - 6 : anchor.x),
+        window.innerWidth - width - 12
+      )
   const estimatedHeight = popover.kind === 'theme' ? 600 : 420
   // Page dialogs sit centred at the top of the page, like Chrome's.
   const position = modal
@@ -95,6 +106,7 @@ export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }:
         {popover.kind === 'permission' && <PermissionPanel prompt={popover.prompt} onDone={onClose} />}
         {popover.kind === 'extensions' && <ExtensionsPanel pinned={pinnedExtensions} anchor={anchor} onClose={onClose} />}
         {popover.kind === 'spaces' && snapshot && <SpacesPicker snapshot={snapshot} onClose={onClose} />}
+        {popover.kind === 'downloads' && <DownloadsPanel downloads={snapshot?.downloads ?? []} />}
         {popover.kind === 'widevine' && <WidevinePrompt host={popover.host} restart={popover.restart} onDone={onClose} />}
         {popover.kind === 'jsDialog' && <JsDialog key={popover.dialog.id} dialog={popover.dialog} onDone={onClose} />}
         {popover.kind === 'auth' && <AuthDialog key={popover.auth.id} auth={popover.auth} onDone={onClose} />}

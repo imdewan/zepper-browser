@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { DEFAULT_THEME, prefersDarkUi, themeBackground } from '@shared/theme'
-import type { SpaceTheme } from '@shared/types'
+import type { ProfileChoice, Space, SpaceTheme } from '@shared/types'
 import { zepper } from '../bridge'
 import { SPACE_EMOJI } from '../emoji'
 import { GradientEditor } from '../GradientEditor'
@@ -9,16 +9,23 @@ import { cx } from '../util'
 
 interface CreateSpaceDialogProps {
   systemDark: boolean
+  /** Existing spaces, to copy or share sign-ins from. */
+  spaces: Space[]
+  activeSpaceId: string
   onClose: () => void
 }
 
 /** Modal "Create a Space" sheet with a live preview of the new space's sidebar. */
-export function CreateSpaceDialog({ systemDark, onClose }: CreateSpaceDialogProps): React.JSX.Element {
+export function CreateSpaceDialog({ systemDark, spaces, activeSpaceId, onClose }: CreateSpaceDialogProps): React.JSX.Element {
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('✨')
   const [theme, setTheme] = useState<SpaceTheme>(DEFAULT_THEME)
   const [pickingIcon, setPickingIcon] = useState(false)
+  /** 'new', or 'copy:<spaceId>' / 'share:<spaceId>'. */
+  const [signIns, setSignIns] = useState('new')
   const previewDark = prefersDarkUi(theme, systemDark)
+  // The space you're in comes first.
+  const ordered = [...spaces].sort((a, b) => Number(b.id === activeSpaceId) - Number(a.id === activeSpaceId))
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -30,7 +37,9 @@ export function CreateSpaceDialog({ systemDark, onClose }: CreateSpaceDialogProp
 
   const create = (): void => {
     if (!name.trim()) return
-    zepper.send({ type: 'space.create', name, icon, theme })
+    const [mode, from] = signIns.split(':') as ['new' | 'copy' | 'share', string?]
+    const profile: ProfileChoice = mode === 'new' || !from ? { mode: 'new' } : { mode, from }
+    zepper.send({ type: 'space.create', name, icon, theme, profile })
     onClose()
   }
 
@@ -55,7 +64,7 @@ export function CreateSpaceDialog({ systemDark, onClose }: CreateSpaceDialogProp
       >
         <div className="create-left">
           <h1>Create a Space</h1>
-          <p className="create-sub">Each space keeps its own tabs, pinned sites and theme.</p>
+          <p className="create-sub">Each space keeps its own tabs, pinned sites, theme and sign-ins.</p>
 
           <div className="create-preview" data-ui={previewDark ? 'dark' : 'light'}>
             <div className="create-preview-glass" />
@@ -110,6 +119,33 @@ export function CreateSpaceDialog({ systemDark, onClose }: CreateSpaceDialogProp
               ))}
             </div>
           )}
+
+          <div className="create-section-title create-signins-title">Sign-ins &amp; site data</div>
+          <select className="create-select" value={signIns} onChange={(e) => setSignIns(e.target.value)}>
+            <option value="new">Start fresh</option>
+            <optgroup label="Copy sign-ins from (stays separate)">
+              {ordered.map((s) => (
+                <option key={`copy:${s.id}`} value={`copy:${s.id}`}>
+                  {s.icon} {s.name}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Share sign-ins with (always in sync)">
+              {ordered.map((s) => (
+                <option key={`share:${s.id}`} value={`share:${s.id}`}>
+                  {s.icon} {s.name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+          <p className="create-note">
+            {signIns === 'new'
+              ? 'Its own cookies, logins and site data, like a new profile.'
+              : signIns.startsWith('copy:')
+                ? 'Starts signed in where that space is (cookies are copied), then stays separate.'
+                : 'Uses the same cookies, logins and site data as that space.'}{' '}
+            History is shared between spaces.
+          </p>
 
           <div className="create-buttons">
             <button type="button" className="panel-button" onClick={onClose}>

@@ -4,6 +4,7 @@ import { IPC, type Command, type WidevineStatus } from '@shared/types'
 import type { AdBlock } from './adblock'
 import { Browser, type BrowserKind } from './browser'
 import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
+import { Downloads } from './downloads'
 import { Extensions } from './extensions'
 import type { History } from './history'
 import type { SettingsStore } from './settings-store'
@@ -29,6 +30,10 @@ export interface Services {
 export class Hub {
   readonly browsers = new Set<Browser>()
   readonly services: Services
+  /** Every download, shared by all windows. */
+  readonly downloads = new Downloads(() => {
+    for (const browser of this.browsers) browser.refresh()
+  })
   private main: Browser | null = null
   private privateCount = 0
   private readonly sessions = new Set<Session>()
@@ -51,6 +56,10 @@ export class Hub {
 
     ipcMain.handle(IPC.getSnapshot, (event) => this.owner(event.sender)?.publicSnapshot() ?? null)
     ipcMain.handle(IPC.suggest, (event, text: string) => this.owner(event.sender)?.suggestions(text) ?? [])
+    // Private windows keep no history, so their history page is empty.
+    ipcMain.handle(IPC.history, (event, query: string) =>
+      this.owner(event.sender)?.kind === 'private' ? [] : services.history.list(String(query ?? ''), 2000)
+    )
     ipcMain.on(IPC.command, (event, command: Command) => this.owner(event.sender)?.handleFromUi(event.sender, command))
     ipcMain.on(IPC.swipe, (event, phase: 'update' | 'end', dx: number, peak: number) =>
       this.owner(event.sender)?.onPageSwipe(event.sender.id, phase, Number(dx) || 0, Number(peak) || 0)
@@ -142,8 +151,19 @@ export class Hub {
 
   persist(): void {
     this.main?.persistNow()
+    this.downloads.flush()
     this.services.permissions.flush()
     this.services.settings.flush()
+  }
+
+  /**
+   * A space's profile (its own cookies, logins, storage and cache, like a Zen container),
+   * wired up like every browsing session. 'default' is Electron's default session.
+   */
+  profileSession(profile: string): Session {
+    const ses = profile === 'default' ? session.defaultSession : session.fromPartition(`persist:space-${profile}`)
+    this.attachSession(ses)
+    return ses
   }
 
   /** Permission prompts, certificates, privacy headers, page preload, ad blocking and downloads for a session. */
