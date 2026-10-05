@@ -27,6 +27,127 @@ interface PageConfig {
   blockWidevine: boolean
   askForWidevine: boolean
   globalPrivacyControl: boolean
+  fingerprintSeed: number | null
+}
+
+/**
+ * Fingerprinting protection (runs in the page's world). Readouts fingerprinters rely on get
+ * tiny, consistent noise: the same site sees the same values all session, another site (or the
+ * next launch) sees different ones, so they can't be used to recognise you. Patched functions
+ * are Proxies, so they still look native.
+ */
+function fingerprintShim(seed: number): void {
+  let state = seed >>> 0 || 0x9e3779b9
+  const random = (): number => {
+    state ^= state << 13
+    state ^= state >>> 17
+    state ^= state << 5
+    return (state >>> 0) / 4294967296
+  }
+  const bits = new Uint8Array(256).map(() => (random() < 0.5 ? 1 : 0))
+  const MAX_PIXELS = 2048 * 2048
+  const farble = (data: Uint8Array | Uint8ClampedArray): void => {
+    if (data.length > MAX_PIXELS * 4) return
+    for (let i = 0; i < data.length; i += 4) if (bits[(i >> 2) & 255]) data[i] ^= 1
+  }
+  // Each patched function's source still reads as the native one's (function toDataURL() { [native code] }).
+  const originals = new WeakMap<object, object>()
+  const disguise = <F extends object>(original: F, handler: ProxyHandler<F>): F => {
+    const proxy = new Proxy(original, handler)
+    originals.set(proxy, original)
+    return proxy
+  }
+  const toStringDescriptor = Object.getOwnPropertyDescriptor(Function.prototype, 'toString')!
+  Object.defineProperty(Function.prototype, 'toString', {
+    ...toStringDescriptor,
+    value: disguise(toStringDescriptor.value as (...a: unknown[]) => string, {
+      apply: (target, self, args) => Reflect.apply(target, originals.get(self as object) ?? self, args)
+    })
+  })
+  const patch = <T extends object>(
+    owner: T | undefined,
+    key: string,
+    apply: (target: (...a: unknown[]) => unknown, self: unknown, args: unknown[]) => unknown
+  ): void => {
+    if (!owner) return
+    const descriptor = Object.getOwnPropertyDescriptor(owner, key)
+    if (!descriptor || typeof descriptor.value !== 'function') return
+    Object.defineProperty(owner, key, { ...descriptor, value: disguise(descriptor.value, { apply }) })
+  }
+
+  // Canvas: readbacks (getImageData, toDataURL, toBlob) carry the noise.
+  const getImageData = CanvasRenderingContext2D.prototype.getImageData
+  patch(CanvasRenderingContext2D.prototype, 'getImageData', (target, self, args) => {
+    const image = Reflect.apply(target, self, args) as ImageData
+    farble(image.data)
+    return image
+  })
+  const farbledCopy = (canvas: HTMLCanvasElement): HTMLCanvasElement | null => {
+    try {
+      if (!canvas.width || !canvas.height || canvas.width * canvas.height > MAX_PIXELS) return null
+      const copy = document.createElement('canvas')
+      copy.width = canvas.width
+      copy.height = canvas.height
+      const context = copy.getContext('2d')
+      if (!context) return null
+      context.drawImage(canvas, 0, 0)
+      const image = getImageData.call(context, 0, 0, copy.width, copy.height)
+      farble(image.data)
+      context.putImageData(image, 0, 0)
+      return copy
+    } catch {
+      return null
+    }
+  }
+  for (const key of ['toDataURL', 'toBlob']) {
+    patch(HTMLCanvasElement.prototype, key, (target, self, args) =>
+      Reflect.apply(target, farbledCopy(self as HTMLCanvasElement) ?? self, args)
+    )
+  }
+
+  // WebGL: pixels read back carry the noise too.
+  for (const proto of [WebGLRenderingContext.prototype, globalThis.WebGL2RenderingContext?.prototype]) {
+    patch(proto, 'readPixels', (target, self, args) => {
+      const result = Reflect.apply(target, self, args)
+      const pixels = args[6]
+      if (pixels instanceof Uint8Array || pixels instanceof Uint8ClampedArray) farble(pixels)
+      return result
+    })
+  }
+
+  // Audio: offline renders (how audio fingerprints are taken) and analyser readouts.
+  const offline = new WeakSet<AudioBuffer>()
+  patch(globalThis.OfflineAudioContext?.prototype, 'startRendering', (target, self, args) =>
+    (Reflect.apply(target, self, args) as Promise<AudioBuffer>).then((buffer) => {
+      offline.add(buffer)
+      return buffer
+    })
+  )
+  const touched = new WeakMap<AudioBuffer, Set<number>>()
+  patch(AudioBuffer.prototype, 'getChannelData', (target, self, args) => {
+    const data = Reflect.apply(target, self, args) as Float32Array
+    const buffer = self as AudioBuffer
+    const channel = Number(args[0]) || 0
+    if (offline.has(buffer) && !touched.get(buffer)?.has(channel)) {
+      touched.set(buffer, (touched.get(buffer) ?? new Set()).add(channel))
+      for (let i = 0; i < data.length; i++) data[i] += (bits[i & 255] ? 1 : -1) * 1e-7
+    }
+    return data
+  })
+  patch(AnalyserNode.prototype, 'getFloatFrequencyData', (target, self, args) => {
+    const result = Reflect.apply(target, self, args)
+    const data = args[0]
+    if (data instanceof Float32Array) for (let i = 0; i < data.length; i++) data[i] += (bits[i & 255] ? 1 : -1) * 1e-4
+    return result
+  })
+
+  // CPU cores: somewhere between 2 and the real count.
+  const cores = Object.getOwnPropertyDescriptor(Navigator.prototype, 'hardwareConcurrency')
+  if (cores?.get) {
+    const real = cores.get.call(navigator) as number
+    const shown = Math.max(2, Math.min(real, 2 + Math.floor(random() * Math.max(1, real - 1))))
+    Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { ...cores, get: disguise(cores.get, { apply: () => shown }) })
+  }
 }
 
 /** Global Privacy Control's JavaScript signal (runs in the page's world). */
@@ -140,6 +261,7 @@ function applyCompat(): void {
     const config = ipcRenderer.sendSync(PAGE_CONFIG_CHANNEL) as PageConfig
     if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
     if (config.globalPrivacyControl) contextBridge.executeInMainWorld({ func: privacyControlShim })
+    if (config.fingerprintSeed !== null) contextBridge.executeInMainWorld({ func: fingerprintShim, args: [config.fingerprintSeed] })
     if (config.signInCompat && location.hostname === 'accounts.google.com') contextBridge.executeInMainWorld({ func: signInPageShim })
     if (config.blockWidevine) {
       contextBridge.executeInMainWorld({ func: widevineShim, args: [DRM_NEEDED_EVENT] })

@@ -107,7 +107,11 @@ export class Hub {
       event.preventDefault()
       browser.onLogin(wc ?? null, authInfo, callback)
     })
-    servePageConfig(services.settings, () => this.userAgent)
+    servePageConfig(
+      services.settings,
+      () => this.userAgent,
+      (url) => services.adblock.protects(url)
+    )
     // Client certificates: you choose which (if any) a site gets.
     app.on('select-client-certificate', (event, wc, url, list, callback) => {
       event.preventDefault()
@@ -231,8 +235,13 @@ export class Hub {
     adblock.attachSession(ses)
     ses.registerPreloadScript({ type: 'frame', filePath: join(__dirname, '../preload/page.js') })
     ses.webRequest.onBeforeSendHeaders((details, callback) => {
-      const headers = clientHintHeaders(details.requestHeaders, this.userAgent)
-      callback({ requestHeaders: settings.get().globalPrivacyControl ? { ...headers, 'Sec-GPC': '1', DNT: '1' } : headers })
+      const headers: Record<string, string> = clientHintHeaders(details.requestHeaders, this.userAgent)
+      if (settings.get().globalPrivacyControl) Object.assign(headers, { 'Sec-GPC': '1', DNT: '1' })
+      // Third parties don't get your cookies (their Set-Cookie is dropped in AdBlock).
+      if (adblock.crossSiteCookiesBlocked(details)) {
+        for (const key of Object.keys(headers)) if (key.toLowerCase() === 'cookie') delete headers[key]
+      }
+      callback({ requestHeaders: headers })
     })
     ses.setPermissionRequestHandler((wc, permission, callback, details) => {
       const browser = this.owner(wc)
@@ -338,6 +347,12 @@ export class Hub {
     bangs.enabled = settings.bangs
     this.services.adblock.setEnabled(settings.adblock)
     this.services.adblock.setAllowlist(settings.adblockAllowlist)
+    this.services.adblock.setAnnoyances(settings.hideCookieBanners)
+    this.services.adblock.setProtections({
+      httpsUpgrade: settings.httpsUpgrade,
+      cleanLinks: settings.cleanLinks,
+      crossSiteCookies: settings.blockCrossSiteCookies
+    })
     this.applySecureDns(settings.secureDns)
 
     const ua = userAgentFor(settings, this.chromeUa)

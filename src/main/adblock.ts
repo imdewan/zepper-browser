@@ -12,6 +12,7 @@ import {
 import { readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse } from 'tldts-experimental'
+import { HttpsUpgrades, cleanLink } from './shields'
 
 const REFRESH_AFTER_MS = 24 * 60 * 60 * 1000
 
@@ -23,8 +24,24 @@ export interface CosmeticsResponse {
   scripts: string[]
 }
 
+/** What every request hook gets: enough to tell which page a request belongs to. */
+interface RequestDetails {
+  url: string
+  resourceType: string
+  frame?: WebFrameMain | null
+  webContents?: { getURL(): string } | null
+}
+
+/** Sign-in frames that need their cookies even when embedded on another site. */
+const SIGN_IN_FRAMES = new Set(['accounts.google.com', 'login.microsoftonline.com', 'login.live.com', 'appleid.apple.com'])
+
+function siteOf(url: string): string {
+  const { domain, hostname } = parse(url)
+  return domain || hostname || ''
+}
+
 /** The top-level page a request or frame belongs to; ad blocking is decided per site. */
-function pageUrlOf(details: OnBeforeRequestListenerDetails | OnHeadersReceivedListenerDetails): string | undefined {
+function pageUrlOf(details: RequestDetails): string | undefined {
   if (details.resourceType === 'mainFrame') return details.url
   try {
     return details.frame?.top?.url || details.webContents?.getURL()
@@ -58,8 +75,13 @@ const MAX_DOM_TOKENS = 2000
 
 export class AdBlock {
   private blocker: ElectronBlocker | null = null
-  private readonly cachePath = join(app.getPath('userData'), 'adblock-engine.bin')
   private enabled = true
+  /** Also hide cookie banners and other annoyances (uBlock Origin's annoyance lists). */
+  private annoyances = false
+  private started = false
+  /** The other protections (see shields.ts), each switchable in Settings › Privacy. */
+  private protections = { httpsUpgrade: true, cleanLinks: true, crossSiteCookies: true }
+  readonly https = new HttpsUpgrades()
   /** Registrable domains where blocking is off. */
   private allowlist = new Set<string>()
   private readonly sessions = new Set<Session>()
@@ -78,15 +100,28 @@ export class AdBlock {
     })
   }
 
+  /** The engine for the current lists is cached separately from the other one's. */
+  private get cachePath(): string {
+    return join(app.getPath('userData'), this.annoyances ? 'adblock-engine-full.bin' : 'adblock-engine.bin')
+  }
+
   async start(): Promise<void> {
+    this.started = true
+    const full = this.annoyances
     if (await this.cacheIsStale()) await unlink(this.cachePath).catch(() => {})
     try {
-      this.blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
+      const cache = {
         path: this.cachePath,
-        read: async (path) => new Uint8Array(await readFile(path)),
-        write: (path, buffer) => writeFile(path, buffer)
-      })
-      this.blocker.on('request-blocked', (request) => this.onBlocked(request.tabId))
+        read: async (path: string) => new Uint8Array(await readFile(path)),
+        write: (path: string, buffer: Uint8Array) => writeFile(path, buffer)
+      }
+      const blocker = full
+        ? await ElectronBlocker.fromPrebuiltFull(fetch, cache)
+        : await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, cache)
+      // A newer choice of lists may have arrived while these loaded.
+      if (full !== this.annoyances) return
+      blocker.on('request-blocked', (request) => this.onBlocked(request.tabId))
+      this.blocker = blocker
     } catch (error) {
       console.error('[adblock] failed to load filter lists', error)
     }
@@ -109,17 +144,45 @@ export class AdBlock {
     this.enabled = enabled
   }
 
+  /** Cookie banners and other annoyances: switches to the larger list set (loaded in the background). */
+  setAnnoyances(on: boolean): void {
+    if (on === this.annoyances) return
+    this.annoyances = on
+    if (this.started) void this.start()
+  }
+
+  setProtections(protections: { httpsUpgrade: boolean; cleanLinks: boolean; crossSiteCookies: boolean }): void {
+    this.protections = protections
+  }
+
+  /** Whether a request mustn't send or receive cookies: a third party on a page with protections on. */
+  crossSiteCookiesBlocked(details: RequestDetails): boolean {
+    if (!this.protections.crossSiteCookies || details.resourceType === 'mainFrame') return false
+    const page = pageUrlOf(details)
+    if (!page || !/^https?:/.test(page) || !this.protects(page)) return false
+    const site = siteOf(details.url)
+    if (!site || site === siteOf(page)) return false
+    try {
+      return !SIGN_IN_FRAMES.has(new URL(details.url).hostname)
+    } catch {
+      return false
+    }
+  }
+
   /** Sites (registrable domains) where blocking is off. */
   setAllowlist(domains: string[]): void {
     this.allowlist = new Set(domains)
   }
 
-  /** Whether blocking applies to a page, by its top-level URL. */
+  /** Whether ad blocking applies to a page, by its top-level URL. */
   blocksOn(pageUrl: string | undefined): boolean {
-    if (!this.enabled) return false
+    return this.enabled && this.protects(pageUrl)
+  }
+
+  /** Whether a site's protections are on (they're off for sites in the allowlist, from the site panel). */
+  protects(pageUrl: string | undefined): boolean {
     if (!pageUrl || this.allowlist.size === 0) return true
-    const { domain, hostname } = parse(pageUrl)
-    const site = domain || hostname
+    const site = siteOf(pageUrl)
     return !site || !this.allowlist.has(site)
   }
 
@@ -132,6 +195,12 @@ export class AdBlock {
   }
 
   private readonly onBeforeRequest = (details: OnBeforeRequestListenerDetails, callback: (response: CallbackResponse) => void): void => {
+    if (details.resourceType === 'mainFrame' && details.method === 'GET') {
+      // Pages open without click trackers or AMP wrappers, and over HTTPS when the site has it.
+      const cleaned = this.protections.cleanLinks && this.protects(details.url) ? cleanLink(details.url) : null
+      const upgraded = this.protections.httpsUpgrade ? this.https.upgrade(cleaned ?? details.url) : null
+      if (upgraded || cleaned) return callback({ redirectURL: upgraded ?? cleaned! })
+    }
     if (!this.blocker || !this.blocksOn(pageUrlOf(details))) return callback({})
     this.blocker.onBeforeRequest(details, callback)
   }
@@ -140,8 +209,16 @@ export class AdBlock {
     details: OnHeadersReceivedListenerDetails,
     callback: (response: HeadersReceivedResponse) => void
   ): void => {
-    if (!this.blocker || !this.blocksOn(pageUrlOf(details))) return callback({})
-    this.blocker.onHeadersReceived(details, callback)
+    // Third parties can't set cookies (the request side is in Hub's onBeforeSendHeaders).
+    const noCookies = this.crossSiteCookiesBlocked(details)
+    const done = (response: HeadersReceivedResponse): void => {
+      if (!noCookies) return callback(response)
+      const headers = { ...(response.responseHeaders ?? details.responseHeaders ?? {}) }
+      for (const key of Object.keys(headers)) if (key.toLowerCase() === 'set-cookie') delete headers[key]
+      callback({ ...response, responseHeaders: headers })
+    }
+    if (!this.blocker || !this.blocksOn(pageUrlOf(details))) return done({})
+    this.blocker.onHeadersReceived(details, done)
   }
 
   /** Hostname-specific hiding rules, generic base rules and scriptlets for a page. */

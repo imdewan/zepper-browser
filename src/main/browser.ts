@@ -346,7 +346,11 @@ export class Browser {
       // Spaces from before profiles keep sharing the existing sign-ins (as they did); you can
       // separate any of them from its context menu (Sign-ins).
       this.spaces = saved.spaces.map((space) => ({ ...space, profile: space.profile ?? DEFAULT_PROFILE }))
-      this.tabs = saved.tabs.map((t) => makeTab(t))
+      // Settings › Tabs decides whether last session's open tabs and Essentials come back.
+      const { restoreTabs, keepEssentials } = hub.services.settings.get()
+      this.tabs = saved.tabs
+        .filter((t) => (t.kind !== 'normal' || restoreTabs) && (t.kind !== 'essential' || keepEssentials))
+        .map((t) => makeTab(t))
       this.activeSpaceId = saved.spaces.some((s) => s.id === saved.activeSpaceId) ? saved.activeSpaceId : saved.spaces[0].id
       this.restoreTabId = saved.activeTabId
       const ids = new Set(this.tabs.map((t) => t.id))
@@ -911,10 +915,6 @@ export class Browser {
         return this.emit({ type: 'popover.open', popover: command.popover }, 'overlay')
       case 'ui.copyUrl':
         return this.copyUrl(command.markdown ?? false)
-      case 'ui.newMenu':
-        return this.newMenu(command.anchor)
-      case 'ui.settingsMenu':
-        return this.settingsMenu(command.anchor)
       case 'ui.toggleCompact':
         return this.toggleCompact()
       case 'ui.siteInfo':
@@ -1073,6 +1073,11 @@ export class Browser {
   }
 
   private applySettings(next: Settings, prev: Settings | null): void {
+    if (prev && prev.blockFingerprinting !== next.blockFingerprinting) {
+      for (const view of this.views.values()) {
+        view.webContents.setWebRTCIPHandlingPolicy(next.blockFingerprinting ? 'default_public_interface_only' : 'default')
+      }
+    }
     nativeTheme.themeSource = next.colorScheme
     setSearchEngine(next.searchEngine)
     this.adblock.setEnabled(next.adblock)
@@ -2197,6 +2202,8 @@ export class Browser {
           }
         })
     view.setBorderRadius(this.settings.cornerRadius)
+    // Part of fingerprinting protection: WebRTC only uses the public interface, so pages can't learn local addresses.
+    view.webContents.setWebRTCIPHandlingPolicy(this.settings.blockFingerprinting ? 'default_public_interface_only' : 'default')
     // Like Chrome: pages without a background of their own are white, in dark mode too
     // (pages that support dark mode paint their own).
     view.setBackgroundColor('#ffffff')
@@ -2366,6 +2373,12 @@ export class Browser {
       const typed = normalizedUrl(url)
       if (this.httpsFirst.delete(typed) && code !== -105 && /^https:/.test(typed)) {
         wc.loadURL(typed.replace(/^https:/, 'http:')).catch(() => {})
+        return
+      }
+      // A plain-HTTP page we upgraded: the site has no (working) HTTPS, so load it as it was.
+      const http = this.hub.services.adblock.https.fallback(url, code)
+      if (http) {
+        wc.loadURL(http).catch(() => {})
         return
       }
       const page = errorPage(url, description, code <= -200 && code > -300 ? 'certificate' : 'network')
@@ -2913,7 +2926,7 @@ export class Browser {
       siteData: [],
       blockedCount: tab.blockedCount,
       adblockEnabled: this.settings.adblock,
-      adblockSite: this.adblock.blocksOn(tab.url),
+      adblockSite: this.adblock.protects(tab.url),
       siteDomain: parseDomain(tab.url).domain || host,
       permissions: /^https?:/.test(tab.url) ? this.permissions.list(origin) : []
     }
@@ -3421,43 +3434,6 @@ export class Browser {
     const ses = this.hub.profileSession(profile)
     await ses.clearStorageData().catch(() => {})
     await ses.clearCache().catch(() => {})
-  }
-
-  private newMenu(anchor: Rect): void {
-    this.popup(
-      [
-        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => this.openPalette('new') },
-        { label: 'Create Space', click: () => this.handle({ type: 'ui.createSpace' }) }
-      ],
-      anchor
-    )
-  }
-
-  private settingsMenu(anchor: Rect): void {
-    this.popup(
-      [
-        {
-          label: 'Block Ads and Trackers',
-          type: 'checkbox',
-          checked: this.settings.adblock,
-          click: () => this.settingsStore.update({ adblock: !this.settings.adblock })
-        },
-        { label: 'Compact Mode', type: 'checkbox', checked: this.compact, accelerator: 'CmdOrCtrl+S', click: () => this.toggleCompact() },
-        { type: 'separator' },
-        { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => this.handle({ type: 'window.open', kind: 'blank' }) },
-        {
-          label: 'New Private Window',
-          accelerator: 'Shift+CmdOrCtrl+N',
-          click: () => this.handle({ type: 'window.open', kind: 'private' })
-        },
-        { type: 'separator' },
-        { label: 'History', accelerator: 'CmdOrCtrl+Y', click: () => this.handle({ type: 'ui.openHistory' }) },
-        { label: 'Downloads', accelerator: 'Alt+CmdOrCtrl+L', click: () => this.handle({ type: 'ui.downloads' }) },
-        { type: 'separator' },
-        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => this.handle({ type: 'ui.openSettings' }) }
-      ],
-      anchor
-    )
   }
 
   /** "Open Link in Space ▸": the other spaces; the link opens there in the background. */

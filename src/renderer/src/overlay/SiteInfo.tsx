@@ -103,24 +103,22 @@ function SiteSummary({ info, onShowCertificate, onShowData }: SiteSummaryProps):
         <section className="site-section site-row">
           <IconShield size={15} className="site-row-icon" />
           <div className="site-row-label">
-            <div>Block ads &amp; trackers</div>
+            <div>Protections</div>
             <div className="site-row-sub">
-              {!info.adblockEnabled
-                ? 'Turned off for all sites in Settings'
-                : blocking
-                  ? `${info.blockedCount} blocked on this page`
-                  : `Off on ${info.siteDomain}`}
+              {!blocking
+                ? `Off on ${info.siteDomain}: ads, trackers, fingerprinting and cross-site cookies are allowed`
+                : info.adblockEnabled
+                  ? `${info.blockedCount} ads and trackers blocked on this page`
+                  : 'Fingerprinting and cross-site cookies blocked'}
             </div>
           </div>
-          {info.adblockEnabled && (
-            <Toggle
-              checked={blocking}
-              onChange={(enabled) => {
-                setBlocking(enabled)
-                zepper.send({ type: 'site.setAdblock', domain: info.siteDomain, enabled })
-              }}
-            />
-          )}
+          <Toggle
+            checked={blocking}
+            onChange={(enabled) => {
+              setBlocking(enabled)
+              zepper.send({ type: 'site.setAdblock', domain: info.siteDomain, enabled })
+            }}
+          />
         </section>
       )}
 

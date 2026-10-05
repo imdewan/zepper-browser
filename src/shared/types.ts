@@ -337,8 +337,6 @@ export type Command =
   | { type: 'ui.overlayMode'; mode: OverlayMode }
   | { type: 'ui.openPopover'; popover: PopoverSpec }
   | { type: 'ui.copyUrl'; markdown?: boolean }
-  | { type: 'ui.newMenu'; anchor: Rect }
-  | { type: 'ui.settingsMenu'; anchor: Rect }
   | { type: 'ui.toggleCompact' }
   | { type: 'ui.siteInfo'; anchor: Rect }
   | { type: 'site.exportCertificate'; index: number }

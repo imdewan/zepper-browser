@@ -285,6 +285,12 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, onClos
                     ))}
                   </select>
                 </Row>
+                <Row label="Reopen tabs from last time" hint="Your open tabs come back when Zepper starts. Pinned tabs always do.">
+                  <Toggle checked={settings.restoreTabs} onChange={(restoreTabs) => set({ restoreTabs })} />
+                </Row>
+                <Row label="Keep Essentials" hint="Essentials stay between launches. Turn off to start each launch with none.">
+                  <Toggle checked={settings.keepEssentials} onChange={(keepEssentials) => set({ keepEssentials })} />
+                </Row>
                 <Row label="After closing a tab, go to the most recently used tab" hint="Otherwise the tab next to it.">
                   <Toggle checked={settings.closeSelectsRecent} onChange={(closeSelectsRecent) => set({ closeSelectsRecent })} />
                 </Row>
@@ -417,7 +423,10 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, onClos
             {section === 'privacy' && (
               <>
                 <h2>Privacy</h2>
-                <Row label="Block ads and trackers" hint="uBlock Origin’s filter lists, built in.">
+                <Row
+                  label="Block ads and trackers"
+                  hint="uBlock Origin’s filter lists, built in. Turn protections off for one site from the lock icon."
+                >
                   <Toggle checked={settings.adblock} onChange={(adblock) => set({ adblock })} />
                 </Row>
                 {settings.adblockAllowlist.length > 0 && (
@@ -441,6 +450,33 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, onClos
                     </div>
                   </div>
                 )}
+                <Row label="Hide cookie banners" hint="Hides cookie consent pop-ups and other annoyances, using uBlock Origin’s lists.">
+                  <Toggle checked={settings.hideCookieBanners} onChange={(hideCookieBanners) => set({ hideCookieBanners })} />
+                </Row>
+                <Row
+                  label="Block fingerprinting"
+                  hint="Adds tiny per-site noise to canvas, WebGL and audio readouts and hides local network addresses, so sites can’t recognise you."
+                >
+                  <Toggle checked={settings.blockFingerprinting} onChange={(blockFingerprinting) => set({ blockFingerprinting })} />
+                </Row>
+                <Row
+                  label="Block cross-site cookies"
+                  hint="Embedded content from other sites can’t set or read cookies, so it can’t follow you around. Sign-in frames still work."
+                >
+                  <Toggle checked={settings.blockCrossSiteCookies} onChange={(blockCrossSiteCookies) => set({ blockCrossSiteCookies })} />
+                </Row>
+                <Row
+                  label="Upgrade connections to HTTPS"
+                  hint="Loads sites over HTTPS when they support it, and falls back when they don’t."
+                >
+                  <Toggle checked={settings.httpsUpgrade} onChange={(httpsUpgrade) => set({ httpsUpgrade })} />
+                </Row>
+                <Row
+                  label="Remove trackers from links"
+                  hint="Strips click identifiers like fbclid and gclid, and opens Google AMP pages on the real site."
+                >
+                  <Toggle checked={settings.cleanLinks} onChange={(cleanLinks) => set({ cleanLinks })} />
+                </Row>
                 <Row
                   label="Secure DNS"
                   hint="Encrypts site lookups, so your network can’t see or change where you go. Automatic uses your DNS provider’s encryption when it offers it."

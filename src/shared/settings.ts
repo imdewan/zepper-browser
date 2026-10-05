@@ -44,6 +44,10 @@ export interface Settings {
   newTabPosition: 'top' | 'bottom'
   pinnedCloseBehavior: PinnedCloseBehavior
   closeSelectsRecent: boolean
+  /** Reopen last session's open (unpinned) tabs when Zepper starts. */
+  restoreTabs: boolean
+  /** Keep Essentials between launches. */
+  keepEssentials: boolean
   /** Show the Tidy button beside Clear. */
   showTidy: boolean
   // Media
@@ -67,6 +71,16 @@ export interface Settings {
   // Windows and downloads
   /** ⌘N opens on the current space or an empty window. */
   newWindowSpace: 'current' | 'empty'
+  /** Also hide cookie banners and other annoyances. */
+  hideCookieBanners: boolean
+  /** Add per-site noise to canvas, WebGL and audio readouts, and limit what hardware details pages see. */
+  blockFingerprinting: boolean
+  /** Third-party requests don't send or receive cookies. */
+  blockCrossSiteCookies: boolean
+  /** Load plain-HTTP pages over HTTPS when the site supports it. */
+  httpsUpgrade: boolean
+  /** Remove click identifiers (fbclid, gclid…) and Google AMP wrappers from links you open. */
+  cleanLinks: boolean
   /** DNS over HTTPS: off, automatic (when your DNS provider supports it), or a provider. */
   secureDns: SecureDns
   /** Where downloads are saved ('' means the Downloads folder). */
@@ -112,6 +126,8 @@ export const DEFAULT_SETTINGS: Settings = {
   newTabPosition: 'top',
   pinnedCloseBehavior: 'reset-unload-switch',
   closeSelectsRecent: true,
+  restoreTabs: true,
+  keepEssentials: true,
   showTidy: true,
   autoPictureInPicture: true,
   pipSize: 'medium',
@@ -125,6 +141,11 @@ export const DEFAULT_SETTINGS: Settings = {
   paletteRecents: true,
   newWindowSpace: 'current',
   secureDns: 'automatic',
+  hideCookieBanners: true,
+  blockFingerprinting: true,
+  blockCrossSiteCookies: true,
+  httpsUpgrade: true,
+  cleanLinks: true,
   downloadPath: '',
   downloadAsk: false,
   swipeBetweenSpaces: true,

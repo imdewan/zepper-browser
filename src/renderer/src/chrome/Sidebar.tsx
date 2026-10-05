@@ -167,7 +167,6 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
 
 /** Bottom bar: settings, the space switcher, and downloads. */
 function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
-  const settingsRef = useRef<HTMLButtonElement>(null)
   const downloadsRef = useRef<HTMLButtonElement>(null)
   const running = snapshot.downloads.filter((d) => d.state === 'progressing' || d.state === 'paused')
   const known = running.filter((d) => d.total > 0)
@@ -177,12 +176,7 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
 
   return (
     <div className="bottom-bar">
-      <button
-        ref={settingsRef}
-        className="icon-button"
-        title="Settings"
-        onClick={() => settingsRef.current && zepper.send({ type: 'ui.settingsMenu', anchor: rectOf(settingsRef.current) })}
-      >
+      <button className="icon-button" title="Settings" onClick={() => zepper.send({ type: 'ui.openSettings' })}>
         <IconSettings size={16} />
       </button>
       <SpaceSwitcher snapshot={snapshot} />

@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { Settings } from '@shared/settings'
 import type { SettingsStore } from './settings-store'
+import { fingerprintSeed } from './shields'
 
 /**
  * Site compatibility: which browser we present as, and the Google sign-in fix.
@@ -28,6 +29,8 @@ export interface PageConfig {
   askForWidevine: boolean
   /** Global Privacy Control: also expose navigator.globalPrivacyControl (the header alone isn't enough). */
   globalPrivacyControl: boolean
+  /** Seed for fingerprinting noise on this site (null: protection off here). */
+  fingerprintSeed: number | null
 }
 
 const FIREFOX_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0'
@@ -75,18 +78,25 @@ export function clientHintHeaders(headers: Record<string, string>, ua: string): 
   return next
 }
 
-export function servePageConfig(settings: SettingsStore, currentUa: () => string): void {
+export function servePageConfig(settings: SettingsStore, currentUa: () => string, protects: (pageUrl: string) => boolean): void {
   ipcMain.on(PAGE_CONFIG_CHANNEL, (event) => {
+    let pageUrl = ''
+    try {
+      pageUrl = event.senderFrame?.url ?? ''
+    } catch {
+      // The frame went away.
+    }
     const ua = currentUa()
     const chromium = isChromiumUa(ua)
-    const { googleSignInCompat, widevine, widevinePrompt, globalPrivacyControl } = settings.get()
+    const { googleSignInCompat, widevine, widevinePrompt, globalPrivacyControl, blockFingerprinting } = settings.get()
     const config: PageConfig = {
       signInCompat: chromium && googleSignInCompat,
       hideChromium: !chromium,
       vendor: /Version\/[\d.]+ Safari\//.test(ua) ? 'Apple Computer, Inc.' : chromium ? 'Google Inc.' : '',
       blockWidevine: !widevine,
       askForWidevine: !widevine && widevinePrompt,
-      globalPrivacyControl
+      globalPrivacyControl,
+      fingerprintSeed: blockFingerprinting && pageUrl && protects(pageUrl) ? fingerprintSeed(pageUrl) : null
     }
     event.returnValue = config
   })
