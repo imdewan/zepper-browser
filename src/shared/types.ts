@@ -153,6 +153,8 @@ export interface Snapshot {
   tidy: { kind: 'ai' } | { kind: 'site'; reason: string }
   /** Zepper opens links from other apps. */
   defaultBrowser: boolean
+  /** What Apple's on-device intelligence can do on this Mac. */
+  intelligence: IntelligenceStatus
   /** The command bar is open (the empty page steps back while it is). */
   paletteOpen: boolean
   /** Window content size, so floating UI can line up with the window's background. */
@@ -223,6 +225,17 @@ export interface CertificateChain {
   entries: CertificateEntry[]
 }
 
+export interface IntelligenceStatus {
+  /** Apple Intelligence (summaries, answers, Tidy Tabs). */
+  ai: boolean
+  /** Why it isn't available. */
+  reason?: string
+  /** On-device translation. */
+  translation: boolean
+  /** On-device text embeddings (search history by meaning). */
+  embeddings: boolean
+}
+
 export interface SiteInfo {
   url: string
   origin: string
@@ -285,6 +298,7 @@ export type PopoverSpec =
   | { kind: 'widevine'; anchor: Rect; host: string; restart: boolean }
   | { kind: 'jsDialog'; anchor: Rect; dialog: JsDialogSpec }
   | { kind: 'auth'; anchor: Rect; auth: AuthSpec }
+  | { kind: 'assistant'; anchor: Rect; title: string; host: string }
 
 export interface FindResult {
   active: number
@@ -349,6 +363,9 @@ export type Command =
   | { type: 'widevine.respond'; host: string; choice: 'install' | 'later' | 'never' }
   | { type: 'app.relaunch' }
   | { type: 'app.makeDefaultBrowser' }
+  /** Summarise the current page, or answer a question about it (with earlier questions and answers). */
+  | { type: 'ui.openAssistant'; anchor?: Rect }
+  | { type: 'assistant.run'; requestId: string; question?: string; history?: [string, string][] }
   /** Settings › Privacy › Clear browsing data. `since` (ms since epoch) applies to history. */
   /** One protection on or off for one site (from the lock icon). */
   | { type: 'site.setProtection'; domain: string; key: Protection; enabled: boolean }
@@ -397,6 +414,8 @@ export type Command =
 /** Events pushed from the main process to renderers. */
 export type UiEvent =
   | { type: 'palette.open'; mode: 'new' | 'current' | 'split'; currentUrl: string | null }
+  /** A summary or answer about the page, as it streams in. */
+  | { type: 'assistant.text'; requestId: string; text: string; done: boolean; error?: string }
   | { type: 'toast'; toast: ToastSpec }
   | { type: 'history.open' }
   | { type: 'folder.startRename'; folderId: string }

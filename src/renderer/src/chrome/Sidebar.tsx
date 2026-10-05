@@ -17,7 +17,8 @@ import {
   IconPuzzle,
   IconReload,
   IconSearch,
-  IconSettings
+  IconSettings,
+  IconSparkle
 } from '../icons'
 import { useSnapshot, useUiEvents } from '../useSnapshot'
 import { cx, hostOf, rectOf } from '../util'
@@ -45,7 +46,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
   return (
     <aside className="sidebar" style={{ width }}>
       <TopRow tab={activeTab} isPrivate={snapshot.kind === 'private'} extensionsRow={snapshot.settings.extensionsRow} />
-      <UrlPill tab={activeTab} />
+      <UrlPill tab={activeTab} ai={snapshot.intelligence.ai} />
       {snapshot.settings.extensionsRow && snapshot.kind !== 'private' && <ExtensionsRow />}
       <div className="sidebar-body">
         <SpacesViewport
@@ -117,7 +118,7 @@ function TopRow({ tab, isPrivate, extensionsRow }: { tab: Tab | null; isPrivate:
   )
 }
 
-function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
+function UrlPill({ tab, ai }: { tab: Tab | null; ai: boolean }): React.JSX.Element {
   const secure = tab?.url.startsWith('https://')
   // Plain HTTP: an open padlock (with "Not secure" in its tooltip and the site panel), not a word that crowds the address.
   const insecure = tab?.url.startsWith('http://')
@@ -152,6 +153,18 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
             {secure ? <IconLock size={12} /> : insecure ? <IconLockOpen size={12} /> : <IconGlobe size={12} />}
           </button>
           <span className="url-pill-host">{hostOf(tab.url)}</span>
+          {ai && /^https?:/.test(tab.url) && (
+            <button
+              className="url-pill-copy url-pill-ask"
+              title="Summarise or ask about this page (⇧⌘A)"
+              onClick={(e) => {
+                e.stopPropagation()
+                if (pill.current) zepper.send({ type: 'ui.openAssistant', anchor: rectOf(pill.current) })
+              }}
+            >
+              <IconSparkle size={13} />
+            </button>
+          )}
           <button className={cx('url-pill-copy', copied && 'copied')} title="Copy URL (⇧⌘C)" onClick={copy}>
             {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
           </button>

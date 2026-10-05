@@ -137,6 +137,7 @@ function createMock(): ZepperApi {
     folders: [],
     tidy: { kind: 'ai' },
     defaultBrowser: false,
+    intelligence: { ai: true, translation: true, embeddings: true },
     windowSize: { width: window.innerWidth, height: window.innerHeight },
     splits: [],
     panes: []

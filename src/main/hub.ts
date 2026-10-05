@@ -12,7 +12,7 @@ import {
   type WebContents
 } from 'electron'
 import { join } from 'node:path'
-import { IPC, type Command, type WidevineStatus } from '@shared/types'
+import { IPC, type Command, type IntelligenceStatus, type WidevineStatus } from '@shared/types'
 import type { AdBlock } from './adblock'
 import { Browser, type BrowserKind, type WindowSeed } from './browser'
 import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
@@ -20,6 +20,7 @@ import { bangs } from './bangs'
 import { Downloads } from './downloads'
 import { Extensions } from './extensions'
 import { tidyMode, type TidyMode } from './tidy'
+import { intelligence } from './ai'
 import { ZoomLevels } from './zoom'
 import { SECURE_DNS_SERVERS } from '@shared/settings'
 import type { History } from './history'
@@ -48,6 +49,8 @@ export class Hub {
   readonly services: Services
   /** How Tidy works on this Mac (until checked: by site). */
   tidy: TidyMode = { kind: 'site', reason: 'Checking for Apple Intelligence…' }
+  /** What the on-device intelligence helper can do (until checked: nothing). */
+  aiStatus: IntelligenceStatus = { ai: false, reason: 'Checking for Apple Intelligence…', translation: false, embeddings: false }
   /** Page zoom per site, shared by all windows. */
   readonly zoom = new ZoomLevels()
   /** Whether Zepper opens links from other apps (macOS default browser). */
@@ -129,6 +132,10 @@ export class Hub {
     })
     this.applyAppIcon()
     this.applySettings()
+    void intelligence.status().then((status) => {
+      this.aiStatus = status
+      for (const browser of this.browsers) browser.refresh()
+    })
     void tidyMode().then((mode) => {
       this.tidy = mode
       for (const browser of this.browsers) browser.refresh()

@@ -65,6 +65,7 @@ import { parse as parseDomain } from 'tldts-experimental'
 import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
 import { suggest } from './suggest'
 import { tidyGroups } from './tidy'
+import { AiError, intelligence } from './ai'
 import { resolveInput, searchEngineName, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
 import { nextZoom } from './zoom'
 
@@ -202,6 +203,17 @@ function mediaSeekScript(seconds: number): string {
   return true
 })()`
 }
+
+/** An isolated JavaScript world for Zepper's own reads of a page (the page can't see or change it). */
+const ZEPPER_WORLD = 1001
+
+/** The readable text of a page: its article or main content when it marks one, else the whole body. */
+const PAGE_TEXT_SCRIPT = `(() => {
+  const root = document.querySelector('article') || document.querySelector('main, [role="main"]') || document.body
+  const text = (root ? root.innerText : '').replace(/\\n{3,}/g, '\\n\\n').slice(0, 60000)
+  const description = document.querySelector('meta[name="description"], meta[property="og:description"]')?.content || ''
+  return { title: document.title, text: description && !text.includes(description) ? description + '\\n\\n' + text : text }
+})()`
 
 /** Pauses every playing video and audio element. */
 const MEDIA_PAUSE_SCRIPT = `(() => {
@@ -955,6 +967,10 @@ export class Browser {
         return this.hub.relaunch()
       case 'app.makeDefaultBrowser':
         return this.hub.makeDefaultBrowser()
+      case 'ui.openAssistant':
+        return this.openAssistant(command.anchor)
+      case 'assistant.run':
+        return void this.runAssistant(command.requestId, command.question, command.history ?? [])
       case 'site.setProtection':
         return this.setSiteProtection(command.domain, command.key, command.enabled)
       case 'site.resetProtections': {
@@ -2110,6 +2126,45 @@ export class Browser {
     if (this.kind === 'private') return
     const factor = this.hub.zoom.get(safeHost(url))
     if (Math.abs(wc.getZoomFactor() - factor) > 0.001) wc.setZoomFactor(factor)
+  }
+
+  /** The "Ask this page" panel: a summary of the page, and questions about it. */
+  openAssistant(anchor?: Rect): void {
+    const tab = this.tab(this.activeTabId)
+    if (!tab || !/^https?:|^file:/.test(tab.url)) return
+    const bounds = this.contentBounds()
+    this.handle({
+      type: 'ui.openPopover',
+      popover: {
+        kind: 'assistant',
+        anchor: anchor ?? { x: bounds.x + bounds.width - 412, y: bounds.y + 4, width: 0, height: 0 },
+        title: tab.title,
+        host: safeHost(tab.url).replace(/^www\./, '')
+      }
+    })
+  }
+
+  /** Summarises the page (no question) or answers a question about it, streaming to the panel. */
+  private async runAssistant(requestId: string, question: string | undefined, history: [string, string][]): Promise<void> {
+    const send = (text: string, done: boolean, error?: string): void =>
+      this.emit({ type: 'assistant.text', requestId, text, done, error }, 'overlay')
+    const tab = this.tab(this.activeTabId)
+    const wc = tab && this.views.get(tab.id)?.webContents
+    if (!tab || !wc || wc.isDestroyed()) return send('', true, 'Open a page first.')
+    const page: { title: string; text: string } | null = await wc
+      .executeJavaScriptInIsolatedWorld(ZEPPER_WORLD, [{ code: PAGE_TEXT_SCRIPT }])
+      .catch(() => null)
+    if (!page?.text.trim()) return send('', true, 'There’s no text on this page to read.')
+    try {
+      const result = await intelligence.request<{ text: string }>(
+        question ? 'ask' : 'summarize',
+        { title: page.title, text: page.text, question: question?.slice(0, 500), history: history.slice(-3) },
+        (partial) => send(partial, false)
+      )
+      send(result.text, true)
+    } catch (error) {
+      send('', true, error instanceof AiError ? error.message : 'Apple Intelligence couldn’t answer that.')
+    }
   }
 
   printActive(): void {
@@ -3608,6 +3663,7 @@ export class Browser {
         { label: 'Forward', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
         { label: 'Reload', click: () => this.reloadPage(wc) },
         { type: 'separator' },
+        ...(this.hub.aiStatus.ai ? [{ label: 'Summarise Page', click: () => this.openAssistant() }] : []),
         { label: 'Save Page As…', click: () => void this.savePageAs() },
         { label: 'Print…', click: () => wc.print({}, () => {}) },
         {
@@ -3823,6 +3879,7 @@ export class Browser {
       folders: this.folders,
       tidy: this.hub.tidy,
       defaultBrowser: this.hub.defaultBrowser,
+      intelligence: this.hub.aiStatus,
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : []

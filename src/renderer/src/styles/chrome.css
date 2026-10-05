@@ -451,6 +451,10 @@ button.site-button.insecure:hover {
   color: var(--accent);
 }
 
+.url-pill-ask {
+  margin-right: 0;
+}
+
 /* ---- Essentials ---------------------------------------------------------- */
 
 .essentials {

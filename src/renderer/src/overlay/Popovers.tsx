@@ -6,6 +6,7 @@ import { SPACE_EMOJI } from '../emoji'
 import { GradientEditor } from '../GradientEditor'
 import { IconClose } from '../icons'
 import { cx } from '../util'
+import { AssistantPanel } from './AssistantPanel'
 import { AuthDialog, JsDialog } from './Dialogs'
 import { ExtensionsPanel } from './ExtensionsPanel'
 import { PermissionPanel, SiteInfoPanel, WidevinePrompt } from './SiteInfo'
@@ -16,6 +17,7 @@ const POPOVER_WIDTHS: Partial<Record<PopoverSpec['kind'], number>> = {
   auth: 360,
   widevine: 360,
   siteInfo: 340,
+  assistant: 400,
   theme: 352
 }
 
@@ -111,6 +113,7 @@ export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }:
         {popover.kind === 'extensions' && <ExtensionsPanel pinned={pinnedExtensions} anchor={anchor} onClose={onClose} />}
         {popover.kind === 'spaces' && snapshot && <SpacesPicker snapshot={snapshot} onClose={onClose} />}
         {popover.kind === 'widevine' && <WidevinePrompt host={popover.host} restart={popover.restart} onDone={onClose} />}
+        {popover.kind === 'assistant' && <AssistantPanel title={popover.title} host={popover.host} />}
         {popover.kind === 'jsDialog' && <JsDialog key={popover.dialog.id} dialog={popover.dialog} onDone={onClose} />}
         {popover.kind === 'auth' && <AuthDialog key={popover.auth.id} auth={popover.auth} onDone={onClose} />}
       </motion.div>

@@ -160,6 +160,7 @@ export function buildMenu(hub: Hub): Menu {
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: run((browser) => browser.zoomActive(0)) },
         { type: 'separator' },
         { label: 'View Page Source', accelerator: 'CmdOrCtrl+Alt+U', click: run((browser) => browser.viewSource()) },
+        { label: 'Summarise or Ask This Page', accelerator: 'CmdOrCtrl+Shift+A', click: run((browser) => browser.openAssistant()) },
         {
           label: 'Developer Tools',
           accelerator: 'CmdOrCtrl+Alt+I',

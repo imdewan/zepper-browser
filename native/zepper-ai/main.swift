@@ -243,21 +243,14 @@ func summarize(_ id: Int, _ body: [String: Any]) async throws -> [String: Any] {
     let title = body["title"] as? String ?? ""
     let text = body["text"] as? String ?? ""
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Failure("There's no text on this page to summarise.", code: "empty") }
-    let budget = characterBudget(for: text)
-    var material = String(text.prefix(budget))
-    if text.count > budget {
-        // A long page: note the key points of each part, then summarise the notes.
-        var notes: [String] = []
-        for part in passages(text, size: budget).prefix(4) {
-            let session = LanguageModelSession(instructions: "Write the key points of this part of a web page as three to five short bullet points.")
-            notes.append(try await session.respond(to: part).content)
-        }
-        material = notes.joined(separator: "\n")
-    }
+    // One streamed pass over as much of the page as fits: pages put their main points first, and
+    // answering at once beats a slower, more complete summary.
+    let material = String(text.prefix(characterBudget(for: text)))
     let session = LanguageModelSession(instructions: """
         You summarise web pages for someone deciding whether to read them. Reply with three to six \
-        short bullet points, each starting with "• ", covering the main points and any concrete \
-        facts such as numbers, dates and names. Write in the page's language. No introduction or conclusion.
+        short bullet points, each starting with "• ". Cover the main points, with numbers, dates and \
+        names where the page gives them. Never mention what the page doesn't say. Write in the page's \
+        language. No introduction or conclusion.
         """)
     let summary = try await stream(id, session: session, prompt: "Page title: \(title)\n\n\(material)")
     return ["text": summary]

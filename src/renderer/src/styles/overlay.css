@@ -2531,3 +2531,150 @@
   font-size: 12px;
   color: var(--text-2);
 }
+
+/* ---- Ask this page --------------------------------------------------------------- */
+
+.assistant {
+  display: flex;
+  flex-direction: column;
+  max-height: min(560px, calc(100vh - 120px));
+}
+
+.assistant-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 2px 30px 12px 2px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.assistant-mark {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.assistant-heading {
+  min-width: 0;
+}
+
+.assistant-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.assistant-host {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.assistant-replies {
+  flex: 1;
+  min-height: 60px;
+  overflow-y: auto;
+  padding: 12px 2px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.assistant-question {
+  align-self: flex-end;
+  max-width: 85%;
+  margin: 0 0 8px auto;
+  padding: 7px 11px;
+  border-radius: 12px 12px 4px 12px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--element));
+  font-size: 13px;
+  width: fit-content;
+}
+
+.assistant-text {
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.assistant-error {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.assistant-thinking {
+  display: flex;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+.assistant-thinking span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+  animation: assistant-dot 1s ease-in-out infinite;
+}
+
+.assistant-thinking span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.assistant-thinking span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes assistant-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.assistant-ask {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 12px;
+  background: var(--element);
+}
+
+.assistant-ask input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  outline: none;
+}
+
+.assistant-ask button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #fff;
+}
+
+.assistant-ask button:disabled {
+  opacity: 0.35;
+}
+
+.assistant-footnote {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--text-3);
+  text-align: center;
+}
