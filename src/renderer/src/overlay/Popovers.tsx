@@ -4,6 +4,7 @@ import type { PopoverSpec, Space } from '@shared/types'
 import { zepper } from '../bridge'
 import { SPACE_EMOJI } from '../emoji'
 import { GradientEditor } from '../GradientEditor'
+import { IconClose } from '../icons'
 import { cx } from '../util'
 import { PermissionPanel, SiteInfoPanel } from './SiteInfo'
 
@@ -47,6 +48,11 @@ export function Popover({ popover, space, onClose }: PopoverProps): React.JSX.El
         exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.12 } }}
         transition={{ type: 'spring', bounce: 0.15, duration: 0.3 }}
       >
+        {popover.kind !== 'permission' && (
+          <button className="popover-close" title="Close (Esc)" onClick={onClose}>
+            <IconClose size={13} />
+          </button>
+        )}
         {popover.kind === 'emoji' && space && (
           <EmojiPicker
             selected={space.icon}

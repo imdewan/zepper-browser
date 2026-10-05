@@ -145,6 +145,8 @@ export interface SiteInfo {
   insecureReason: string | null
   certificate: CertificateInfo | null
   chain: CertificateChain | null
+  /** Domains under this site that store cookies or data on this device. */
+  siteData: { domain: string; cookies: number }[]
   blockedCount: number
   adblockEnabled: boolean
   permissions: { permission: string; label: string; state: PermissionState }[]
@@ -219,6 +221,7 @@ export type Command =
   | { type: 'media.dismiss'; tabId: string }
   | { type: 'site.setPermission'; origin: string; permission: string; state: PermissionState }
   | { type: 'site.clearData'; origin: string }
+  | { type: 'site.clearDomain'; domain: string }
   | { type: 'permission.respond'; id: number; allow: boolean }
   | { type: 'find.query'; text: string; forward: boolean; findNext: boolean }
   | { type: 'find.stop' }
@@ -227,6 +230,7 @@ export type Command =
   | { type: 'ui.openSettings' }
   | { type: 'ui.peekSidebar'; show: boolean }
   | { type: 'ui.dismissOverlay' }
+  | { type: 'ui.createSpace' }
 
 /** Events pushed from the main process to renderers. */
 export type UiEvent =
@@ -253,6 +257,7 @@ export interface ZepperApi {
 
 export const IPC = {
   swipe: 'zepper:swipe',
+  pipBack: 'zepper:pip-back',
   snapshot: 'zepper:snapshot',
   getSnapshot: 'zepper:get-snapshot',
   event: 'zepper:event',

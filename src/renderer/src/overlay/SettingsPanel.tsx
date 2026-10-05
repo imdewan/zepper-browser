@@ -140,6 +140,19 @@ export function SettingsPanel({ settings, onClose }: SettingsPanelProps): React.
                     onChange={(density) => set({ density })}
                   />
                 </Row>
+                <Row
+                  label="Transparency"
+                  hint={settings.windowTransparency === 0 ? 'Solid window' : `${Math.round(settings.windowTransparency * 100)}% see-through`}
+                >
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={settings.windowTransparency}
+                    onChange={(e) => set({ windowTransparency: Number(e.target.value) })}
+                  />
+                </Row>
                 <Row label="Content gap" hint={`${settings.contentGap}px around the page`}>
                   <input type="range" min={0} max={16} step={1} value={settings.contentGap} onChange={(e) => set({ contentGap: Number(e.target.value) })} />
                 </Row>
@@ -179,6 +192,9 @@ export function SettingsPanel({ settings, onClose }: SettingsPanelProps): React.
                       </option>
                     ))}
                   </select>
+                </Row>
+                <Row label="Picture-in-picture when you leave a video" hint="A playing video floats in a mini player until you come back.">
+                  <Toggle checked={settings.autoPictureInPicture} onChange={(autoPictureInPicture) => set({ autoPictureInPicture })} />
                 </Row>
                 <Row label="After closing a tab, go to the most recently used tab" hint="Otherwise the tab next to it.">
                   <Toggle checked={settings.closeSelectsRecent} onChange={(closeSelectsRecent) => set({ closeSelectsRecent })} />

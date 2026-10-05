@@ -55,8 +55,10 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
   }, [index, width, x])
 
   const swipeEnabled = snapshot.settings.swipeBetweenSpaces
+  const wrap = snapshot.settings.wrapSpaces
   useEffect(() => {
-    const el = viewport.current
+    // Swipes work anywhere on the sidebar, not just over the tab list.
+    const el = viewport.current?.closest<HTMLElement>('.sidebar') ?? viewport.current
     if (!el || !width || !swipeEnabled) return
     const g = gesture.current
     const settle = (): void => {
@@ -71,10 +73,11 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
     }
     const commit = (delta: number): void => {
       const target = indexRef.current + delta
-      if (target < 0 || target >= count) {
+      if (!wrap && (target < 0 || target >= count)) {
         void animate(x, -indexRef.current * width, SWITCH_SPRING)
         return
       }
+      // The main process wraps past the ends when "Wrap around spaces" is on.
       zepper.send({ type: 'space.switchRelative', delta })
     }
     const onWheel = (e: WheelEvent): void => {
@@ -89,8 +92,8 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
       }
       g.active = true
       g.offset -= e.deltaX
-      const atStart = indexRef.current === 0 && g.offset > 0
-      const atEnd = indexRef.current === count - 1 && g.offset < 0
+      const atStart = !wrap && indexRef.current === 0 && g.offset > 0
+      const atEnd = !wrap && indexRef.current === count - 1 && g.offset < 0
       const shown = atStart || atEnd ? g.offset * 0.25 : g.offset
       x.set(-indexRef.current * width + Math.max(-width, Math.min(width, shown)))
       if (!atStart && !atEnd && Math.abs(g.offset) > width * 0.3) {
@@ -109,7 +112,7 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
       el.removeEventListener('wheel', onWheel)
       window.clearTimeout(g.timer)
     }
-  }, [width, count, x, swipeEnabled])
+  }, [width, count, x, swipeEnabled, wrap])
 
   return (
     <div className="spaces-viewport" ref={viewport}>
@@ -182,7 +185,7 @@ function SpaceView({ space, tabs, activeTabId, newTabAtBottom, renaming, onRenam
           ))}
         </AnimatePresence>
         {newTabAtBottom && <NewTabRow />}
-        <div className="space-fill drag" onDoubleClick={() => zepper.send({ type: 'ui.openPalette', mode: 'new' })} />
+        <div className="space-fill" onDoubleClick={() => zepper.send({ type: 'ui.openPalette', mode: 'new' })} />
       </div>
     </section>
   )

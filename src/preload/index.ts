@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { injectBrowserAction } from 'electron-chrome-extensions/browser-action'
 import { IPC, type Command, type Snapshot, type UiEvent, type ZepperApi } from '../shared/types'
 
 const api: ZepperApi = {
@@ -19,3 +20,6 @@ const api: ZepperApi = {
 }
 
 contextBridge.exposeInMainWorld('zepper', api)
+
+// <browser-action-list>: extension toolbar buttons and popups.
+injectBrowserAction()

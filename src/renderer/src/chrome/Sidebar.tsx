@@ -1,5 +1,4 @@
 import { useCallback, useRef, useState } from 'react'
-import { AnimatePresence } from 'motion/react'
 import type { Snapshot, Tab, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconBack, IconForward, IconGlobe, IconLock, IconPlus, IconReload, IconSearch, IconSettings, IconSidebar } from '../icons'
@@ -7,7 +6,6 @@ import { useUiEvents } from '../useSnapshot'
 import { cx, hostOf, rectOf } from '../util'
 import { Essentials } from './Essentials'
 import { MediaCard } from './MediaCard'
-import { SpaceCreate } from './SpaceCreate'
 import { SpacesViewport } from './Spaces'
 
 interface SidebarProps {
@@ -20,14 +18,12 @@ interface SidebarProps {
 
 export function Sidebar({ snapshot, width, onResize, floating = false }: SidebarProps): React.JSX.Element {
   const [renamingId, setRenamingId] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
   const activeTab = snapshot.tabs.find((t) => t.id === snapshot.activeTabId) ?? null
   const essentials = snapshot.tabs.filter((t) => t.kind === 'essential')
 
   useUiEvents(
     useCallback((event: UiEvent) => {
       if (event.type === 'space.startRename') setRenamingId(event.spaceId)
-      if (event.type === 'space.startCreate') setCreating(true)
     }, [])
   )
 
@@ -43,7 +39,6 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
           onRenameDone={() => setRenamingId(null)}
           onStartRename={setRenamingId}
         />
-        <AnimatePresence>{creating && <SpaceCreate onDone={() => setCreating(false)} />}</AnimatePresence>
       </div>
       <MediaCard snapshot={snapshot} />
       <BottomBar snapshot={snapshot} />
@@ -93,6 +88,9 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
             {secure ? <IconLock size={12} /> : <IconGlobe size={12} />}
           </button>
           <span className="url-pill-host">{hostOf(tab.url)}</span>
+          <span className="url-pill-extensions" onClick={(e) => e.stopPropagation()}>
+            <browser-action-list partition="zepper-browsing" alignment="bottom left" />
+          </span>
           {tab.blockedCount > 0 && (
             <span className="url-pill-blocked" title={`${tab.blockedCount} ads and trackers blocked`}>
               {tab.blockedCount}
@@ -104,7 +102,7 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
           <span className="site-button">
             <IconSearch size={12} />
           </span>
-          <span className="url-pill-placeholder">Search or enter address</span>
+          <span className="url-pill-placeholder">Search or enter URL</span>
         </>
       )}
     </div>

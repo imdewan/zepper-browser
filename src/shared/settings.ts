@@ -14,10 +14,13 @@ export interface Settings {
   essentialsGlow: boolean
   reduceMotion: boolean
   appIcon: 'auto' | 'light' | 'dark'
+  /** How much of the desktop shows through the window: 0 = solid, 1 = full vibrancy. */
+  windowTransparency: number
   // Tabs
   newTabPosition: 'top' | 'bottom'
   pinnedCloseBehavior: PinnedCloseBehavior
   closeSelectsRecent: boolean
+  autoPictureInPicture: boolean
   // Search
   searchEngine: SearchEngineId
   searchSuggestions: boolean
@@ -40,9 +43,11 @@ export const DEFAULT_SETTINGS: Settings = {
   essentialsGlow: true,
   reduceMotion: false,
   appIcon: 'auto',
+  windowTransparency: 1,
   newTabPosition: 'top',
   pinnedCloseBehavior: 'reset-unload-switch',
   closeSelectsRecent: true,
+  autoPictureInPicture: true,
   searchEngine: 'google',
   searchSuggestions: true,
   swipeBetweenSpaces: true,

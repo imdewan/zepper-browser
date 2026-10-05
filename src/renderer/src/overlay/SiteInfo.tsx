@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { CertificateChain, PermissionPrompt, PermissionState, SiteInfo } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconBack, IconGlobe, IconLock, IconShield } from '../icons'
+import { IconArrowRight, IconBack, IconCookie, IconGlobe, IconLock, IconShield, IconTrash } from '../icons'
 import { cx } from '../util'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 
 /** The panel behind the lock icon: connection security, certificate, blocking and permissions. */
 export function SiteInfoPanel({ info, onClose }: { info: SiteInfo; onClose: () => void }): React.JSX.Element {
-  const [view, setView] = useState<'info' | 'certificate'>('info')
+  const [view, setView] = useState<'info' | 'certificate' | 'data'>('info')
   return (
     <AnimatePresence mode="popLayout" initial={false}>
       {view === 'info' ? (
@@ -20,7 +20,21 @@ export function SiteInfoPanel({ info, onClose }: { info: SiteInfo; onClose: () =
           exit={{ opacity: 0, x: -24 }}
           transition={{ type: 'spring', bounce: 0, duration: 0.28 }}
         >
-          <SiteSummary info={info} onClose={onClose} onShowCertificate={() => setView('certificate')} />
+          <SiteSummary
+            info={info}
+            onShowCertificate={() => setView('certificate')}
+            onShowData={() => setView('data')}
+          />
+        </motion.div>
+      ) : view === 'data' ? (
+        <motion.div
+          key="data"
+          initial={{ opacity: 0, x: 24 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 24 }}
+          transition={{ type: 'spring', bounce: 0, duration: 0.28 }}
+        >
+          <SiteDataView info={info} onBack={() => setView('info')} onDone={onClose} />
         </motion.div>
       ) : (
         <motion.div
@@ -39,11 +53,11 @@ export function SiteInfoPanel({ info, onClose }: { info: SiteInfo; onClose: () =
 
 interface SiteSummaryProps {
   info: SiteInfo
-  onClose: () => void
   onShowCertificate: () => void
+  onShowData: () => void
 }
 
-function SiteSummary({ info, onClose, onShowCertificate }: SiteSummaryProps): React.JSX.Element {
+function SiteSummary({ info, onShowCertificate, onShowData }: SiteSummaryProps): React.JSX.Element {
   const [permissions, setPermissions] = useState(info.permissions)
   const cert = info.certificate
   const expired = cert ? cert.validTo < Date.now() : false
@@ -110,16 +124,80 @@ function SiteSummary({ info, onClose, onShowCertificate }: SiteSummaryProps): Re
       )}
 
       {/^https?:/.test(info.url) && (
-        <button
-          className="panel-button subtle"
-          onClick={() => {
-            zepper.send({ type: 'site.clearData', origin: info.origin })
-            onClose()
-          }}
-        >
-          Clear Cookies and Site Data
+        <button className="site-section site-row site-link" onClick={onShowData}>
+          <IconCookie size={15} className="site-row-icon" />
+          <span className="site-row-label">Cookies and site data</span>
+          <span className="site-row-value">
+            {info.siteData.length === 0 ? 'None' : `${info.siteData.length} ${info.siteData.length === 1 ? 'site' : 'sites'}`}
+          </span>
+          <IconArrowRight size={13} className="site-row-chevron" />
         </button>
       )}
+    </div>
+  )
+}
+
+/** "On-device site data": which domains under this site store data here, with per-domain delete. */
+function SiteDataView({ info, onBack, onDone }: { info: SiteInfo; onBack: () => void; onDone: () => void }): React.JSX.Element {
+  const [entries, setEntries] = useState(info.siteData)
+  const remove = (domain: string): void => {
+    zepper.send({ type: 'site.clearDomain', domain })
+    setEntries((list) => list.filter((e) => e.domain !== domain))
+  }
+  return (
+    <div className="site-data">
+      <div className="cert-header">
+        <button className="cert-back" onClick={onBack} title="Back">
+          <IconBack size={15} />
+        </button>
+        <div className="cert-header-title">On-device site data</div>
+      </div>
+      <p className="site-note">
+        Sites save things like your sign-in, preferences and shopping cart to this device. Deleting a site’s data signs you out of it.
+      </p>
+      <div className="site-section-title">Data from the site you’re visiting</div>
+      <div className="site-data-list">
+        <AnimatePresence initial={false}>
+          {entries.map((entry) => (
+            <motion.div
+              key={entry.domain}
+              className="site-data-row"
+              layout
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, height: 0, transition: { duration: 0.18 } }}
+            >
+              <IconGlobe size={16} className="site-data-icon" />
+              <div className="site-data-text">
+                <div className="site-data-domain">{entry.domain}</div>
+                <div className="site-data-count">
+                  {entry.cookies} {entry.cookies === 1 ? 'cookie' : 'cookies'}
+                </div>
+              </div>
+              <button className="site-data-delete" title={`Delete data from ${entry.domain}`} onClick={() => remove(entry.domain)}>
+                <IconTrash size={14} />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        {entries.length === 0 && <div className="site-data-empty">No data stored for this site.</div>}
+      </div>
+      <div className="site-data-footer">
+        <button
+          className="panel-button subtle"
+          disabled={entries.length === 0}
+          onClick={() => {
+            for (const entry of entries) zepper.send({ type: 'site.clearDomain', domain: entry.domain })
+            zepper.send({ type: 'site.clearData', origin: info.origin })
+            setEntries([])
+          }}
+        >
+          Delete All
+        </button>
+        <button className="panel-button primary" onClick={onDone}>
+          Done
+        </button>
+      </div>
     </div>
   )
 }

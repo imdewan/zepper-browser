@@ -291,7 +291,11 @@ button.site-button:active {
 
 .url-pill-placeholder {
   flex: 1;
+  min-width: 0;
   color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .url-pill-blocked {
@@ -397,11 +401,6 @@ button.site-button:active {
   overflow: hidden;
   position: relative;
   transition: opacity 0.15s ease;
-}
-
-.sidebar-body:has(.space-create) .spaces-viewport {
-  opacity: 0;
-  pointer-events: none;
 }
 
 .spaces-track {
@@ -843,124 +842,6 @@ button.site-button:active {
   opacity: 0.8;
 }
 
-/* ---- Create a Space form ---------------------------------------------------- */
-
-.space-create {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 18px 4px 6px;
-}
-
-.space-create h1 {
-  margin: 6px 0 4px;
-  font-size: 16px;
-  font-weight: 650;
-  text-align: center;
-  letter-spacing: -0.01em;
-}
-
-.space-create-sub {
-  margin: 0 0 20px;
-  font-size: 12px;
-  text-align: center;
-  color: var(--text-3);
-}
-
-.space-create-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 10px;
-  background: var(--element);
-}
-
-.space-create-icon {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  border-radius: 7px;
-  border: 1px dashed var(--text-3);
-  display: grid;
-  place-items: center;
-  font-size: 15px;
-}
-
-.space-create-name input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-}
-
-.space-create-name input::placeholder {
-  color: var(--text-3);
-}
-
-.emoji-grid.inline {
-  margin-top: 8px;
-  max-height: 156px;
-  overflow-y: auto;
-  padding: 6px;
-  border-radius: 10px;
-  background: var(--element);
-  grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
-  scrollbar-width: none;
-}
-
-.space-create-label {
-  margin: 18px 2px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-2);
-}
-
-.space-create-buttons {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.primary-button {
-  height: 36px;
-  border-radius: 10px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 600;
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease,
-    filter 0.15s ease;
-}
-
-.primary-button:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-
-.primary-button:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-.primary-button:disabled {
-  opacity: 0.4;
-}
-
-.ghost-button {
-  height: 34px;
-  border-radius: 10px;
-  color: var(--text-2);
-  transition: background-color 0.1s ease;
-}
-
-.ghost-button:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-
 /* ---- Swipe to navigate -------------------------------------------------------- */
 
 .swipe-indicator {
@@ -1260,13 +1141,41 @@ button.site-button:active {
   opacity: 1;
 }
 
-.space-create-theme {
-  margin-top: 14px;
-  overflow-y: auto;
-  scrollbar-width: none;
-  min-height: 0;
+
+/* Extension buttons (Chrome Web Store extensions) inside the URL pill. */
+.url-pill-extensions {
+  display: flex;
+  align-items: center;
+  flex: none;
 }
 
-.space-create-theme .swatches {
-  grid-template-columns: repeat(6, 1fr);
+.url-pill-extensions browser-action-list {
+  display: flex;
+  gap: 2px;
+}
+
+browser-action-list::part(action) {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background-color: transparent;
+  background-size: 15px;
+  transition: background-color 0.1s ease;
+}
+
+browser-action-list::part(action):hover {
+  background-color: var(--press);
+}
+
+browser-action-list::part(badge) {
+  font-size: 8px;
+  border-radius: 4px;
+}
+
+/* Solid window base under the gradient; its opacity is the inverse of the transparency setting. */
+.background-base {
+  position: absolute;
+  inset: 0;
+  background: var(--window-base);
+  transition: opacity 0.2s ease;
 }

@@ -10,7 +10,8 @@ export default defineConfig({
     resolve: { alias }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    // Sandboxed preloads can't require node_modules, so bundle what they use.
+    plugins: [externalizeDepsPlugin({ exclude: ['electron-chrome-extensions'] })],
     resolve: { alias },
     build: {
       rollupOptions: {

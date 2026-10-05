@@ -83,6 +83,7 @@ kbd {
   --panel-border: rgba(255, 255, 255, 0.12);
   --palette-bg: rgb(26, 26, 28);
   --card: #1c1c1e;
+  --window-base: rgb(30, 30, 33);
 }
 
 [data-ui='light'] {
@@ -102,6 +103,7 @@ kbd {
   --panel-border: rgba(0, 0, 0, 0.12);
   --palette-bg: #ffffff;
   --card: #ffffff;
+  --window-base: rgb(234, 234, 237);
 }
 
 .favicon {

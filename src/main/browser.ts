@@ -39,10 +39,12 @@ import {
   type UiEvent
 } from '@shared/types'
 import type { AdBlock } from './adblock'
+import { Extensions } from './extensions'
 import { startDebugServer } from './devtools-server'
 import type { History } from './history'
 import { JsonFile } from './persist'
 import type { SettingsStore } from './settings-store'
+import { parse as parseDomain } from 'tldts-experimental'
 import { CertificateStore, SitePermissions, originOf, promptLabel, settingKeys } from './site'
 import { suggest } from './suggest'
 import { resolveInput, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
@@ -114,6 +116,26 @@ const MEDIA_METADATA_SCRIPT = `(() => {
   return { title: m.title || '', artist: m.artist || m.album || '', artwork: art ? new URL(art.src, location.href).href : null }
 })()`
 
+/** Pops a playing, audible video into picture-in-picture. Needs a user gesture, which executeJavaScript can grant. */
+const AUTO_PIP_SCRIPT = `(async () => {
+  if (document.pictureInPictureElement) return 'already'
+  const video = Array.from(document.querySelectorAll('video')).find(
+    (v) => !v.paused && !v.ended && !v.muted && v.volume > 0 && v.readyState >= 2 && v.videoWidth >= 160 && !v.disablePictureInPicture
+  )
+  if (!video) return 'none'
+  await video.requestPictureInPicture()
+  window.__zepperAutoPip = true
+  return 'pip'
+})()`
+
+/** Brings an auto-started picture-in-picture video back into the page. */
+const EXIT_AUTO_PIP_SCRIPT = `(() => {
+  if (!window.__zepperAutoPip || !document.pictureInPictureElement) return false
+  window.__zepperAutoPip = false
+  document.exitPictureInPicture()
+  return true
+})()`
+
 /** Pauses whatever is playing, or resumes what we paused last time. */
 const MEDIA_TOGGLE_SCRIPT = `(() => {
   const media = Array.from(document.querySelectorAll('video, audio'))
@@ -170,6 +192,7 @@ export class Browser {
   /** Horizontal offset applied to the active view while a swipe gesture is in progress. */
   private swipeOffset = 0
   private layoutAnimation: NodeJS.Timeout | null = null
+  private extensions: Extensions | null = null
 
   constructor(
     private readonly history: History,
@@ -263,8 +286,37 @@ export class Browser {
     })
 
     ipcMain.on(IPC.swipe, (event, phase: 'update' | 'end', dx: number) => this.onPageSwipe(event.sender.id, phase, dx))
+    // "Back to tab" from the picture-in-picture window.
+    ipcMain.on(IPC.pipBack, (event) => {
+      const id = this.tabByWebContents.get(event.sender.id)
+      if (id && id !== this.activeTabId) {
+        this.activateTab(id)
+        this.win.show()
+        this.win.focus()
+      }
+    })
 
     this.attachSession(session.defaultSession)
+    this.extensions = new Extensions(
+      {
+        window: () => this.win,
+        createTab: (url, active) => {
+          const tab = this.openTab(url, { background: !active })
+          return this.ensureView(tab).webContents
+        },
+        selectTab: (wc) => {
+          const id = this.tabByWebContents.get(wc.id)
+          if (id) this.activateTab(id)
+        },
+        removeTab: (wc) => {
+          const id = this.tabByWebContents.get(wc.id)
+          const tab = this.tab(id)
+          if (tab) this.removeTab(tab)
+        }
+      },
+      session.fromPartition('zepper-ui')
+    )
+    void this.extensions.start()
     this.applySettings(this.settings, null)
     this.settingsStore.onChange((next, prev) => this.applySettings(next, prev))
     this.win.setWindowButtonVisibility(!this.compact)
@@ -282,6 +334,7 @@ export class Browser {
       },
       handle: (command) => this.handle(command),
       snapshotJson: () => this.snapshot(),
+      evaluate: async (code) => this.activeWebContents()?.executeJavaScript(code, true) ?? null,
       drag: (layer, from, to) => {
         const target = layer === 'chrome' ? this.win.webContents : layer === 'tab' ? this.activeWebContents() : this.overlay.webContents
         const origin = layer === 'overlay' ? this.overlay.getBounds() : layer === 'tab' ? this.contentBounds() : { x: 0, y: 0 }
@@ -297,13 +350,14 @@ export class Browser {
           }, i * 16)
         }
       },
-      wheel: (dx, steps) => {
-        const wc = this.activeWebContents()
+      wheel: (dx, steps, layer, at) => {
+        const wc = layer === 'chrome' ? this.win.webContents : this.activeWebContents()
         if (!wc) return
         const { width, height } = this.contentBounds()
+        const [x, y] = at ?? [width / 2, height / 2]
         for (let i = 0; i < steps; i++) {
           setTimeout(() => {
-            wc.sendInputEvent({ type: 'mouseWheel', x: width / 2, y: height / 2, deltaX: dx, deltaY: 0, hasPreciseScrollingDeltas: true, canScroll: true })
+            wc.sendInputEvent({ type: 'mouseWheel', x, y, deltaX: dx, deltaY: 0, hasPreciseScrollingDeltas: true, canScroll: true })
           }, i * 16)
         }
       }
@@ -459,7 +513,9 @@ export class Browser {
       case 'ui.toggleCompact':
         return this.toggleCompact()
       case 'ui.siteInfo':
-        return this.openSiteInfo(command.anchor)
+        return void this.openSiteInfo(command.anchor)
+      case 'site.clearDomain':
+        return void this.clearDomain(command.domain)
       case 'site.exportCertificate':
         return void this.exportCertificate(command.index)
       case 'clipboard.write':
@@ -495,6 +551,10 @@ export class Browser {
         return this.setPeek(command.show)
       case 'ui.dismissOverlay':
         return this.emit({ type: 'overlay.dismiss' }, 'overlay')
+      case 'ui.createSpace':
+        this.setOverlayMode('full')
+        this.overlay.webContents.focus()
+        return this.emit({ type: 'space.startCreate' }, 'overlay')
     }
   }
 
@@ -590,6 +650,8 @@ export class Browser {
   activateTab(id: string): void {
     const tab = this.tab(id)
     if (!tab) return
+    const previousId = this.activeTabId
+    if (previousId && previousId !== id) void this.autoPictureInPicture(previousId)
     if (tab.kind !== 'essential' && tab.spaceId && tab.spaceId !== this.activeSpaceId) {
       this.activeSpaceId = tab.spaceId
     }
@@ -605,11 +667,52 @@ export class Browser {
     if (space) space.lastTabId = id
     this.layout()
     if (!this.paletteOpen && this.overlayMode !== 'full') view.webContents.focus()
+    this.extensions?.api.selectTab(view.webContents)
     this.broadcast()
     this.showNextPrompt()
+    this.runInFrames(view.webContents, EXIT_AUTO_PIP_SCRIPT, false)
+  }
+
+  /** Arc-style auto picture-in-picture: a playing video floats when you leave its tab. */
+  private async autoPictureInPicture(tabId: string): Promise<void> {
+    if (!this.settings.autoPictureInPicture) return
+    const tab = this.tab(tabId)
+    const wc = this.views.get(tabId)?.webContents
+    if (!tab?.audible || tab.muted || !wc) return
+    const entered = await this.runInFrames(wc, AUTO_PIP_SCRIPT, true, 'pip')
+    if (!app.isPackaged) console.info(`[pip] auto picture-in-picture for ${tab.title}: ${entered ? 'entered' : 'no playing video'}`)
+  }
+
+  /** Whether any frame of a tab currently shows picture-in-picture (dev checks). */
+  async isInPictureInPicture(tabId: string): Promise<boolean> {
+    const wc = this.views.get(tabId)?.webContents
+    if (!wc) return false
+    for (const frame of wc.mainFrame.framesInSubtree) {
+      try {
+        if (await frame.executeJavaScript('!!document.pictureInPictureElement')) return true
+      } catch {
+        // ignore
+      }
+    }
+    return false
+  }
+
+  /** Runs a script in every frame (videos are often in iframes), stopping at the first frame returning `stopOn`. */
+  private async runInFrames(wc: WebContents, script: string, userGesture: boolean, stopOn?: unknown): Promise<boolean> {
+    if (wc.isDestroyed()) return false
+    for (const frame of wc.mainFrame.framesInSubtree) {
+      try {
+        const result = await frame.executeJavaScript(script, userGesture)
+        if (stopOn !== undefined && result === stopOn) return true
+      } catch {
+        // Cross-origin or detached frames can refuse; try the next one.
+      }
+    }
+    return false
   }
 
   private clearActiveTab(): void {
+    if (this.activeTabId) void this.autoPictureInPicture(this.activeTabId)
     const previous = this.activeTabId ? this.views.get(this.activeTabId) : undefined
     if (previous) this.win.contentView.removeChildView(previous)
     this.activeTabId = null
@@ -899,6 +1002,7 @@ export class Browser {
     this.views.set(tab.id, view)
     this.tabByWebContents.set(view.webContents.id, tab.id)
     this.wire(tab.id, view.webContents)
+    this.extensions?.api.addTab(view.webContents, this.win)
     tab.loaded = true
     if (!adopt) void view.webContents.loadURL(tab.url).catch(() => {})
     return view
@@ -1267,6 +1371,27 @@ export class Browser {
   // ---------------------------------------------------------------------------
   // Site info, permissions, find
 
+  /** Cookie-holding domains that belong to the same site (registrable domain) as the page. */
+  private async siteData(url: string): Promise<{ domain: string; cookies: number }[]> {
+    const site = parseDomain(url).domain
+    if (!site) return []
+    const counts = new Map<string, number>()
+    for (const cookie of await session.defaultSession.cookies.get({})) {
+      const domain = (cookie.domain ?? '').replace(/^\./, '')
+      if (domain === site || domain.endsWith(`.${site}`)) counts.set(domain, (counts.get(domain) ?? 0) + 1)
+    }
+    return [...counts.entries()].map(([domain, cookies]) => ({ domain, cookies })).sort((a, b) => a.domain.localeCompare(b.domain))
+  }
+
+  private async clearDomain(domain: string): Promise<void> {
+    const ses = session.defaultSession
+    const cookies = (await ses.cookies.get({})).filter((c) => (c.domain ?? '').replace(/^\./, '') === domain)
+    await Promise.all(
+      cookies.map((c) => ses.cookies.remove(`http${c.secure ? 's' : ''}://${domain}${c.path ?? '/'}`, c.name).catch(() => {}))
+    )
+    await Promise.all(['https', 'http'].map((scheme) => ses.clearStorageData({ origin: `${scheme}://${domain}` }).catch(() => {})))
+  }
+
   private siteInfo(): SiteInfo | null {
     const tab = this.tab(this.activeTabId)
     if (!tab) return null
@@ -1294,15 +1419,17 @@ export class Browser {
           : 'This is a local or internal page.',
       certificate: https ? this.certificates.info(host) : null,
       chain: https ? this.certificates.chain(host) : null,
+      siteData: [],
       blockedCount: tab.blockedCount,
       adblockEnabled: this.adblock.isEnabled(),
       permissions: /^https?:/.test(tab.url) ? this.permissions.list(origin) : []
     }
   }
 
-  private openSiteInfo(anchor: Rect): void {
+  private async openSiteInfo(anchor: Rect): Promise<void> {
     const info = this.siteInfo()
     if (!info) return
+    if (/^https?:/.test(info.url)) info.siteData = await this.siteData(info.url)
     this.handle({ type: 'ui.openPopover', popover: { kind: 'siteInfo', anchor, info } })
   }
 
@@ -1387,7 +1514,7 @@ export class Browser {
   // ---------------------------------------------------------------------------
   // Menus
 
-  private popup(items: MenuItemConstructorOptions[], anchor?: Rect): void {
+  private popup(items: (MenuItemConstructorOptions | Electron.MenuItem)[], anchor?: Rect): void {
     const menu = Menu.buildFromTemplate(items)
     if (anchor) {
       menu.popup({ window: this.win, x: Math.round(anchor.x), y: Math.round(anchor.y + anchor.height + 4) })
@@ -1459,7 +1586,7 @@ export class Browser {
       { type: 'separator' },
       { label: 'Unload Space', click: () => this.unloadSpace(id) },
       { type: 'separator' },
-      { label: 'Create Space', click: () => this.emit({ type: 'space.startCreate' }, 'chrome') },
+      { label: 'Create Space', click: () => this.handle({ type: 'ui.createSpace' }) },
       { label: 'Delete Space', enabled: this.spaces.length > 1, click: () => void this.deleteSpace(id) }
     ])
   }
@@ -1468,7 +1595,7 @@ export class Browser {
     this.popup(
       [
         { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => this.openPalette('new') },
-        { label: 'Create Space', click: () => this.emit({ type: 'space.startCreate' }, 'chrome') }
+        { label: 'Create Space', click: () => this.handle({ type: 'ui.createSpace' }) }
       ],
       anchor
     )
@@ -1492,7 +1619,7 @@ export class Browser {
   }
 
   private pageContextMenu(tabId: string, wc: WebContents, params: ContextMenuParams): void {
-    const items: MenuItemConstructorOptions[] = []
+    const items: (MenuItemConstructorOptions | Electron.MenuItem)[] = []
     const tab = this.tab(tabId)
 
     for (const suggestion of params.dictionarySuggestions.slice(0, 4)) {
@@ -1547,6 +1674,8 @@ export class Browser {
         { type: 'separator' }
       )
     }
+    const extensionItems = this.extensions?.api.getContextMenuItems(wc, params) ?? []
+    if (extensionItems.length > 0) items.push(...extensionItems, { type: 'separator' })
     items.push({ label: 'Inspect Element', click: () => wc.inspectElement(params.x, params.y) })
     this.popup(items)
   }

@@ -148,3 +148,16 @@ export const IconPause = (p: IconProps): React.JSX.Element => (
     <rect x="13.8" y="5" width="4.2" height="14" rx="1.2" />
   </Icon>
 )
+
+export const IconTrash = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6.5 7l.8 11.2A2 2 0 0 0 9.3 20h5.4a2 2 0 0 0 2-1.8L17.5 7" />
+    <path d="M10 11v5M14 11v5" />
+  </Icon>
+)
+export const IconCookie = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <path d="M12 3a9 9 0 1 0 9 9 4 4 0 0 1-4-4 4 4 0 0 1-5-5z" />
+    <path d="M8.5 11.5h.01M12 16h.01M15.5 13.5h.01M9 15.5h.01" />
+  </Icon>
+)

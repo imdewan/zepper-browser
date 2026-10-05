@@ -9,9 +9,11 @@ export interface DebugTarget {
   handle(command: Command): void
   snapshotJson(): unknown
   /** Sends synthetic precise (trackpad) wheel events to the active page. */
-  wheel(dx: number, steps: number): void
+  wheel(dx: number, steps: number, layer: string, at: [number, number] | null): void
   /** Sends a mouse drag (or click when from === to) to a layer, in window coordinates. */
   drag(layer: string, from: [number, number], to: [number, number]): void
+  /** Evaluates JavaScript in the active page and returns the result. */
+  evaluate(code: string): Promise<unknown>
 }
 
 /**
@@ -34,8 +36,20 @@ export function startDebugServer(target: DebugTarget): void {
         target.handle(JSON.parse(body) as Command)
         res.end('ok')
       } else if (url.pathname === '/wheel') {
-        target.wheel(Number(url.searchParams.get('dx') ?? -20), Number(url.searchParams.get('steps') ?? 15))
+        const x = url.searchParams.get('x')
+        const y = url.searchParams.get('y')
+        target.wheel(
+          Number(url.searchParams.get('dx') ?? -20),
+          Number(url.searchParams.get('steps') ?? 15),
+          url.searchParams.get('layer') ?? 'tab',
+          x && y ? [Number(x), Number(y)] : null
+        )
         res.end('ok')
+      } else if (url.pathname === '/eval' && req.method === 'POST') {
+        let body = ''
+        for await (const chunk of req) body += chunk
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify(await target.evaluate(body)))
       } else if (url.pathname === '/drag') {
         const n = (k: string): number => Number(url.searchParams.get(k) ?? 0)
         target.drag(url.searchParams.get('layer') ?? 'overlay', [n('x1'), n('y1')], [n('x2') || n('x1'), n('y2') || n('y1')])

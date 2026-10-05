@@ -992,3 +992,353 @@
   opacity: 0.4;
   pointer-events: none;
 }
+
+/* ---- Create a Space dialog ------------------------------------------------------ */
+
+.create-dialog {
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow:
+    0 30px 100px rgba(0, 0, 0, 0.45),
+    0 0 0 0.5px var(--panel-border);
+  overflow: auto;
+}
+
+.create-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.create-right {
+  width: 300px;
+  flex: none;
+}
+
+.create-dialog h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.create-sub {
+  margin: 4px 0 18px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.create-section-title {
+  margin: 4px 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+/* Miniature sidebar showing the space's gradient and name. */
+.create-preview {
+  position: relative;
+  height: 200px;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  box-shadow: inset 0 0 0 1px var(--separator);
+  color: var(--text);
+}
+
+.create-preview-glass {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, #3b342d, #26221e 60%, #1d1a17);
+}
+
+.create-preview[data-ui='light'] .create-preview-glass {
+  background: linear-gradient(160deg, #ece8e1, #e0dcd5 60%, #d6d2cc);
+}
+
+.create-preview-bg {
+  position: absolute;
+  inset: 0;
+}
+
+.create-preview-content {
+  position: relative;
+  width: 210px;
+  height: 100%;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.mock-pill {
+  height: 22px;
+  border-radius: 7px;
+  background: var(--element);
+}
+
+.mock-essentials {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.mock-essentials span {
+  height: 26px;
+  border-radius: 8px;
+  background: var(--element);
+}
+
+.mock-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 4px 0 2px 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mock-name {
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mock-tab {
+  height: 22px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 7px;
+}
+
+.mock-tab.active {
+  background: var(--selected);
+  box-shadow: var(--selected-shadow);
+}
+
+.mock-tab i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--text-3);
+}
+
+.mock-tab b {
+  height: 6px;
+  width: 70%;
+  border-radius: 3px;
+  background: var(--text-3);
+}
+
+.create-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--element);
+}
+
+.create-icon {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 9px;
+  border: 1px dashed var(--text-3);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  transition: background-color 0.1s ease;
+}
+
+.create-icon:hover,
+.create-icon.open {
+  background: var(--hover);
+}
+
+.create-name input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.create-name input::placeholder {
+  color: var(--text-3);
+}
+
+.create-emoji {
+  margin-top: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--element);
+  grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+}
+
+.create-buttons {
+  margin-top: auto;
+  padding-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.popover-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease;
+}
+
+.popover-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* Leave room for the close button next to headers. */
+.site-header,
+.popover-title {
+  padding-right: 30px;
+}
+
+.cert-header {
+  padding-right: 32px;
+}
+
+/* ---- Site data ------------------------------------------------------------------ */
+
+.site-link {
+  width: 100%;
+  text-align: left;
+  border-radius: 8px;
+  transition: background-color 0.1s ease;
+}
+
+.site-link:hover {
+  background: var(--hover);
+}
+
+.site-row-value {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.site-row-chevron {
+  color: var(--text-3);
+}
+
+.site-data {
+  display: flex;
+  flex-direction: column;
+}
+
+.site-data .site-note {
+  margin: 0 2px 12px;
+}
+
+.site-data .site-section-title {
+  margin: 0 2px 6px;
+}
+
+.site-data-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.site-data-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.site-data-row:hover {
+  background: var(--hover);
+}
+
+.site-data-icon {
+  color: var(--text-2);
+  flex: none;
+}
+
+.site-data-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.site-data-domain {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.site-data-count {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.site-data-delete {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease;
+}
+
+.site-data-delete:hover {
+  background: color-mix(in srgb, #ff453a 15%, transparent);
+  color: #ff453a;
+}
+
+.site-data-empty {
+  padding: 18px 4px;
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.site-data-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: 6px;
+  border-top: 1px solid var(--separator);
+}
+
+.site-data-footer .panel-button.subtle {
+  margin-top: 0;
+  margin-right: auto;
+}
