@@ -434,8 +434,14 @@ button.site-button:active {
   padding-bottom: 8px;
 }
 
+.essential-slot {
+  position: relative;
+  display: grid;
+}
+
 .essential {
   height: 46px;
+  width: 100%;
   border-radius: 12px;
   background: var(--element);
   display: grid;
@@ -672,6 +678,170 @@ button.site-button:active {
 .space-fill {
   flex: 1;
   min-height: 32px;
+  position: relative;
+}
+
+/* ---- Drag and drop ------------------------------------------------------- */
+
+/* A slim accent line where the item will land. */
+.tab.dnd-before::before,
+.tab.dnd-after::after,
+.new-tab-row.dnd-before::before,
+.new-tab-row.dnd-after::after,
+.space-fill.dnd-before::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 80%);
+  pointer-events: none;
+}
+
+.tab.dnd-before::before,
+.new-tab-row.dnd-before::before,
+.space-fill.dnd-before::before {
+  top: -2px;
+}
+
+.tab.dnd-after::after,
+.new-tab-row.dnd-after::after {
+  bottom: -2px;
+}
+
+/* Dropping into a folder. */
+.tab.dnd-into {
+  background: color-mix(in srgb, var(--accent), transparent 78%);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent), transparent 30%);
+}
+
+.essential-slot.dnd-before::before,
+.essential-slot.dnd-after::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.essential-slot.dnd-before::before {
+  left: -4px;
+}
+
+.essential-slot.dnd-after::after {
+  right: -4px;
+}
+
+/* The end of the pinned area while dragging; a placeholder when there's nothing pinned yet. */
+.pin-zone {
+  flex: none;
+  height: 8px;
+  margin: 0 4px;
+  border-radius: 8px;
+  transition:
+    background-color 0.1s ease,
+    height 0.15s ease;
+}
+
+.pin-zone.over {
+  background: color-mix(in srgb, var(--accent), transparent 80%);
+}
+
+.pin-zone.empty,
+.essentials-drop {
+  height: 36px;
+  margin: 2px 0 6px;
+  border: 1.5px dashed var(--separator);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.essentials-drop {
+  flex: none;
+  height: 46px;
+  border-radius: 12px;
+}
+
+.pin-zone.empty.over,
+.essentials-drop.over {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent), transparent 85%);
+}
+
+.space-dot.drop-over {
+  filter: none;
+  opacity: 1;
+  transform: scale(1.18);
+  background: color-mix(in srgb, var(--accent), transparent 75%);
+}
+
+/* ---- Folders ------------------------------------------------------------- */
+
+.folder-row {
+  cursor: default;
+}
+
+.folder-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+
+.folder-count {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--element);
+}
+
+.folder-chevron {
+  flex: none;
+  margin-right: 6px;
+  color: var(--text-3);
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    transform 0.18s ease;
+}
+
+.folder-row:hover .folder-chevron {
+  opacity: 1;
+}
+
+.folder-row.collapsed .folder-chevron {
+  transform: rotate(-90deg);
+}
+
+.folder-name-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  outline: none;
+  background: var(--element);
+  color: var(--text);
+  font: inherit;
 }
 
 /* ---- Tab rows ------------------------------------------------------------ */
@@ -679,6 +849,8 @@ button.site-button:active {
 .tab-wrap {
   flex: none;
   transform-origin: center left;
+  /* Rows inside folders are indented by their depth. */
+  padding-left: calc(var(--depth, 0) * 14px);
 }
 
 .tab {
@@ -877,6 +1049,7 @@ button.site-button:active {
 }
 
 .new-tab-row {
+  position: relative;
   height: 36px;
   flex: none;
   margin: 1px 0;

@@ -41,6 +41,8 @@ import {
   type Space,
   type SpaceTheme,
   type AuthSpec,
+  type DropTarget,
+  type Folder,
   type JsDialogSpec,
   type PopoverSpec,
   type ProfileChoice,
@@ -89,6 +91,7 @@ interface PersistedState {
   compact: boolean
   adblockEnabled: boolean
   splits?: Split[]
+  folders?: Folder[]
 }
 
 const MAX_SPLIT_PANES = 4
@@ -215,7 +218,7 @@ export const DEFAULT_PROFILE = 'default'
 
 /** New spaces get their own profile: separate cookies, logins, storage and cache. */
 function makeSpace(name: string, icon: string, theme: SpaceTheme = DEFAULT_THEME, profile: string = randomUUID()): Space {
-  return { id: randomUUID(), name, icon, theme, collapsedPins: false, lastTabId: null, profile }
+  return { id: randomUUID(), name, icon, theme, collapsedPins: false, lastTabId: null, profile, pinnedItems: [] }
 }
 
 /**
@@ -267,6 +270,8 @@ export class Browser {
   private readonly disposers: (() => void)[] = []
   /** Tabs we already offered to pause other media for, so the tip never nags. */
   private readonly mediaTipShown = new Set<string>()
+  /** Folders in spaces' pinned areas (the tree itself is space.pinnedItems and folder.items). */
+  private folders: Folder[] = []
   /** Page dialogs (alert/confirm/prompt) and sign-in requests waiting for an answer, oldest first. */
   private pendingDialogs: { id: number; tabId: string | undefined; popover: PopoverSpec; answer: (ok: boolean, value: string) => void }[] = []
   private showingDialog: number | null = null
@@ -307,7 +312,11 @@ export class Browser {
         .map((split) => ({ ...split, tabIds: split.tabIds.filter((id) => ids.has(id)) }))
         .filter((split) => split.tabIds.length >= 2)
       this.sidebarWidth = Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, saved.sidebarWidth ?? DEFAULT_SIDEBAR))
+      this.folders = (saved.folders ?? []).filter((f) => this.space(f.spaceId))
       this.compact = saved.compact ?? false
+      // Pinned areas from before folders: the pinned tabs in their saved order.
+      for (const space of this.spaces) space.pinnedItems ??= this.tabs.filter((t) => t.kind === 'pinned' && t.spaceId === space.id).map((t) => t.id)
+      this.normalizePinned()
     } else if (kind === 'private') {
       const space = makeSpace('Private', '🕶️', { colors: ['#3b2a6b', '#1b1934'], opacity: 0.7, texture: 0.15, scheme: 'dark' }, DEFAULT_PROFILE)
       this.spaces = [space]
@@ -686,6 +695,14 @@ export class Browser {
         return this.switchSpaceRelative(command.delta)
       case 'space.create':
         return void this.createSpace(command.name, command.icon, command.theme, command.profile ?? { mode: 'new' })
+      case 'item.drop':
+        return this.dropItem(command.item, command.target)
+      case 'folder.create':
+        return this.createFolder(command.spaceId, command.parentId, command.tabIds)
+      case 'folder.update':
+        return this.updateFolder(command.folderId, command.patch)
+      case 'folder.contextMenu':
+        return this.folderContextMenu(command.folderId)
       case 'space.setProfile':
         return void this.setSpaceProfile(command.spaceId, command.profile)
       case 'space.update':
@@ -1132,6 +1149,7 @@ export class Browser {
     this.leaveSplit(tab.id)
     const next = wasActive ? (this.tab(splitSibling) ?? this.pickNextTab(tab)) : undefined
     this.destroyView(tab)
+    this.detachPinned(tab.id)
     this.tabs = this.tabs.filter((t) => t !== tab)
     this.openers.delete(tab.id)
     for (const space of this.spaces) if (space.lastTabId === tab.id) space.lastTabId = null
@@ -1182,9 +1200,12 @@ export class Browser {
     if (!tab || tab.kind !== 'normal') return
     tab.kind = 'pinned'
     tab.pinned = { url: tab.url, title: tab.title, favicon: tab.favicon }
-    this.moveToEnd(tab)
     const space = this.space(tab.spaceId ?? '')
-    if (space) space.collapsedPins = false
+    if (space) {
+      space.pinnedItems.push(tab.id)
+      space.collapsedPins = false
+    }
+    this.syncPinnedOrder()
     this.broadcast()
   }
 
@@ -1193,6 +1214,7 @@ export class Browser {
     if (!tab || tab.kind !== 'pinned') return
     tab.kind = 'normal'
     tab.pinned = null
+    this.detachPinned(tab.id)
     this.moveToFront(tab)
     this.broadcast()
   }
@@ -1204,6 +1226,7 @@ export class Browser {
       this.toast({ id: 'essentials-full', message: 'Essentials are full', description: `You can keep up to ${MAX_ESSENTIALS}.` })
       return
     }
+    this.detachPinned(tab.id)
     tab.kind = 'essential'
     tab.spaceId = null
     tab.pinned ??= { url: tab.url, title: tab.title, favicon: tab.favicon }
@@ -1226,11 +1249,279 @@ export class Browser {
   private moveTabToSpace(id: string, spaceId: string): void {
     const tab = this.tab(id)
     if (!tab || tab.kind === 'essential') return
-    tab.spaceId = spaceId
-    if (tab.kind === 'pinned') this.moveToEnd(tab)
-    else this.moveToFront(tab)
+    this.setTabSpace(tab, spaceId)
     this.rehome(tab)
     this.activateTab(tab.id)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pinned area tree (folders) and drag and drop
+  //
+  // A space's pinned area is a tree: space.pinnedItems and each folder's items hold tab and
+  // folder ids in order. this.tabs keeps pinned tabs in the same (flattened) order, so code
+  // that walks tabs in sidebar order works unchanged.
+
+  private folder(id: string | null | undefined): Folder | undefined {
+    return id ? this.folders.find((f) => f.id === id) : undefined
+  }
+
+  /** The list holding an item in a pinned tree, and where. */
+  private containerOf(id: string): { list: string[]; index: number } | undefined {
+    for (const list of [...this.spaces.map((s) => s.pinnedItems), ...this.folders.map((f) => f.items)]) {
+      const index = list.indexOf(id)
+      if (index >= 0) return { list, index }
+    }
+    return undefined
+  }
+
+  private detachPinned(id: string): void {
+    const at = this.containerOf(id)
+    if (at) at.list.splice(at.index, 1)
+  }
+
+  /** Folder ids inside a folder, at any depth. */
+  private subfolders(folderId: string): string[] {
+    const folder = this.folder(folderId)
+    if (!folder) return []
+    return folder.items.filter((id) => this.folder(id)).flatMap((id) => [id, ...this.subfolders(id)])
+  }
+
+  /** Pinned tab ids under a list, in order (folders expanded). */
+  private flattenPinned(items: string[]): string[] {
+    return items.flatMap((id) => (this.folder(id) ? this.flattenPinned(this.folder(id)!.items) : [id]))
+  }
+
+  /** Keeps this.tabs' pinned tabs in tree order. */
+  private syncPinnedOrder(): void {
+    const order = new Map(this.spaces.flatMap((s) => this.flattenPinned(s.pinnedItems)).map((id, i) => [id, i]))
+    const pinned = this.tabs.filter((t) => t.kind === 'pinned').sort((a, b) => (order.get(a.id) ?? 1e9) - (order.get(b.id) ?? 1e9))
+    let next = 0
+    this.tabs = this.tabs.map((t) => (t.kind === 'pinned' ? pinned[next++] : t))
+  }
+
+  /** Repairs the trees: every pinned tab listed once in its own space, nothing else listed. */
+  private normalizePinned(): void {
+    const seen = new Set<string>()
+    const clean = (items: string[], spaceId: string): string[] =>
+      items.filter((id) => {
+        if (seen.has(id)) return false
+        const tab = this.tab(id)
+        const folder = this.folder(id)
+        const ok = (tab?.kind === 'pinned' && tab.spaceId === spaceId) || folder?.spaceId === spaceId
+        if (ok) seen.add(id)
+        return ok
+      })
+    for (const space of this.spaces) space.pinnedItems = clean(space.pinnedItems ?? [], space.id)
+    for (const folder of this.folders) folder.items = clean(folder.items, folder.spaceId)
+    // Folders nobody contains go back to their space's top level.
+    for (const folder of this.folders) {
+      if (!seen.has(folder.id)) {
+        this.space(folder.spaceId)?.pinnedItems.push(folder.id)
+        seen.add(folder.id)
+      }
+    }
+    for (const tab of this.tabs) {
+      if (tab.kind === 'pinned' && !seen.has(tab.id)) this.space(tab.spaceId ?? '')?.pinnedItems.push(tab.id)
+    }
+    this.syncPinnedOrder()
+  }
+
+  /** Moves a tab to another space, keeping it pinned (at the end of that space's pinned area) or normal. */
+  private setTabSpace(tab: Tab, spaceId: string): void {
+    if (tab.spaceId === spaceId) return
+    tab.spaceId = spaceId
+    if (tab.kind === 'pinned') {
+      this.detachPinned(tab.id)
+      this.space(spaceId)?.pinnedItems.push(tab.id)
+      this.syncPinnedOrder()
+    } else {
+      this.moveToFront(tab)
+    }
+  }
+
+  /** A tab or folder dropped somewhere in the sidebar (drag and drop). */
+  private dropItem(item: { kind: 'tab' | 'folder'; id: string }, target: DropTarget): void {
+    if (item.kind === 'folder') this.dropFolder(item.id, target)
+    else this.dropTab(item.id, target)
+    this.syncPinnedOrder()
+    this.broadcast()
+  }
+
+  private dropTab(id: string, target: DropTarget): void {
+    const tab = this.tab(id)
+    if (!tab) return
+    if (target.zone === 'space') {
+      if (tab.kind === 'essential' || tab.spaceId === target.spaceId) return
+      this.setTabSpace(tab, target.spaceId)
+      this.rehome(tab)
+      const space = this.space(target.spaceId)
+      if (space) this.toast({ id: 'moved-to-space', message: `Moved to ${space.name}`, description: tab.title, action: { label: 'Switch', command: { type: 'space.switch', spaceId: space.id } } })
+      return
+    }
+    if (target.zone === 'essentials') {
+      const essentials = this.tabs.filter((t) => t.kind === 'essential')
+      if (tab.kind !== 'essential' && essentials.length >= MAX_ESSENTIALS) {
+        this.toast({ id: 'essentials-full', message: 'Essentials are full', description: `You can keep up to ${MAX_ESSENTIALS}.` })
+        return
+      }
+      this.detachPinned(id)
+      tab.kind = 'essential'
+      tab.spaceId = null
+      tab.pinned ??= { url: tab.url, title: tab.title, favicon: tab.favicon }
+      this.placeInList(tab, essentials, target.index)
+      this.rehome(tab)
+      return
+    }
+    if (target.zone === 'pinned') {
+      if (!this.space(target.spaceId) || (target.parentId && this.folder(target.parentId)?.spaceId !== target.spaceId)) return
+      const list = target.parentId ? this.folder(target.parentId)!.items : this.space(target.spaceId)!.pinnedItems
+      const was = this.containerOf(id)
+      let index = target.index
+      if (was && was.list === list && was.index < index) index--
+      this.detachPinned(id)
+      tab.kind = 'pinned'
+      tab.pinned ??= { url: tab.url, title: tab.title, favicon: tab.favicon }
+      tab.spaceId = target.spaceId
+      list.splice(Math.max(0, Math.min(index, list.length)), 0, id)
+      this.rehome(tab)
+      return
+    }
+    // A space's normal tabs, at a position.
+    const normals = this.tabs.filter((t) => t.kind === 'normal' && t.spaceId === target.spaceId)
+    this.detachPinned(id)
+    tab.kind = 'normal'
+    tab.pinned = null
+    tab.spaceId = target.spaceId
+    this.placeInList(tab, normals, target.index)
+    this.rehome(tab)
+  }
+
+  /** Puts a tab at a position among a group of tabs (Essentials, or a space's normal tabs) in this.tabs. */
+  private placeInList(tab: Tab, group: Tab[], index: number): void {
+    const others = group.filter((t) => t !== tab)
+    const wasAt = group.indexOf(tab)
+    const at = Math.max(0, Math.min(wasAt >= 0 && wasAt < index ? index - 1 : index, others.length))
+    const rest = this.tabs.filter((t) => t !== tab)
+    const before = others[at]
+    if (before) rest.splice(rest.indexOf(before), 0, tab)
+    else if (others.length > 0) rest.splice(rest.indexOf(others[others.length - 1]) + 1, 0, tab)
+    else rest.push(tab)
+    this.tabs = rest
+  }
+
+  private dropFolder(id: string, target: DropTarget): void {
+    const folder = this.folder(id)
+    if (!folder || target.zone === 'essentials' || target.zone === 'normal') return
+    const spaceId = target.spaceId
+    const parentId = target.zone === 'pinned' ? target.parentId : null
+    // A folder can't go inside itself.
+    if (parentId && (parentId === id || this.subfolders(id).includes(parentId))) return
+    const space = this.space(spaceId)
+    const parent = this.folder(parentId)
+    if (!space || (parentId && parent?.spaceId !== spaceId)) return
+    const list = parent ? parent.items : space.pinnedItems
+    const was = this.containerOf(id)
+    let index = target.zone === 'pinned' ? target.index : list.length
+    if (was && was.list === list && was.index < index) index--
+    this.detachPinned(id)
+    list.splice(Math.max(0, Math.min(index, list.length)), 0, id)
+    if (folder.spaceId !== spaceId) {
+      // Everything inside moves to the new space (and its sign-ins) too.
+      for (const fid of [id, ...this.subfolders(id)]) this.folder(fid)!.spaceId = spaceId
+      for (const tabId of this.flattenPinned(folder.items)) {
+        const tab = this.tab(tabId)
+        if (!tab) continue
+        tab.spaceId = spaceId
+        this.rehome(tab)
+      }
+    }
+  }
+
+  private createFolder(spaceId: string, parentId: string | null, tabIds: string[] = []): void {
+    const space = this.space(spaceId)
+    const parent = this.folder(parentId)
+    if (!space || (parentId && parent?.spaceId !== spaceId)) return
+    const folder: Folder = { id: randomUUID(), spaceId, name: 'New Folder', collapsed: false, items: [] }
+    this.folders.push(folder)
+    ;(parent ? parent.items : space.pinnedItems).push(folder.id)
+    for (const tabId of tabIds) this.dropTab(tabId, { zone: 'pinned', spaceId, parentId: folder.id, index: folder.items.length })
+    space.collapsedPins = false
+    this.syncPinnedOrder()
+    this.broadcast()
+    this.emit({ type: 'folder.startRename', folderId: folder.id }, 'chrome')
+  }
+
+  private updateFolder(id: string, patch: { name?: string; collapsed?: boolean }): void {
+    const folder = this.folder(id)
+    if (!folder) return
+    if (patch.name !== undefined) folder.name = patch.name.trim() || folder.name
+    if (patch.collapsed !== undefined) folder.collapsed = patch.collapsed
+    this.broadcast()
+  }
+
+  /** Removes a folder; its tabs and folders take its place, or close with it. */
+  private removeFolder(id: string, closeTabs: boolean): void {
+    const folder = this.folder(id)
+    const at = this.containerOf(id)
+    if (!folder || !at) return
+    if (closeTabs) {
+      for (const tabId of this.flattenPinned(folder.items)) {
+        const tab = this.tab(tabId)
+        if (tab) this.removeTab(tab)
+      }
+      const gone = new Set([id, ...this.subfolders(id)])
+      this.folders = this.folders.filter((f) => !gone.has(f.id))
+      this.detachPinned(id)
+    } else {
+      at.list.splice(at.index, 1, ...folder.items)
+      this.folders = this.folders.filter((f) => f.id !== id)
+    }
+    this.syncPinnedOrder()
+    this.broadcast()
+  }
+
+  private folderContextMenu(id: string): void {
+    const folder = this.folder(id)
+    if (!folder) return
+    const count = this.flattenPinned(folder.items).length
+    this.popup([
+      { label: 'Rename Folder', click: () => this.emit({ type: 'folder.startRename', folderId: id }, 'chrome') },
+      { label: 'New Folder Inside', click: () => this.createFolder(folder.spaceId, id) },
+      { label: folder.collapsed ? 'Expand' : 'Collapse', click: () => this.updateFolder(id, { collapsed: !folder.collapsed }) },
+      { type: 'separator' },
+      { label: 'Ungroup (Keep Tabs)', click: () => this.removeFolder(id, false) },
+      { label: count > 0 ? `Delete Folder and ${count} ${count === 1 ? 'Tab' : 'Tabs'}` : 'Delete Folder', click: () => this.removeFolder(id, true) }
+    ])
+  }
+
+  /** "Add to Folder ▸" for a tab's context menu. */
+  private folderMenuItems(tab: Tab): MenuItemConstructorOptions[] {
+    if (tab.kind === 'essential' || !tab.spaceId) return []
+    const spaceId = tab.spaceId
+    const label = (folder: Folder): string => {
+      const path: string[] = [folder.name]
+      let parent = this.folders.find((f) => f.items.includes(folder.id))
+      while (parent) {
+        path.unshift(parent.name)
+        parent = this.folders.find((f) => f.items.includes(parent!.id))
+      }
+      return path.join(' › ')
+    }
+    const current = this.folders.find((f) => f.items.includes(tab.id))
+    const targets = this.folders.filter((f) => f.spaceId === spaceId && f !== current)
+    return [
+      {
+        label: 'Add to Folder',
+        submenu: [
+          { label: 'New Folder', click: () => this.createFolder(spaceId, null, [tab.id]) },
+          ...(targets.length > 0 ? [{ type: 'separator' } as MenuItemConstructorOptions] : []),
+          ...targets.map((f) => ({ label: label(f), click: () => this.dropItem({ kind: 'tab', id: tab.id }, { zone: 'pinned', spaceId, parentId: f.id, index: f.items.length }) }))
+        ]
+      },
+      ...(current
+        ? [{ label: 'Remove from Folder', click: () => this.dropItem({ kind: 'tab', id: tab.id }, { zone: 'pinned', spaceId, parentId: null, index: this.space(spaceId)!.pinnedItems.length }) }]
+        : [])
+    ]
   }
 
   private moveToEnd(tab: Tab): void {
@@ -1746,6 +2037,7 @@ export class Browser {
       this.openers.delete(tab.id)
     }
     this.tabs = this.tabs.filter((t) => t.spaceId !== id)
+    this.folders = this.folders.filter((f) => f.spaceId !== id)
     if (this.activeTabId && !this.tab(this.activeTabId)) this.activeTabId = null
     const wasActive = this.activeSpaceId === id
     this.spaces = this.spaces.filter((s) => s.id !== id)
@@ -2326,6 +2618,7 @@ export class Browser {
     } else {
       items.push({ label: 'Add to Essentials', enabled: !essentialsFull, click: () => this.addEssential(id) })
     }
+    items.push(...this.folderMenuItems(tab))
     if (tab.pinned) {
       const noun = tab.kind === 'essential' ? 'Essential' : 'Pinned Tab'
       items.push(
@@ -2392,6 +2685,7 @@ export class Browser {
       { label: 'Change Icon…', click: () => this.handle({ type: 'ui.openPopover', popover: { kind: 'emoji', spaceId: id, anchor } }) },
       { label: 'Edit Theme…', click: () => this.handle({ type: 'ui.openPopover', popover: { kind: 'theme', spaceId: id, anchor } }) },
       { type: 'separator' },
+      { label: 'New Folder', click: () => this.createFolder(id, null) },
       { label: 'Unload Space', click: () => this.unloadSpace(id) },
       ...(this.kind === 'main' ? this.profileMenuItems(space) : []),
       { type: 'separator' },
@@ -2716,7 +3010,7 @@ export class Browser {
     }
     split.tabIds.push(tab.id)
     split.sizes = evenSizes(split.layout === 'grid' ? 1 : split.tabIds.length)
-    if (tab.spaceId !== active.spaceId && active.spaceId) tab.spaceId = active.spaceId
+    if (tab.spaceId !== active.spaceId && active.spaceId) this.setTabSpace(tab, active.spaceId)
     this.rehome(tab)
     this.activateTab(tab.id)
   }
@@ -2811,6 +3105,7 @@ export class Browser {
       widevine: this.hub.widevine,
       downloads: this.hub.downloads.list(this.kind === 'private'),
       paletteOpen: this.paletteOpen,
+      folders: this.folders,
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : []
@@ -2860,7 +3155,8 @@ export class Browser {
       sidebarWidth: this.sidebarWidth,
       compact: this.compact,
       adblockEnabled: this.settings.adblock,
-      splits: this.splits
+      splits: this.splits,
+      folders: this.folders
     }
   }
 }

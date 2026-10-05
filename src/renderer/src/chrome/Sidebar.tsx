@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Snapshot, Tab, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
 import { ExtensionButton, useExtensions } from '../extensions'
+import { useDrop } from './dnd'
 import {
   IconBack,
   IconCheck,
@@ -264,27 +265,36 @@ function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element 
   return (
     <div ref={list} className={cx('space-switcher', fade.start && 'fade-start', fade.end && 'fade-end')}>
       {snapshot.spaces.map((space) => (
-        <button
+        <SpaceDot
           key={space.id}
-          className={cx(
-            'space-dot',
-            space.id === snapshot.activeSpaceId && 'active',
-            snapshot.tabs.some((t) => t.spaceId === space.id && t.audible) && 'has-audio'
-          )}
-          title={space.name}
-          onClick={() => zepper.send({ type: 'space.switch', spaceId: space.id })}
-          onContextMenu={(e) => {
-            e.preventDefault()
-            zepper.send({ type: 'space.contextMenu', spaceId: space.id, anchor: rectOf(e.currentTarget) })
-          }}
-        >
-          {space.icon}
-        </button>
+          space={space}
+          active={space.id === snapshot.activeSpaceId}
+          playing={snapshot.tabs.some((t) => t.spaceId === space.id && t.audible)}
+        />
       ))}
       <button className="space-add" title="New space" onClick={() => zepper.send({ type: 'ui.createSpace' })}>
         <IconPlus size={13} />
       </button>
     </div>
+  )
+}
+
+/** A space in the bottom bar: click to switch, drop a tab or folder on it to move it there. */
+function SpaceDot({ space, active, playing }: { space: Snapshot['spaces'][number]; active: boolean; playing: boolean }): React.JSX.Element {
+  const drop = useDrop({ key: `space-dot:${space.id}`, whole: 'into', target: () => (active ? null : { zone: 'space', spaceId: space.id }) })
+  return (
+    <button
+      {...drop.props}
+      className={cx('space-dot', active && 'active', playing && 'has-audio', drop.position && 'drop-over')}
+      title={space.name}
+      onClick={() => zepper.send({ type: 'space.switch', spaceId: space.id })}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        zepper.send({ type: 'space.contextMenu', spaceId: space.id, anchor: rectOf(e.currentTarget) })
+      }}
+    >
+      {space.icon}
+    </button>
   )
 }
 

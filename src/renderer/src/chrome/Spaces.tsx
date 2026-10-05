@@ -1,27 +1,66 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useMotionValue } from 'motion/react'
-import type { Snapshot, Space, Split, Tab } from '@shared/types'
+import type { Folder, Snapshot, Space, Split, Tab } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconArrowDown, IconChevronDown, IconDots, IconPlus } from '../icons'
 import { cx, rectOf } from '../util'
 import { SplitRow } from './SplitRow'
-import { TabRow } from './TabRow'
+import { useDragging, useDrop } from './dnd'
+import { FolderRow } from './FolderRow'
+import { TabRow, type RowPlace } from './TabRow'
 
 /** Tab rows for a section, with each split collapsed into one grouped row at its first member. */
-function renderRows(tabs: Tab[], all: Tab[], splits: Split[], activeTabId: string | null): React.JSX.Element[] {
+function renderRows(
+  tabs: Tab[],
+  all: Tab[],
+  splits: Split[],
+  activeTabId: string | null,
+  placeOf?: (tab: Tab, index: number) => RowPlace
+): React.JSX.Element[] {
   const rendered = new Set<string>()
   const rows: React.JSX.Element[] = []
-  for (const tab of tabs) {
+  tabs.forEach((tab, index) => {
     const split = splits.find((s) => s.tabIds.includes(tab.id))
     if (!split) {
-      rows.push(<TabRow key={tab.id} tab={tab} active={tab.id === activeTabId} />)
-      continue
+      rows.push(<TabRow key={tab.id} tab={tab} active={tab.id === activeTabId} place={placeOf?.(tab, index)} />)
+      return
     }
-    if (rendered.has(split.id)) continue
+    if (rendered.has(split.id)) return
     rendered.add(split.id)
     const members = split.tabIds.map((id) => all.find((t) => t.id === id)).filter((t): t is Tab => !!t)
     rows.push(<SplitRow key={`split-${split.id}`} split={split} tabs={members} activeTabId={activeTabId} />)
-  }
+  })
+  return rows
+}
+
+/**
+ * A space's pinned area as a tree of folders and tabs. Collapsed folders still show the
+ * tab you're on, like Zen.
+ */
+function pinnedRows(
+  items: string[],
+  parentId: string | null,
+  depth: number,
+  ctx: { space: Space; tabs: Map<string, Tab>; folders: Map<string, Folder>; all: Tab[]; splits: Split[]; activeTabId: string | null }
+): React.JSX.Element[] {
+  const rows: React.JSX.Element[] = []
+  const tabsUnder = (ids: string[]): string[] => ids.flatMap((id) => (ctx.folders.has(id) ? tabsUnder(ctx.folders.get(id)!.items) : [id]))
+  items.forEach((id, index) => {
+    const place: RowPlace = { zone: 'pinned', spaceId: ctx.space.id, parentId, index, depth }
+    const folder = ctx.folders.get(id)
+    if (folder) {
+      const inside = tabsUnder(folder.items)
+      rows.push(<FolderRow key={`folder-${id}`} folder={folder} place={place} count={inside.length} />)
+      if (!folder.collapsed) rows.push(...pinnedRows(folder.items, folder.id, depth + 1, ctx))
+      else if (ctx.activeTabId && inside.includes(ctx.activeTabId)) {
+        const active = ctx.tabs.get(ctx.activeTabId)
+        if (active) rows.push(<TabRow key={active.id} tab={active} active place={{ ...place, parentId: folder.id, index: folder.items.indexOf(active.id), depth: depth + 1 }} />)
+      }
+      return
+    }
+    const tab = ctx.tabs.get(id)
+    if (tab) rows.push(...renderRows([tab], ctx.all, ctx.splits, ctx.activeTabId, () => place))
+  })
   return rows
 }
 
@@ -263,6 +302,7 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
             tabs={snapshot.tabs}
             activeTabId={snapshot.activeTabId}
             splits={snapshot.splits}
+            folders={snapshot.folders}
             newTabAtBottom={snapshot.settings.newTabPosition === 'bottom'}
             renaming={renamingId === space.id}
             onRenameDone={onRenameDone}
@@ -279,29 +319,45 @@ interface SpaceViewProps {
   tabs: Tab[]
   activeTabId: string | null
   splits: Split[]
+  folders: Folder[]
   newTabAtBottom: boolean
   renaming: boolean
   onRenameDone: () => void
   onStartRename: () => void
 }
 
-function SpaceView({ space, tabs, activeTabId, splits, newTabAtBottom, renaming, onRenameDone, onStartRename }: SpaceViewProps): React.JSX.Element {
+function SpaceView({ space, tabs, activeTabId, splits, folders, newTabAtBottom, renaming, onRenameDone, onStartRename }: SpaceViewProps): React.JSX.Element {
   const pinned = tabs.filter((t) => t.kind === 'pinned' && t.spaceId === space.id)
   const normal = tabs.filter((t) => t.kind === 'normal' && t.spaceId === space.id)
-  const shownPinned = space.collapsedPins ? pinned.filter((t) => t.id === activeTabId) : pinned
   const canClear = normal.some((t) => t.id !== activeTabId && !t.audible)
+  const dragging = useDragging()
+  const ctx = {
+    space,
+    tabs: new Map(tabs.map((t) => [t.id, t])),
+    folders: new Map(folders.filter((f) => f.spaceId === space.id).map((f) => [f.id, f])),
+    all: tabs,
+    splits,
+    activeTabId
+  }
+  const hasPinnedArea = space.pinnedItems.length > 0
+  // Collapsed pinned area: just the pinned tab you're on.
+  const pinnedArea = space.collapsedPins
+    ? renderRows(pinned.filter((t) => t.id === activeTabId), tabs, splits, activeTabId)
+    : pinnedRows(space.pinnedItems, null, 0, ctx)
+  const normalPlace = (_tab: Tab, index: number): RowPlace => ({ zone: 'normal', spaceId: space.id, parentId: null, index, depth: 0 })
 
   return (
     <section className="space">
       <SpaceHeader
         space={space}
-        hasPinned={pinned.length > 0}
+        hasPinned={hasPinnedArea}
         renaming={renaming}
         onRenameDone={onRenameDone}
         onStartRename={onStartRename}
       />
       <div className="space-scroll">
-        <AnimatePresence initial={false}>{renderRows(shownPinned, tabs, splits, activeTabId)}</AnimatePresence>
+        <AnimatePresence initial={false}>{pinnedArea}</AnimatePresence>
+        {dragging && <PinZone spaceId={space.id} index={space.pinnedItems.length} empty={!hasPinnedArea} />}
 
         <div className={cx('pinned-separator', normal.length === 0 && 'hidden')}>
           <span className="separator-line" />
@@ -315,18 +371,53 @@ function SpaceView({ space, tabs, activeTabId, splits, newTabAtBottom, renaming,
           </button>
         </div>
 
-        {!newTabAtBottom && <NewTabRow />}
-        <AnimatePresence initial={false}>{renderRows(normal, tabs, splits, activeTabId)}</AnimatePresence>
-        {newTabAtBottom && <NewTabRow />}
-        <div className="space-fill" onDoubleClick={() => zepper.send({ type: 'ui.openPalette', mode: 'new' })} />
+        {!newTabAtBottom && <NewTabRow spaceId={space.id} index={0} />}
+        <AnimatePresence initial={false}>{renderRows(normal, tabs, splits, activeTabId, normalPlace)}</AnimatePresence>
+        {newTabAtBottom && <NewTabRow spaceId={space.id} index={normal.length} />}
+        <SpaceFill spaceId={space.id} index={normal.length} />
       </div>
     </section>
   )
 }
 
-function NewTabRow(): React.JSX.Element {
+/** While dragging: the end of the pinned area (a "drop here to pin" placeholder when it's empty). */
+function PinZone({ spaceId, index, empty }: { spaceId: string; index: number; empty: boolean }): React.JSX.Element {
+  const drop = useDrop({ key: `pin-zone:${spaceId}`, whole: 'after', target: () => ({ zone: 'pinned', spaceId, parentId: null, index }) })
   return (
-    <button className="new-tab-row" onClick={() => zepper.send({ type: 'ui.openPalette', mode: 'new' })}>
+    <div {...drop.props} className={cx('pin-zone', empty && 'empty', drop.position && 'over')}>
+      {empty && 'Drop here to pin'}
+    </div>
+  )
+}
+
+/** The space below the tabs: double-click for a new tab; drop a tab to put it at the end. */
+function SpaceFill({ spaceId, index }: { spaceId: string; index: number }): React.JSX.Element {
+  const drop = useDrop({
+    key: `fill:${spaceId}`,
+    whole: 'before',
+    target: (_position, item) => (item.kind === 'tab' ? { zone: 'normal', spaceId, index } : null)
+  })
+  return (
+    <div
+      {...drop.props}
+      className={cx('space-fill', drop.position && 'dnd-before')}
+      onDoubleClick={() => zepper.send({ type: 'ui.openPalette', mode: 'new' })}
+    />
+  )
+}
+
+function NewTabRow({ spaceId, index }: { spaceId: string; index: number }): React.JSX.Element {
+  const drop = useDrop({
+    key: `new-tab:${spaceId}`,
+    whole: index === 0 ? 'after' : 'before',
+    target: (_position, item) => (item.kind === 'tab' ? { zone: 'normal', spaceId, index } : null)
+  })
+  return (
+    <button
+      {...drop.props}
+      className={cx('new-tab-row', drop.position && `dnd-${drop.position}`)}
+      onClick={() => zepper.send({ type: 'ui.openPalette', mode: 'new' })}
+    >
       <IconPlus size={15} />
       <span>New Tab</span>
     </button>

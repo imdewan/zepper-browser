@@ -33,9 +33,9 @@ function createMock(): ZepperApi {
     ...fields
   })
   const spaces: Space[] = [
-    { id: 's1', name: 'Personal', icon: '😀', theme: { colors: [], opacity: 0.5, texture: 0 }, collapsedPins: false, lastTabId: 'e1', profile: 'default' },
-    { id: 's2', name: 'Work', icon: '💼', theme: { colors: ['#7b6cf6', '#c06cf6', '#f66cb4'], opacity: 0.6, texture: 0.15 }, collapsedPins: false, lastTabId: null, profile: crypto.randomUUID() },
-    { id: 's3', name: 'Reading', icon: '📚', theme: { colors: ['#e07a2d', '#f2b134'], opacity: 0.55, texture: 0 }, collapsedPins: false, lastTabId: null, profile: crypto.randomUUID() }
+    { id: 's1', name: 'Personal', icon: '😀', theme: { colors: [], opacity: 0.5, texture: 0 }, collapsedPins: false, lastTabId: 'e1', profile: 'default', pinnedItems: ['p1', 'p2', 'p3'] },
+    { id: 's2', name: 'Work', icon: '💼', theme: { colors: ['#7b6cf6', '#c06cf6', '#f66cb4'], opacity: 0.6, texture: 0.15 }, collapsedPins: false, lastTabId: null, profile: crypto.randomUUID(), pinnedItems: ['w1'] },
+    { id: 's3', name: 'Reading', icon: '📚', theme: { colors: ['#e07a2d', '#f2b134'], opacity: 0.55, texture: 0 }, collapsedPins: false, lastTabId: null, profile: crypto.randomUUID(), pinnedItems: [] }
   ]
   const pin = (url: string, title: string): Tab['pinned'] => ({ url, title, favicon: favicon(new URL(url).hostname) })
   let snapshot: Snapshot = {
@@ -72,6 +72,7 @@ function createMock(): ZepperApi {
     widevine: { state: 'off', version: null },
     downloads: [],
     paletteOpen: false,
+    folders: [],
     windowSize: { width: window.innerWidth, height: window.innerHeight },
     splits: [],
     panes: []
@@ -115,7 +116,7 @@ function createMock(): ZepperApi {
         set({ spaces: snapshot.spaces.map((s) => (s.id === command.spaceId ? { ...s, ...command.patch } : s)) })
         break
       case 'space.create': {
-        const space: Space = { id: `s${Date.now()}`, name: command.name, icon: command.icon, theme: command.theme, collapsedPins: false, lastTabId: null, profile: crypto.randomUUID() }
+        const space: Space = { id: `s${Date.now()}`, name: command.name, icon: command.icon, theme: command.theme, collapsedPins: false, lastTabId: null, profile: crypto.randomUUID(), pinnedItems: [] }
         set({ spaces: [...snapshot.spaces, space], activeSpaceId: space.id, activeTabId: null })
         break
       }

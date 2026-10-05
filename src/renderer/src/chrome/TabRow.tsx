@@ -1,10 +1,28 @@
 import { memo, useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import type { Tab } from '@shared/types'
+import type { DropTarget, Tab } from '@shared/types'
 import { zepper } from '../bridge'
 import { Favicon } from '../Favicon'
 import { Equalizer, IconClose, IconMinus, IconMuted, IconSpeaker } from '../icons'
 import { cx, isPinnedChanged } from '../util'
+import { dragProps, useDrop, type DragItem, type DropPosition } from './dnd'
+
+/** Where a row sits, for drag and drop: its list, its position in it, and how deep in folders. */
+export interface RowPlace {
+  zone: 'pinned' | 'normal'
+  spaceId: string
+  /** Folder containing the row (pinned area only). */
+  parentId: string | null
+  index: number
+  depth: number
+}
+
+/** The drop target for dropping before or after a row. */
+export function dropBeside(place: RowPlace, position: DropPosition, item: DragItem): DropTarget | null {
+  const index = position === 'after' ? place.index + 1 : place.index
+  if (place.zone === 'normal') return item.kind === 'folder' ? null : { zone: 'normal', spaceId: place.spaceId, index }
+  return { zone: 'pinned', spaceId: place.spaceId, parentId: place.parentId, index }
+}
 
 /** Tracks whether ⌘ is held, which switches pinned-tab reset into "separate". */
 function useMetaKey(enabled: boolean): boolean {
@@ -25,14 +43,23 @@ function useMetaKey(enabled: boolean): boolean {
 interface TabRowProps {
   tab: Tab
   active: boolean
+  /** Set where the row can be dragged and dropped on (not in split rows). */
+  place?: RowPlace
 }
 
 /** Snapshots arrive as fresh objects, so compare the fields a row actually renders. */
 function sameRow(a: TabRowProps, b: TabRowProps): boolean {
   const x = a.tab
   const y = b.tab
+  const p = a.place
+  const q = b.place
   return (
     a.active === b.active &&
+    p?.zone === q?.zone &&
+    p?.spaceId === q?.spaceId &&
+    p?.parentId === q?.parentId &&
+    p?.index === q?.index &&
+    p?.depth === q?.depth &&
     x.id === y.id &&
     x.kind === y.kind &&
     x.url === y.url &&
@@ -46,8 +73,9 @@ function sameRow(a: TabRowProps, b: TabRowProps): boolean {
   )
 }
 
-export const TabRow = memo(function TabRow({ tab, active }: TabRowProps): React.JSX.Element {
+export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps): React.JSX.Element {
   const changed = isPinnedChanged(tab)
+  const drop = useDrop({ key: `tab:${tab.id}`, target: (position, item) => (place && item.id !== tab.id ? dropBeside(place, position, item) : null) })
   const [resetHover, setResetHover] = useState(false)
   const metaHeld = useMetaKey(resetHover)
 
@@ -56,6 +84,7 @@ export const TabRow = memo(function TabRow({ tab, active }: TabRowProps): React.
   return (
     <motion.div
       className="tab-wrap"
+      style={{ '--depth': place?.depth ?? 0 } as React.CSSProperties}
       layout="position"
       initial={{ opacity: 0, height: 0, scale: 0.95 }}
       animate={{ opacity: 1, height: 'auto', scale: 1 }}
@@ -63,7 +92,9 @@ export const TabRow = memo(function TabRow({ tab, active }: TabRowProps): React.
       transition={{ duration: 0.12, ease: 'easeOut' }}
     >
       <div
-        className={cx('tab', active && 'active', !tab.loaded && 'unloaded', changed && 'changed')}
+        {...(place ? dragProps({ kind: 'tab', id: tab.id }) : {})}
+        {...drop.props}
+        className={cx('tab', active && 'active', !tab.loaded && 'unloaded', changed && 'changed', drop.position && `dnd-${drop.position}`)}
         title={tab.title || tab.url}
         onClick={() => zepper.send({ type: 'tab.activate', tabId: tab.id })}
         onMouseDown={(e) => e.button === 1 && e.preventDefault()}

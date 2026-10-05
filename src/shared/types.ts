@@ -64,12 +64,30 @@ export interface Space {
   theme: SpaceTheme
   collapsedPins: boolean
   lastTabId: string | null
+  /** The pinned area, top level: pinned tab ids and folder ids, in order. */
+  pinnedItems: string[]
   /**
    * Where this space keeps cookies, logins, storage and cache, like a Zen container:
    * 'default' (shared with Essentials and extensions) or its own store. History is shared.
    */
   profile: string
 }
+
+/** A folder in a space's pinned area; folders nest. `items` are tab and folder ids in order. */
+export interface Folder {
+  id: string
+  spaceId: string
+  name: string
+  collapsed: boolean
+  items: string[]
+}
+
+/** Where a dragged tab or folder lands. Indexes count the target list as it was before the drag. */
+export type DropTarget =
+  | { zone: 'pinned'; spaceId: string; parentId: string | null; index: number }
+  | { zone: 'normal'; spaceId: string; index: number }
+  | { zone: 'essentials'; index: number }
+  | { zone: 'space'; spaceId: string }
 
 /**
  * A space's sign-ins: a fresh profile, a fresh profile seeded with another space's cookies
@@ -130,6 +148,7 @@ export interface Snapshot {
   kind: 'main' | 'blank' | 'private'
   widevine: WidevineStatus
   downloads: DownloadEntry[]
+  folders: Folder[]
   /** The command bar is open (the empty page steps back while it is). */
   paletteOpen: boolean
   /** Window content size, so floating UI can line up with the window's background. */
@@ -295,6 +314,10 @@ export type Command =
   | { type: 'space.switchRelative'; delta: number }
   | { type: 'space.create'; name: string; icon: string; theme: SpaceTheme; profile?: ProfileChoice }
   | { type: 'space.setProfile'; spaceId: string; profile: ProfileChoice }
+  | { type: 'item.drop'; item: { kind: 'tab' | 'folder'; id: string }; target: DropTarget }
+  | { type: 'folder.create'; spaceId: string; parentId: string | null; tabIds?: string[] }
+  | { type: 'folder.update'; folderId: string; patch: { name?: string; collapsed?: boolean } }
+  | { type: 'folder.contextMenu'; folderId: string }
   | {
       type: 'space.update'
       spaceId: string
@@ -361,6 +384,7 @@ export type UiEvent =
   | { type: 'palette.open'; mode: 'new' | 'current' | 'split'; currentUrl: string | null }
   | { type: 'toast'; toast: ToastSpec }
   | { type: 'history.open' }
+  | { type: 'folder.startRename'; folderId: string }
   | { type: 'about.open'; info: AboutInfo }
   /** Open the downloads panel from the sidebar's downloads button. */
   | { type: 'downloads.open' }
