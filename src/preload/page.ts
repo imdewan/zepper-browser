@@ -24,7 +24,13 @@ interface PageConfig {
   signInCompat: boolean
   hideChromium: boolean
   vendor: string
+  blockWidevine: boolean
+  askForWidevine: boolean
 }
+
+const DRM_NEEDED_CHANNEL = 'zepper:drm-needed'
+/** Fired on the document (shared by the page's world and ours) when the page asks for Widevine. */
+const DRM_NEEDED_EVENT = 'zepper-drm-needed'
 
 interface CosmeticsResponse {
   styles: string
@@ -86,14 +92,92 @@ function signInPageShim(): void {
   delete w.PublicKeyCredential
 }
 
+/**
+ * Runs in the page's main world while Widevine is off: requests for it fail
+ * the way they would in a browser without it, and we hear about them.
+ */
+function widevineShim(eventName: string): void {
+  const original = Navigator.prototype.requestMediaKeySystemAccess
+  if (!original) return
+  const wrapped = function (this: Navigator, keySystem: string, configs: MediaKeySystemConfiguration[]): Promise<MediaKeySystemAccess> {
+    if (typeof keySystem === 'string' && keySystem.toLowerCase().includes('widevine')) {
+      document.dispatchEvent(new CustomEvent(eventName))
+      return Promise.reject(new DOMException('Unsupported keySystem or supportedConfigurations.', 'NotSupportedError'))
+    }
+    return original.call(this, keySystem, configs)
+  }
+  Object.defineProperty(wrapped, 'name', { value: 'requestMediaKeySystemAccess' })
+  Object.defineProperty(wrapped, 'toString', { value: () => 'function requestMediaKeySystemAccess() { [native code] }' })
+  Navigator.prototype.requestMediaKeySystemAccess = wrapped
+}
+
+/**
+ * Tells the browser a page needs Widevine, once per page. Sites like YouTube
+ * probe for it while playing ordinary video, so if something starts playing
+ * shortly after, it wasn't really needed.
+ */
+function reportWidevineNeeds(): void {
+  let reported = false
+  document.addEventListener(DRM_NEEDED_EVENT, () => {
+    if (reported) return
+    reported = true
+    window.setTimeout(() => {
+      const playing = Array.from(document.querySelectorAll('video')).some((v) => !v.paused && v.currentTime > 0)
+      if (!playing) ipcRenderer.send(DRM_NEEDED_CHANNEL, location.hostname)
+    }, 2000)
+  })
+}
+
 function applyCompat(): void {
   if (!/^https?:/.test(location.href)) return
   try {
     const config = ipcRenderer.sendSync(PAGE_CONFIG_CHANNEL) as PageConfig
     if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
     if (config.signInCompat && location.hostname === 'accounts.google.com') contextBridge.executeInMainWorld({ func: signInPageShim })
+    if (config.blockWidevine) {
+      contextBridge.executeInMainWorld({ func: widevineShim, args: [DRM_NEEDED_EVENT] })
+      if (config.askForWidevine) reportWidevineNeeds()
+    }
   } catch {
     // Never break a page over this.
+  }
+}
+
+// ---- JavaScript dialogs ------------------------------------------------------------
+//
+// alert(), confirm() and prompt() open Zepper's own dialog (labelled with the
+// site, with spam protection) instead of Electron's: a plain system box for
+// the first two, and nothing at all for prompt(), which Electron doesn't
+// support. Like the real ones, they block the page until answered.
+
+const DIALOG_CHANNEL = 'zepper:dialog'
+
+/** Runs in the page's main world. `open` crosses back into this preload and waits for the answer. */
+function dialogShim(open: (kind: string, message: string, value: string) => unknown): void {
+  const define = (name: string, fn: (...args: never[]) => unknown): void => {
+    Object.defineProperty(fn, 'name', { value: name })
+    Object.defineProperty(fn, 'toString', { value: () => `function ${name}() { [native code] }` })
+    Object.defineProperty(window, name, { value: fn, writable: true, configurable: true, enumerable: true })
+  }
+  const text = (value: unknown): string => (value === undefined ? '' : String(value))
+  define('alert', (message?: unknown) => {
+    open('alert', text(message), '')
+  })
+  define('confirm', (message?: unknown) => open('confirm', text(message), '') === true)
+  define('prompt', (message?: unknown, value?: unknown) => {
+    const result = open('prompt', text(message), text(value))
+    return typeof result === 'string' ? result : null
+  })
+}
+
+function applyDialogs(): void {
+  try {
+    contextBridge.executeInMainWorld({
+      func: dialogShim,
+      args: [(kind: string, message: string, value: string) => ipcRenderer.sendSync(DIALOG_CHANNEL, kind, message, value)]
+    })
+  } catch {
+    // Fall back to Electron's own dialogs.
   }
 }
 
@@ -174,6 +258,7 @@ function watchDomForGenericRules(): void {
 }
 
 applyCompat()
+applyDialogs()
 applyCosmetics()
 
 // ---- Picture-in-picture: "back to tab" -------------------------------------

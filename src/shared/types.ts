@@ -82,6 +82,13 @@ export interface Pane {
   rect: Rect
 }
 
+/** Google Widevine (DRM): not in this build, turned off, downloading, usable, or failed to install. */
+export interface WidevineStatus {
+  /** 'restart': turned on, but castLabs' updater can only install it on the next launch. */
+  state: 'unavailable' | 'off' | 'restart' | 'installing' | 'ready' | 'error'
+  version: string | null
+}
+
 export interface Snapshot {
   spaces: Space[]
   tabs: Tab[]
@@ -95,6 +102,7 @@ export interface Snapshot {
   settings: Settings
   /** Window type: the main window, a temporary window, or a private window. */
   kind: 'main' | 'blank' | 'private'
+  widevine: WidevineStatus
   splits: Split[]
   /** Where each visible web view sits in the window; more than one while a split is shown. */
   panes: Pane[]
@@ -180,6 +188,27 @@ export interface SiteInfo {
   permissions: { permission: string; label: string; state: PermissionState }[]
 }
 
+/** A page's alert(), confirm() or prompt(), shown in Zepper's own dialog. */
+export interface JsDialogSpec {
+  id: number
+  kind: 'alert' | 'confirm' | 'prompt'
+  message: string
+  defaultValue: string
+  host: string
+  /** Asked by an embedded frame rather than the page itself. */
+  embedded: boolean
+  /** The page has shown dialogs before: offer to block more. */
+  offerSuppress: boolean
+}
+
+/** A site (or proxy) asking for a username and password (HTTP authentication). */
+export interface AuthSpec {
+  id: number
+  host: string
+  realm: string
+  isProxy: boolean
+}
+
 export interface PermissionPrompt {
   id: number
   origin: string
@@ -195,6 +224,9 @@ export type PopoverSpec =
   | { kind: 'permission'; anchor: Rect; prompt: PermissionPrompt }
   | { kind: 'extensions'; anchor: Rect }
   | { kind: 'spaces'; anchor: Rect }
+  | { kind: 'widevine'; anchor: Rect; host: string; restart: boolean }
+  | { kind: 'jsDialog'; anchor: Rect; dialog: JsDialogSpec }
+  | { kind: 'auth'; anchor: Rect; auth: AuthSpec }
 
 export interface FindResult {
   active: number
@@ -250,6 +282,10 @@ export type Command =
   | { type: 'media.toggle'; tabId: string }
   | { type: 'media.seek'; tabId: string; seconds: number }
   | { type: 'site.setAdblock'; domain: string; enabled: boolean }
+  | { type: 'widevine.respond'; host: string; choice: 'install' | 'later' | 'never' }
+  | { type: 'app.relaunch' }
+  | { type: 'dialog.respond'; id: number; ok: boolean; value: string; suppress: boolean }
+  | { type: 'auth.respond'; id: number; username: string | null; password: string }
   | { type: 'media.dismiss'; tabId: string }
   | { type: 'media.pauseOthers'; keepTabId: string }
   | { type: 'site.setPermission'; origin: string; permission: string; state: PermissionState }

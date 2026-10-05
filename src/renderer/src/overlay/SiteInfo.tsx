@@ -353,6 +353,37 @@ function CertSection({ title, fields, mono }: { title: string; fields: { label: 
 }
 
 /** Chrome-style permission request bubble shown under the top-left of the page. */
+/** Brave-style offer to turn on Google Widevine when a site needs it for protected video. */
+export function WidevinePrompt({ host, restart, onDone }: { host: string; restart: boolean; onDone: () => void }): React.JSX.Element {
+  const respond = (choice: 'install' | 'later' | 'never'): void => {
+    zepper.send({ type: 'widevine.respond', host, choice })
+    onDone()
+  }
+  return (
+    <div className="permission-prompt widevine-prompt">
+      <div className="permission-title">
+        <strong>{host}</strong> wants to
+      </div>
+      <div className="permission-label">Play protected content</div>
+      <p className="widevine-text">
+        This needs Google Widevine, a small component from Google that protected video like Netflix and Crunchyroll relies on.
+        {restart && ' Zepper restarts once to finish installing it; your tabs come back.'}
+      </p>
+      <div className="widevine-actions">
+        <button className="widevine-never" onClick={() => respond('never')}>
+          Don’t ask again
+        </button>
+        <button className="panel-button" onClick={() => respond('later')}>
+          Not now
+        </button>
+        <button className="panel-button primary" onClick={() => respond('install')}>
+          {restart ? 'Install and restart' : 'Install'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function PermissionPanel({ prompt, onDone }: { prompt: PermissionPrompt; onDone: () => void }): React.JSX.Element {
   const respond = (allow: boolean): void => {
     zepper.send({ type: 'permission.respond', id: prompt.id, allow })

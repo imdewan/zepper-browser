@@ -568,6 +568,37 @@
   gap: 8px;
 }
 
+.widevine-text {
+  margin: -6px 0 16px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.widevine-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.widevine-actions .panel-button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.widevine-never {
+  margin-right: auto;
+  padding: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--text-3);
+}
+
+.widevine-never:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
 /* ---- Compact mode peek sidebar ---------------------------------------------------- */
 
 .peek-card {
@@ -730,6 +761,7 @@
   flex: none;
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
 .settings-row-control input[type='range'] {
@@ -1641,4 +1673,97 @@
 
 .spaces-picker-new svg {
   width: 20px;
+}
+
+/* ---- Page dialogs (alert / confirm / prompt) and HTTP sign-in ---------------------------- */
+
+.popover-backdrop.modal {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.popover-jsDialog,
+.popover-auth {
+  padding: 18px 18px 14px;
+  transform-origin: top center;
+}
+
+.js-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.js-dialog-title {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.js-dialog-message {
+  max-height: 280px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.js-dialog-message strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.dialog-input {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 0;
+  background: var(--element);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.dialog-input:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 50%);
+}
+
+.js-dialog-suppress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.js-dialog .permission-buttons {
+  margin-top: 2px;
+}
+
+.auth-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.auth-header svg {
+  color: var(--accent);
+}
+
+.auth-realm {
+  color: var(--text-3);
+}
+
+.settings-inline-button {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--accent);
 }

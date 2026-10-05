@@ -8,6 +8,16 @@ import { SettingsStore } from './settings-store'
 
 app.setName('Zepper')
 
+// With Widevine off we disable castLabs' component updater, and its own background
+// install then rejects internally ("No component available"). That's expected.
+process.on('unhandledRejection', (reason) => {
+  if (reason instanceof Error && reason.message === 'No component available') return
+  console.error('Unhandled promise rejection:', reason)
+})
+
+// Development only: a second, isolated instance with its own profile (for automated checks).
+if (!app.isPackaged && process.env['ZEPPER_PROFILE']) app.setPath('userData', process.env['ZEPPER_PROFILE'])
+
 // Present a plain Chrome user agent: many sites (Google sign-in, WhatsApp Web,
 // Teams) refuse or degrade when they see Electron or an unknown app token.
 app.userAgentFallback = app.userAgentFallback
@@ -36,6 +46,7 @@ if (!app.requestSingleInstanceLock()) {
       rendererUrl: process.env['ELECTRON_RENDERER_URL'],
       rendererDir: join(__dirname, '../renderer')
     })
+    await hub.widevineSettled(15_000)
     hub.openWindow('main')
     hub.startExtensions()
     Menu.setApplicationMenu(buildMenu(hub))

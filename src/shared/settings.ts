@@ -40,6 +40,10 @@ export interface Settings {
   /** Floating player width as a share of the screen. */
   pipSize: PipSize
   showMediaCard: boolean
+  /** Google Widevine, for DRM-protected video (Netflix, Crunchyroll…). Off until you opt in, like Brave. */
+  widevine: boolean
+  /** Ask to turn Widevine on when a site needs it. */
+  widevinePrompt: boolean
   /** When a tab starts playing while others already are. */
   otherMedia: 'nothing' | 'offer' | 'pause'
   // Search
@@ -81,6 +85,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autoPictureInPicture: true,
   pipSize: 'medium',
   showMediaCard: true,
+  widevine: false,
+  widevinePrompt: true,
   otherMedia: 'offer',
   searchEngine: 'google',
   searchSuggestions: true,

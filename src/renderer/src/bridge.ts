@@ -69,6 +69,7 @@ function createMock(): ZepperApi {
     adblockEnabled: true,
     settings: DEFAULT_SETTINGS,
     kind: 'main',
+    widevine: { state: 'off', version: null },
     splits: [],
     panes: []
   }

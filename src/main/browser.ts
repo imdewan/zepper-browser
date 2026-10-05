@@ -8,8 +8,10 @@ import {
   dialog,
   nativeTheme,
   shell,
+  type AuthInfo,
   type ContextMenuParams,
   type DownloadItem,
+  type IpcMainEvent,
   type PermissionCheckHandlerHandlerDetails,
   type Session,
   type HandlerDetails,
@@ -37,6 +39,9 @@ import {
   type Snapshot,
   type Space,
   type SpaceTheme,
+  type AuthSpec,
+  type JsDialogSpec,
+  type PopoverSpec,
   type Split,
   type SplitLayout,
   type Suggestion,
@@ -249,6 +254,16 @@ export class Browser {
   private readonly disposers: (() => void)[] = []
   /** Tabs we already offered to pause other media for, so the tip never nags. */
   private readonly mediaTipShown = new Set<string>()
+  /** Page dialogs (alert/confirm/prompt) and sign-in requests waiting for an answer, oldest first. */
+  private pendingDialogs: { id: number; tabId: string | undefined; popover: PopoverSpec; answer: (ok: boolean, value: string) => void }[] = []
+  private showingDialog: number | null = null
+  private dialogSeq = 0
+  /** Per tab, per page: how many dialogs it has shown, and whether you've blocked more. */
+  private readonly dialogGuard = new Map<string, { count: number; suppressed: boolean }>()
+  /** Tabs that wanted Widevine while it was off; reloaded once it's ready. */
+  private readonly widevineTabs = new Set<string>()
+  /** Sites already asked about Widevine this session. */
+  private readonly widevineAsked = new Set<string>()
   /** Set once the window has closed; late events from dying pages are ignored. */
   private windowClosed = false
   private splits: Split[] = []
@@ -413,6 +428,13 @@ export class Browser {
       handle: (command) => this.handle(command),
       snapshotJson: () => this.snapshot(),
       evaluate: async (code) => this.activeWebContents()?.executeJavaScript(code, true) ?? null,
+      state: () => ({
+        activeTabId: this.activeTabId,
+        overlayMode: this.overlayMode,
+        showingDialog: this.showingDialog,
+        showingPrompt: this.showingPrompt,
+        pendingDialogs: this.pendingDialogs.map((d) => ({ id: d.id, tabId: d.tabId, kind: d.popover.kind }))
+      }),
       drag: (layer, from, to) => {
         const target = layer === 'chrome' ? this.win.webContents : layer === 'tab' ? this.activeWebContents() : this.overlay.webContents
         const origin = layer === 'overlay' ? this.overlay.getBounds() : layer === 'tab' ? this.contentBounds() : { x: 0, y: 0 }
@@ -676,6 +698,18 @@ export class Browser {
         return void clipboard.writeText(command.text)
       case 'media.toggle':
         return void this.views.get(command.tabId)?.webContents.executeJavaScript(MEDIA_TOGGLE_SCRIPT, true).catch(() => {})
+      case 'dialog.respond':
+        return this.respondToDialog(command.id, command.ok, command.value, command.suppress)
+      case 'auth.respond':
+        return this.respondToDialog(
+          command.id,
+          command.username !== null,
+          JSON.stringify({ username: command.username ?? '', password: command.password })
+        )
+      case 'widevine.respond':
+        return this.respondToWidevine(command.choice)
+      case 'app.relaunch':
+        return this.hub.relaunch()
       case 'site.setAdblock':
         return this.setSiteAdblock(command.domain, command.enabled)
       case 'media.seek': {
@@ -867,6 +901,7 @@ export class Browser {
     this.extensions?.api.selectTab(view.webContents)
     this.broadcast()
     this.showNextPrompt()
+    this.showNextDialog()
     this.runInFrames(view.webContents, EXIT_AUTO_PIP_SCRIPT, false)
   }
 
@@ -1313,7 +1348,9 @@ export class Browser {
           }
         })
     view.setBorderRadius(this.settings.cornerRadius)
-    view.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff')
+    // Like Chrome: pages without a background of their own are white, in dark mode too
+    // (pages that support dark mode paint their own).
+    view.setBackgroundColor('#ffffff')
     this.views.set(tab.id, view)
     this.tabByWebContents.set(view.webContents.id, tab.id)
     this.wire(tab.id, view.webContents)
@@ -1376,6 +1413,11 @@ export class Browser {
       })
       if (choice === 0) event.preventDefault()
     })
+    // Dialogs belong to the page that asked; a new page (or a closed tab) cancels them.
+    wc.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) this.dropDialogs(tabId)
+    })
+    wc.once('destroyed', () => this.dropDialogs(tabId))
     wc.on('did-start-loading', () => update({ loading: true }))
     wc.on('did-stop-loading', () => update({ loading: false, ...navState() }))
     wc.on('page-title-updated', (_event, title) => {
@@ -1827,6 +1869,55 @@ export class Browser {
     this.handle({ type: 'ui.openPopover', popover: { kind: 'siteInfo', anchor, info } })
   }
 
+  /**
+   * A page asked for Widevine while it's off. Like Brave, offer to turn it on:
+   * once per site per session, only for the tab you're looking at.
+   */
+  onWidevineNeeded(wc: WebContents, _frameHost: string): void {
+    const tabId = this.tabByWebContents.get(wc.id)
+    const tab = this.tab(tabId)
+    if (!tab || this.settings.widevine || !this.settings.widevinePrompt) return
+    this.widevineTabs.add(tab.id)
+    const site = parseDomain(tab.url).domain || safeHost(tab.url)
+    if (this.widevineAsked.has(site) || tab.id !== this.activeTabId || this.overlayMode === 'full') return
+    this.widevineAsked.add(site)
+    const bounds = this.contentBounds()
+    const anchor = { x: bounds.x + 4, y: bounds.y, width: 0, height: 0 }
+    this.handle({ type: 'ui.openPopover', popover: { kind: 'widevine', anchor, host: site, restart: this.hub.widevineNeedsRestart() } })
+  }
+
+  private respondToWidevine(choice: 'install' | 'later' | 'never'): void {
+    if (choice === 'install') {
+      this.settingsStore.update({ widevine: true })
+      // castLabs' updater can only install it on a fresh launch: restart (you agreed in the prompt).
+      if (this.hub.widevine.state === 'restart') return this.hub.relaunch()
+      this.toast({ id: 'widevine', message: 'Installing Widevine…', description: 'Downloading it from Google', timeout: 8000 })
+    } else if (choice === 'never') {
+      this.settingsStore.update({ widevinePrompt: false })
+      this.toast({ id: 'widevine', message: 'Zepper won’t ask again', description: 'Turn on Widevine any time in Settings → Media.', timeout: 4500 })
+    } else {
+      this.toast({ id: 'widevine', message: 'Protected video won’t play here', description: 'Turn on Widevine any time in Settings → Media.', timeout: 3500 })
+    }
+  }
+
+  onWidevineReady(): void {
+    const waiting = [...this.widevineTabs].filter((id) => this.views.has(id))
+    this.widevineTabs.clear()
+    for (const id of waiting) this.views.get(id)?.webContents.reload()
+    if (waiting.length > 0 || this.win.isFocused()) {
+      this.toast({
+        id: 'widevine',
+        message: 'Widevine is ready',
+        description: waiting.length > 0 ? 'Reloaded the page that needed it.' : 'Protected video can play now.'
+      })
+    }
+  }
+
+  onWidevineFailed(): void {
+    if (this.widevineTabs.size === 0 && !this.win.isFocused()) return
+    this.toast({ id: 'widevine', message: 'Couldn’t install Widevine', description: 'Check your connection, then try again in Settings → Media.', timeout: 5000 })
+  }
+
   /** Turns ad blocking off (or back on) for one site, then reloads its tabs so it takes effect. */
   private setSiteAdblock(domain: string, enabled: boolean): void {
     if (!domain) return
@@ -1862,7 +1953,7 @@ export class Browser {
 
   /** Shows the oldest pending permission prompt that belongs to the active tab. */
   private showNextPrompt(): void {
-    if (this.showingPrompt !== null || this.paletteOpen) return
+    if (this.showingPrompt !== null || this.showingDialog !== null || this.paletteOpen) return
     const prompt = this.prompts.find((p) => !p.tabId || p.tabId === this.activeTabId)
     if (!prompt) return
     this.showingPrompt = prompt.id
@@ -1885,7 +1976,113 @@ export class Browser {
       other.callback(allow)
     }
     this.prompts = this.prompts.filter((p) => !(p.origin === prompt.origin && p.keys.every((k) => prompt.keys.includes(k))))
-    setTimeout(() => this.showNextPrompt(), 200)
+    setTimeout(() => {
+      this.showNextPrompt()
+      this.showNextDialog()
+    }, 200)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Page dialogs and sign-in
+
+  /** A page called alert(), confirm() or prompt(). The page waits until we set event.returnValue. */
+  onJsDialog(event: IpcMainEvent, kind: string, message: string, value: string): void {
+    const type = kind === 'confirm' || kind === 'prompt' ? kind : 'alert'
+    const cancelled = type === 'confirm' ? false : null
+    const tabId = this.tabByWebContents.get(event.sender.id)
+    if (!tabId) {
+      event.returnValue = cancelled
+      return
+    }
+    const guard = this.dialogGuard.get(tabId) ?? { count: 0, suppressed: false }
+    this.dialogGuard.set(tabId, guard)
+    if (guard.suppressed) {
+      event.returnValue = cancelled
+      return
+    }
+    guard.count++
+    let frameUrl = ''
+    let embedded = false
+    try {
+      frameUrl = event.senderFrame?.url ?? ''
+      embedded = !!event.senderFrame?.parent
+    } catch {
+      // The frame went away.
+    }
+    const dialog: JsDialogSpec = {
+      id: ++this.dialogSeq,
+      kind: type,
+      message: String(message).slice(0, 4000),
+      defaultValue: String(value).slice(0, 2000),
+      host: safeHost(frameUrl || this.tab(tabId)?.url || '') || 'This page',
+      embedded,
+      offerSuppress: guard.count > 1
+    }
+    let answered = false
+    this.queueDialog(dialog.id, tabId, { kind: 'jsDialog', anchor: this.contentBounds(), dialog }, (ok, text) => {
+      if (answered) return
+      answered = true
+      event.returnValue = type === 'confirm' ? ok : type === 'prompt' ? (ok ? text : null) : null
+    })
+  }
+
+  /** A site or proxy asked for a username and password (HTTP authentication). */
+  onLogin(wc: WebContents | null, authInfo: AuthInfo, callback: (username?: string, password?: string) => void): void {
+    const tabId = wc ? this.tabByWebContents.get(wc.id) : undefined
+    const port = authInfo.port && authInfo.port !== 80 && authInfo.port !== 443 ? `:${authInfo.port}` : ''
+    const auth: AuthSpec = { id: ++this.dialogSeq, host: `${authInfo.host}${port}`, realm: authInfo.realm ?? '', isProxy: authInfo.isProxy }
+    let answered = false
+    this.queueDialog(auth.id, tabId, { kind: 'auth', anchor: this.contentBounds(), auth }, (ok, credentials) => {
+      if (answered) return
+      answered = true
+      if (!ok) return callback()
+      const { username, password } = JSON.parse(credentials) as { username: string; password: string }
+      callback(username, password)
+    })
+  }
+
+  private queueDialog(id: number, tabId: string | undefined, popover: PopoverSpec, answer: (ok: boolean, value: string) => void): void {
+    this.pendingDialogs.push({ id, tabId, popover, answer })
+    this.showNextDialog()
+  }
+
+  /** Shows the oldest waiting dialog of a tab you can see; others wait until you switch to their tab. */
+  private showNextDialog(): void {
+    if (this.showingDialog !== null || this.showingPrompt !== null) return
+    const next = this.pendingDialogs.find((d) => !d.tabId || d.tabId === this.activeTabId || this.attached.has(d.tabId))
+    if (!next) return
+    this.showingDialog = next.id
+    this.handle({ type: 'ui.openPopover', popover: { ...next.popover, anchor: this.contentBounds() } })
+  }
+
+  private respondToDialog(id: number, ok: boolean, value: string, suppress = false): void {
+    const index = this.pendingDialogs.findIndex((d) => d.id === id)
+    if (this.showingDialog === id) this.showingDialog = null
+    if (index < 0) return
+    const [dialog] = this.pendingDialogs.splice(index, 1)
+    if (suppress && dialog.tabId) {
+      const guard = this.dialogGuard.get(dialog.tabId)
+      if (guard) guard.suppressed = true
+    }
+    dialog.answer(ok, value)
+    setTimeout(() => {
+      this.showNextDialog()
+      this.showNextPrompt()
+    }, 150)
+  }
+
+  /** A tab navigated away or closed: its waiting dialogs are cancelled so nothing hangs. */
+  private dropDialogs(tabId: string): void {
+    this.dialogGuard.delete(tabId)
+    const dropped = this.pendingDialogs.filter((d) => d.tabId === tabId)
+    if (dropped.length === 0) return
+    this.pendingDialogs = this.pendingDialogs.filter((d) => d.tabId !== tabId)
+    for (const dialog of dropped) dialog.answer(false, '')
+    if (dropped.some((d) => d.id === this.showingDialog)) {
+      this.showingDialog = null
+      this.handle({ type: 'ui.dismissOverlay' })
+      setTimeout(() => this.showNextDialog(), 150)
+    }
   }
 
   private dropPrompts(match: (prompt: PendingPrompt) => boolean): void {
@@ -2335,12 +2532,18 @@ export class Browser {
       adblockEnabled: this.adblock.isEnabled(),
       settings: this.settings,
       kind: this.kind,
+      widevine: this.hub.widevine,
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : []
     }
   }
 
   /** Coalesces state changes into at most one snapshot per frame for both renderers. */
+  /** Shared state changed elsewhere (e.g. Widevine): send a fresh snapshot. */
+  refresh(): void {
+    this.broadcast()
+  }
+
   private broadcast(): void {
     if (this.broadcastTimer) return
     this.broadcastTimer = setTimeout(() => {

@@ -14,6 +14,8 @@ export interface DebugTarget {
   drag(layer: string, from: [number, number], to: [number, number]): void
   /** Evaluates JavaScript in the active page and returns the result. */
   evaluate(code: string): Promise<unknown>
+  /** Internal state that snapshots don't carry (dialog queue, overlay). */
+  state(): unknown
 }
 
 /**
@@ -27,7 +29,10 @@ export function startDebugServer(target: DebugTarget): void {
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost')
-      if (url.pathname === '/snapshot') {
+      if (url.pathname === '/state') {
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify(target.state()))
+      } else if (url.pathname === '/snapshot') {
         res.setHeader('content-type', 'application/json')
         res.end(JSON.stringify(target.snapshotJson()))
       } else if (url.pathname === '/command' && req.method === 'POST') {

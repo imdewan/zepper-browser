@@ -1,6 +1,6 @@
-import { BrowserWindow, ipcMain, nativeTheme, session, app, webContents, type Session, type WebContents } from 'electron'
+import { BrowserWindow, components, ipcMain, nativeTheme, session, app, webContents, type Session, type WebContents } from 'electron'
 import { join } from 'node:path'
-import { IPC, type Command } from '@shared/types'
+import { IPC, type Command, type WidevineStatus } from '@shared/types'
 import type { AdBlock } from './adblock'
 import { Browser, type BrowserKind } from './browser'
 import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
@@ -35,9 +35,19 @@ export class Hub {
   /** Our plain Chrome user agent, before any identity choice. */
   private readonly chromeUa = app.userAgentFallback
   private userAgent = app.userAgentFallback
+  /** Google Widevine (castLabs' Electron builds only), see applyWidevine. */
+  widevine: WidevineStatus = { state: 'unavailable', version: null }
+  private widevineWanted: boolean | null = null
+  /**
+   * castLabs' updater can only install a component on a launch where updates were on from the
+   * start (once its startup attempt has failed with updates off, it can't recover until restart).
+   */
+  private readonly widevineInstallableNow: boolean
+  private widevineInstall: Promise<void> | null = null
 
   constructor(services: Omit<Services, 'extensions' | 'certificates' | 'permissions'>) {
     this.services = { ...services, permissions: new SitePermissions(), certificates: new CertificateStore(), extensions: null }
+    this.widevineInstallableNow = services.settings.get().widevine
 
     ipcMain.handle(IPC.getSnapshot, (event) => this.owner(event.sender)?.publicSnapshot() ?? null)
     ipcMain.handle(IPC.suggest, (event, text: string) => this.owner(event.sender)?.suggestions(text) ?? [])
@@ -46,6 +56,20 @@ export class Hub {
       this.owner(event.sender)?.onPageSwipe(event.sender.id, phase, Number(dx) || 0, Number(peak) || 0)
     )
     ipcMain.on(IPC.pipBack, (event) => this.owner(event.sender)?.onNativePipBack(event.sender.id))
+    ipcMain.on('zepper:drm-needed', (event, host: string) => this.owner(event.sender)?.onWidevineNeeded(event.sender, String(host)))
+    // Page dialogs (alert/confirm/prompt); the page is blocked until event.returnValue is set.
+    ipcMain.on('zepper:dialog', (event, kind: string, message: string, value: string) => {
+      const browser = this.owner(event.sender)
+      if (browser) browser.onJsDialog(event, String(kind), String(message), String(value))
+      else event.returnValue = kind === 'confirm' ? false : null
+    })
+    // HTTP authentication: ask in the window that owns the page (or the focused one for proxies).
+    app.on('login', (event, wc, _details, authInfo, callback) => {
+      const browser = (wc && this.owner(wc)) || this.focused()
+      if (!browser) return
+      event.preventDefault()
+      browser.onLogin(wc ?? null, authInfo, callback)
+    })
     servePageConfig(services.settings, () => this.userAgent)
 
     nativeTheme.on('updated', () => this.applyAppIcon())
@@ -150,6 +174,7 @@ export class Hub {
   /** Ad blocking switches and the browser identity, from settings. */
   private applySettings(): void {
     const settings = this.services.settings.get()
+    this.applyWidevine(settings.widevine)
     this.services.adblock.setEnabled(settings.adblock)
     this.services.adblock.setAllowlist(settings.adblockAllowlist)
 
@@ -162,6 +187,66 @@ export class Hub {
     for (const wc of webContents.getAllWebContents()) {
       if (!wc.isDestroyed() && this.sessions.has(wc.session)) wc.setUserAgent(ua)
     }
+  }
+
+  /**
+   * Widevine is opt-in, like Brave: while it's off, castLabs' component updater
+   * stays disabled so nothing is downloaded. Turning it on installs it straight
+   * away (no restart needed on macOS) and keeps it updated.
+   */
+  private applyWidevine(wanted: boolean): void {
+    if (this.widevineWanted === wanted) return
+    this.widevineWanted = wanted
+    if (!components) return this.setWidevine({ state: 'unavailable', version: null })
+    const installed = (): string | null => components.status()[components.WIDEVINE_CDM_ID]?.version ?? null
+    if (!wanted) {
+      components.updatesEnabled = false
+      return this.setWidevine({ state: 'off', version: installed() })
+    }
+    components.updatesEnabled = true
+    const version = installed()
+    if (!version && !this.widevineInstallableNow) return this.setWidevine({ state: 'restart', version: null })
+    this.setWidevine({ state: version ? 'ready' : 'installing', version })
+    this.widevineInstall = components.whenReady([components.WIDEVINE_CDM_ID]).then(
+      () => {
+        if (!this.widevineWanted) return
+        this.setWidevine({ state: 'ready', version: installed() })
+        for (const browser of this.browsers) browser.onWidevineReady()
+      },
+      (error: unknown) => {
+        console.error('[widevine] install failed', error)
+        if (this.widevineWanted) this.setWidevine({ state: 'error', version: null })
+        for (const browser of this.browsers) browser.onWidevineFailed()
+      }
+    )
+  }
+
+  /**
+   * On the launch that installs Widevine, wait for it (briefly) before opening windows, so
+   * the page that needed it doesn't load first and fail.
+   */
+  async widevineSettled(timeoutMs: number): Promise<void> {
+    if (!this.widevineInstall || this.widevine.state !== 'installing') return
+    await Promise.race([this.widevineInstall, new Promise((resolve) => setTimeout(resolve, timeoutMs))])
+  }
+
+  /** Whether turning Widevine on now would need a restart to finish installing. */
+  widevineNeedsRestart(): boolean {
+    if (!components || this.widevineInstallableNow) return false
+    return !components.status()[components.WIDEVINE_CDM_ID]?.version
+  }
+
+  /** Restarts Zepper (tabs and spaces are restored). */
+  relaunch(): void {
+    // In development the renderer dev server goes away with this process; use the built UI.
+    Reflect.deleteProperty(process.env, 'ELECTRON_RENDERER_URL')
+    app.relaunch()
+    app.quit()
+  }
+
+  private setWidevine(status: WidevineStatus): void {
+    this.widevine = status
+    for (const browser of this.browsers) browser.refresh()
   }
 
   private applyAppIcon(): void {

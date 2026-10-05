@@ -9,6 +9,7 @@ import {
   type Settings,
   type UserAgentChoice
 } from '@shared/settings'
+import type { WidevineStatus } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose } from '../icons'
 import { cx, isMac } from '../util'
@@ -56,11 +57,29 @@ const SHORTCUTS: [string, string][] = [
 
 interface SettingsPanelProps {
   settings: Settings
+  widevine: WidevineStatus
   onClose: () => void
 }
 
+function widevineHint(status: WidevineStatus): string {
+  switch (status.state) {
+    case 'unavailable':
+      return 'Not available in this build of Zepper.'
+    case 'restart':
+      return 'Restart Zepper to finish installing it (your tabs come back).'
+    case 'installing':
+      return 'Downloading from Google…'
+    case 'ready':
+      return `Installed${status.version ? ` · version ${status.version}` : ''}. Updated automatically.`
+    case 'error':
+      return 'Couldn’t install it. Check your connection, then turn it off and on again.'
+    default:
+      return 'Needed for protected video like Netflix or Crunchyroll. A component from Google; off until you turn it on.'
+  }
+}
+
 /** Settings sheet: every change applies immediately. */
-export function SettingsPanel({ settings, onClose }: SettingsPanelProps): React.JSX.Element {
+export function SettingsPanel({ settings, widevine, onClose }: SettingsPanelProps): React.JSX.Element {
   const [section, setSection] = useState<Section>('appearance')
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
 
@@ -230,6 +249,19 @@ export function SettingsPanel({ settings, onClose }: SettingsPanelProps): React.
                 <Row label="Picture-in-picture when you leave a video" hint="A playing video floats in a mini player until you come back.">
                   <Toggle checked={settings.autoPictureInPicture} onChange={(autoPictureInPicture) => set({ autoPictureInPicture })} />
                 </Row>
+                <Row label="Play protected content (Google Widevine)" hint={widevineHint(widevine)}>
+                  {settings.widevine && widevine.state === 'restart' && (
+                    <button className="settings-inline-button" onClick={() => zepper.send({ type: 'app.relaunch' })}>
+                      Restart now
+                    </button>
+                  )}
+                  <Toggle checked={settings.widevine && widevine.state !== 'unavailable'} onChange={(on) => set({ widevine: on })} />
+                </Row>
+                {!settings.widevine && (
+                  <Row label="Ask when a site needs it" hint="Offer to turn Widevine on when a page asks for it.">
+                    <Toggle checked={settings.widevinePrompt} onChange={(widevinePrompt) => set({ widevinePrompt })} />
+                  </Row>
+                )}
                 <Row label="Picture-in-picture size" hint="Relative to your screen. Resize the player to fine-tune it.">
                   <Segmented
                     value={settings.pipSize}

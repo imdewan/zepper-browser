@@ -129,7 +129,7 @@ export function Overlay(): React.JSX.Element | null {
         {peek === 'shown' && !wantsFull && <Peek key="peek" snapshot={snapshot} onHide={() => setPeek('exiting')} />}
       </AnimatePresence>
       <AnimatePresence onExitComplete={() => setExiting(false)}>
-        {settingsOpen && <SettingsPanel key="settings" settings={snapshot.settings} onClose={closeSettings} />}
+        {settingsOpen && <SettingsPanel key="settings" settings={snapshot.settings} widevine={snapshot.widevine} onClose={closeSettings} />}
         {creatingSpace && <CreateSpaceDialog key="create" systemDark={systemDark} onClose={closeCreate} />}
         {palette && <Palette key={palette.key} mode={palette.mode} currentUrl={palette.currentUrl} onClose={closePalette} />}
         {popover && (

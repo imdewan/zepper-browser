@@ -22,6 +22,10 @@ export interface PageConfig {
   hideChromium: boolean
   /** navigator.vendor for the browser we present as. */
   vendor: string
+  /** Widevine is turned off: refuse it to pages (even if it's installed) and notice who asks. */
+  blockWidevine: boolean
+  /** ...and offer to turn it on when a site asks. */
+  askForWidevine: boolean
 }
 
 const FIREFOX_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0'
@@ -73,10 +77,13 @@ export function servePageConfig(settings: SettingsStore, currentUa: () => string
   ipcMain.on(PAGE_CONFIG_CHANNEL, (event) => {
     const ua = currentUa()
     const chromium = isChromiumUa(ua)
+    const { googleSignInCompat, widevine, widevinePrompt } = settings.get()
     const config: PageConfig = {
-      signInCompat: chromium && settings.get().googleSignInCompat,
+      signInCompat: chromium && googleSignInCompat,
       hideChromium: !chromium,
-      vendor: /Version\/[\d.]+ Safari\//.test(ua) ? 'Apple Computer, Inc.' : chromium ? 'Google Inc.' : ''
+      vendor: /Version\/[\d.]+ Safari\//.test(ua) ? 'Apple Computer, Inc.' : chromium ? 'Google Inc.' : '',
+      blockWidevine: !widevine,
+      askForWidevine: !widevine && widevinePrompt
     }
     event.returnValue = config
   })
