@@ -1520,3 +1520,125 @@
 .extensions-store:hover {
   text-decoration: underline;
 }
+
+/* ---- Space picker (space header chevron) ------------------------------------------- */
+
+.popover-spaces {
+  padding: 8px;
+  transform-origin: top left;
+}
+
+.spaces-picker .popover-title {
+  margin: 4px 6px 6px;
+}
+
+.spaces-picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.spaces-picker-row {
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--text);
+}
+
+.spaces-picker-row.selected {
+  background: var(--element);
+}
+
+.spaces-picker-icon {
+  width: 20px;
+  flex: none;
+  text-align: center;
+  font-size: 15px;
+}
+
+.spaces-picker-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spaces-picker-row.active .spaces-picker-name {
+  font-weight: 600;
+}
+
+.spaces-picker-audio {
+  flex: none;
+  display: grid;
+  color: var(--accent);
+}
+
+.spaces-picker-audio .equalizer {
+  width: 10px;
+  height: 9px;
+}
+
+.spaces-picker-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.spaces-picker-meta kbd {
+  font: inherit;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.spaces-picker-row.selected .spaces-picker-meta kbd {
+  opacity: 1;
+}
+
+.spaces-picker-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--element);
+  font-weight: 600;
+}
+
+.spaces-picker-check {
+  width: 14px;
+  flex: none;
+  display: grid;
+  color: var(--accent);
+}
+
+.spaces-picker-new {
+  width: 100%;
+  height: 34px;
+  margin-top: 6px;
+  padding: 0 8px;
+  border-top: 1px solid var(--separator);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.spaces-picker-new:hover {
+  color: var(--text);
+}
+
+.spaces-picker-new svg {
+  width: 20px;
+}

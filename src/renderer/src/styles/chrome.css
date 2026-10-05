@@ -498,8 +498,40 @@ button.site-button:active {
   transform: rotate(-90deg);
 }
 
-.space-name {
+.space-title {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* The space picker chevron, shown while the header is hovered. */
+.space-picker-button {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    background-color 0.1s ease;
+}
+
+.space-header:hover .space-picker-button {
+  opacity: 1;
+}
+
+.space-picker-button:hover {
+  background: var(--press);
+  color: var(--text);
+}
+
+.space-name {
+  flex: 0 1 auto;
   min-width: 0;
   font-weight: 600;
   color: var(--text);

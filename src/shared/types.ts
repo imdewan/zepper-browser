@@ -194,6 +194,7 @@ export type PopoverSpec =
   | { kind: 'siteInfo'; anchor: Rect; info: SiteInfo }
   | { kind: 'permission'; anchor: Rect; prompt: PermissionPrompt }
   | { kind: 'extensions'; anchor: Rect }
+  | { kind: 'spaces'; anchor: Rect }
 
 export interface FindResult {
   active: number

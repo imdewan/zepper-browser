@@ -65,7 +65,7 @@ export interface PipHost {
   widthFraction(): number
   /** The page asked to go back to its tab. */
   onBack(tabId: string): void
-  /** The player was closed (window closed or close button). */
+  /** The player window was closed from outside (not via exit()). */
   onClosed(tabId: string): void
 }
 

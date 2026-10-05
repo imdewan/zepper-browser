@@ -382,7 +382,7 @@ export class Browser {
       load,
       widthFraction: () => PIP_WIDTH[this.settings.pipSize] ?? PIP_WIDTH.medium,
       onBack: (tabId) => this.pipBack(tabId),
-      onClosed: (tabId) => this.pauseTab(tabId)
+      onClosed: () => this.broadcast()
     })
 
     this.overlay.webContents.once('did-finish-load', () => {
@@ -691,13 +691,10 @@ export class Browser {
         if (id) this.pipBack(id)
         return
       }
-      case 'pip.close': {
-        const id = this.pip.activeTabId
-        if (!id) return
-        this.pauseTab(id)
+      case 'pip.close':
+        // The video goes back to its tab and keeps playing there.
         this.pip.exit()
-        return
-      }
+        return this.broadcast()
       case 'media.dismiss': {
         const tab = this.tab(command.tabId)
         if (tab) tab.media = null

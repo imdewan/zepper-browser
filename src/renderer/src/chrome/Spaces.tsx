@@ -389,15 +389,29 @@ function SpaceHeader({ space, hasPinned, renaming, onRenameDone, onStartRename }
           onBlur={(e) => commitRename(e.currentTarget.value)}
         />
       ) : (
-        <span
-          className="space-name"
-          onDoubleClick={(e) => {
-            e.stopPropagation()
-            window.clearTimeout(clickTimer.current)
-            onStartRename()
-          }}
-        >
-          {space.name}
+        <span className="space-title">
+          <span
+            className="space-name"
+            onDoubleClick={(e) => {
+              e.stopPropagation()
+              window.clearTimeout(clickTimer.current)
+              onStartRename()
+            }}
+          >
+            {space.name}
+          </span>
+          <button
+            className="space-picker-button"
+            title="Switch space"
+            onClick={(e) => {
+              e.stopPropagation()
+              window.clearTimeout(clickTimer.current)
+              if (ref.current) zepper.send({ type: 'ui.openPopover', popover: { kind: 'spaces', anchor: rectOf(ref.current) } })
+            }}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
+            <IconChevronDown size={12} />
+          </button>
         </span>
       )}
       <button

@@ -73,7 +73,7 @@ export function PipControls(): React.JSX.Element {
       <button className="pip-button back" title="Back to tab" onClick={() => zepper.send({ type: 'pip.back' })}>
         <IconPopIn size={16} />
       </button>
-      <button className="pip-button close" title="Close" onClick={() => zepper.send({ type: 'pip.close' })}>
+      <button className="pip-button close" title="Close (keeps playing in its tab)" onClick={() => zepper.send({ type: 'pip.close' })}>
         <IconClose size={14} />
       </button>
       <div className="pip-center">

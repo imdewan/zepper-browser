@@ -137,6 +137,7 @@ export function Overlay(): React.JSX.Element | null {
             key="popover"
             popover={popover}
             space={popoverSpace}
+            snapshot={snapshot}
             pinnedExtensions={snapshot?.settings.pinnedExtensions ?? []}
             onClose={closePopover}
           />

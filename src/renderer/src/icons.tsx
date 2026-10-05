@@ -43,6 +43,11 @@ export const IconSidebar = (p: IconProps): React.JSX.Element => (
     <path d="M9 4v16" />
   </Icon>
 )
+export const IconCheck = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </Icon>
+)
 export const IconPuzzle = (p: IconProps): React.JSX.Element => (
   <Icon {...p}>
     <path d="M10 4.5a2 2 0 1 1 4 0V6h3a1 1 0 0 1 1 1v3h-1.5a2 2 0 1 0 0 4H18v3a1 1 0 0 1-1 1h-3v-1.5a2 2 0 1 0-4 0V18H7a1 1 0 0 1-1-1v-3h1.5a2 2 0 1 0 0-4H6V7a1 1 0 0 1 1-1h3z" />

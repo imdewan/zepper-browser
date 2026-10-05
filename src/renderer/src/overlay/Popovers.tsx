@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { motion } from 'motion/react'
-import type { PopoverSpec, Space } from '@shared/types'
+import type { PopoverSpec, Snapshot, Space } from '@shared/types'
 import { zepper } from '../bridge'
 import { SPACE_EMOJI } from '../emoji'
 import { GradientEditor } from '../GradientEditor'
@@ -8,16 +8,18 @@ import { IconClose } from '../icons'
 import { cx } from '../util'
 import { ExtensionsPanel } from './ExtensionsPanel'
 import { PermissionPanel, SiteInfoPanel } from './SiteInfo'
+import { SpacesPicker } from './SpacesPicker'
 
 interface PopoverProps {
   popover: PopoverSpec
   space: Space | undefined
+  snapshot: Snapshot | null
   pinnedExtensions: string[]
   onClose: () => void
 }
 
 /** Anchored popovers drawn above web content: the space icon and theme pickers. */
-export function Popover({ popover, space, pinnedExtensions, onClose }: PopoverProps): React.JSX.Element | null {
+export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }: PopoverProps): React.JSX.Element | null {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -33,7 +35,8 @@ export function Popover({ popover, space, pinnedExtensions, onClose }: PopoverPr
   // and site panels drop down from their anchor.
   const beside = needsSpace
   const above = popover.kind === 'extensions'
-  const width = popover.kind === 'siteInfo' ? 340 : popover.kind === 'theme' ? 352 : 300
+  const width =
+    popover.kind === 'siteInfo' ? 340 : popover.kind === 'theme' ? 352 : popover.kind === 'spaces' ? Math.max(250, anchor.width) : 300
   const left = beside
     ? Math.min(anchor.x + anchor.width + 12, window.innerWidth - width - 12)
     : Math.min(Math.max(12, above ? anchor.x - 6 : anchor.x), window.innerWidth - width - 12)
@@ -58,7 +61,7 @@ export function Popover({ popover, space, pinnedExtensions, onClose }: PopoverPr
         exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.12 } }}
         transition={{ type: 'spring', bounce: 0.15, duration: 0.3 }}
       >
-        {popover.kind !== 'permission' && (
+        {popover.kind !== 'permission' && popover.kind !== 'spaces' && (
           <button className="popover-close" title="Close (Esc)" onClick={onClose}>
             <IconClose size={13} />
           </button>
@@ -84,6 +87,7 @@ export function Popover({ popover, space, pinnedExtensions, onClose }: PopoverPr
         {popover.kind === 'siteInfo' && <SiteInfoPanel info={popover.info} onClose={onClose} />}
         {popover.kind === 'permission' && <PermissionPanel prompt={popover.prompt} onDone={onClose} />}
         {popover.kind === 'extensions' && <ExtensionsPanel pinned={pinnedExtensions} anchor={anchor} onClose={onClose} />}
+        {popover.kind === 'spaces' && snapshot && <SpacesPicker snapshot={snapshot} onClose={onClose} />}
       </motion.div>
     </div>
   )
