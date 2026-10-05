@@ -11,6 +11,20 @@ npm run dev
 
 `npm run typecheck` type-checks main, preload and renderers. `npm run dist` builds a macOS app.
 
+## Protected video (Widevine)
+
+Zepper runs on [castLabs' Electron for Content Security](https://github.com/castlabs/electron-releases), which adds Google Widevine. It's off until you turn it on (Settings → Media, or the prompt a site like Netflix triggers); installing it restarts Zepper once.
+
+Streaming services also require the app to be **VMP-signed** with a production certificate from castLabs' free EVS service; the castLabs build only carries a development one. One-time setup:
+
+```bash
+python3 -m venv .evs && .evs/bin/pip install castlabs-evs
+npm run vmp:signup     # create your EVS account (asks for email, name, password; emails a code)
+npm run vmp:sign       # sign the development runtime in node_modules/electron/dist
+```
+
+Re-run `npm run vmp:sign` after reinstalling Electron, and `npm run vmp:login` when the login expires. `npm run dist` signs the packaged app automatically (`scripts/vmp-sign.cjs`, before Apple code signing). `npm run vmp:verify` shows which certificate the runtime has.
+
 ## Layout
 
 | Path | What it is |

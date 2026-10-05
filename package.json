@@ -11,7 +11,11 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "dist": "electron-vite build && electron-builder --mac"
+    "dist": "electron-vite build && electron-builder --mac",
+    "vmp:signup": ".evs/bin/python -m castlabs_evs.account signup",
+    "vmp:login": ".evs/bin/python -m castlabs_evs.account reauth",
+    "vmp:sign": ".evs/bin/python -m castlabs_evs.vmp sign-pkg node_modules/electron/dist",
+    "vmp:verify": ".evs/bin/python -m castlabs_evs.vmp verify-pkg node_modules/electron/dist"
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "^2.18.2",
@@ -42,6 +46,7 @@
     "appId": "app.zepper.browser",
     "productName": "Zepper",
     "electronDist": "node_modules/electron/dist",
+    "afterPack": "scripts/vmp-sign.cjs",
     "directories": {
       "buildResources": "build",
       "output": "dist"
