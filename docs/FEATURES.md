@@ -9,7 +9,8 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - Address pill with the site's lock (certificate, permissions, cookies, per-site ad blocking) and a copy button on hover
 - Bottom bar: settings, space switcher (with a "+" for new spaces), downloads with a progress ring
 - Compact mode (⌘S): the sidebar hides and floats back in when you reach the window edge
-- The main window remembers its size and position; new windows open at your window's size
+- The main window remembers its size and position
+- New windows (⌘N) open on the space you're in, with no tabs, at your window's size
 
 ## Spaces
 

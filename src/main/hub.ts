@@ -118,6 +118,8 @@ export class Hub {
 
   /** Opens a window; with a URL it starts on that page instead of the command bar. */
   openWindow(kind: BrowserKind, url?: string): Browser {
+    // With the main window closed, ⌘N brings it back (your spaces and tabs) rather than a blank one.
+    if (kind === 'blank' && !this.main) kind = 'main'
     const ses = kind === 'private' ? session.fromPartition(`zepper-private-${++this.privateCount}`) : session.defaultSession
     this.attachSession(ses)
     // A new window opens on the space you're in, at your window's size.
@@ -134,10 +136,9 @@ export class Hub {
 
   windowClosed(browser: Browser): void {
     this.browsers.delete(browser)
-    if (browser === this.main) {
-      this.main = null
-      app.quit()
-    }
+    // Other windows stay open when the main one closes (it has saved its spaces and tabs);
+    // Zepper quits with the last window.
+    if (browser === this.main) this.main = null
   }
 
   /** The window that owns a WebContents: its chrome, overlay, player controls or one of its tabs. */

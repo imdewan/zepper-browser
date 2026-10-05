@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import type { Suggestion } from '@shared/types'
 import { zepper } from '../bridge'
 import { Favicon } from '../Favicon'
-import { IconArrowRight, IconClock, IconGlobe, IconSearch } from '../icons'
+import { IconArrowRight, IconClock, IconClose, IconGlobe, IconSearch } from '../icons'
 import { cx, hostOf } from '../util'
 
 /** Typed text survives closing the palette for 45 seconds. */
@@ -124,6 +124,9 @@ export function Palette({ mode, currentUrl, onClose, insetLeft = 0, insetRight =
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
           />
+          <button className="palette-close" title="Close (Esc)" onMouseDown={(e) => e.preventDefault()} onClick={close}>
+            <IconClose size={14} />
+          </button>
         </div>
         {results.length > 0 && (
           <div className="palette-results" ref={list}>

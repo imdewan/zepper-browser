@@ -3,20 +3,46 @@ import type { Harmony, SpaceTheme } from './types'
 export const DEFAULT_THEME: SpaceTheme = { colors: [], opacity: 0.5, texture: 0 }
 
 /** Curated gradient presets, offered when creating or editing a space. */
-export const THEME_PRESETS: SpaceTheme[] = [
-  { colors: [], opacity: 0.5, texture: 0 },
-  { colors: ['#f4efdf'], opacity: 0.5, texture: 0 },
-  { colors: ['#f0b8cd', '#e9c3e3'], opacity: 0.55, texture: 0 },
-  { colors: ['#da7682', '#eb8570', '#dcce7f'], opacity: 0.55, texture: 0.15 },
-  { colors: ['#5becad', '#7cc6e8'], opacity: 0.5, texture: 0 },
-  { colors: ['#919bb5', '#c3b6e8', '#e8d3c3'], opacity: 0.55, texture: 0.1 },
-  { colors: ['#7b6cf6', '#c06cf6', '#f66cb4'], opacity: 0.6, texture: 0.15 },
-  { colors: ['#2d6cdf', '#1fb6c9'], opacity: 0.6, texture: 0 },
-  { colors: ['#3a7d44', '#9bc53d'], opacity: 0.55, texture: 0.1 },
-  { colors: ['#e07a2d', '#f2b134'], opacity: 0.55, texture: 0 },
-  { colors: ['#5b2a86', '#1b1f3b'], opacity: 0.7, texture: 0.2 },
-  { colors: ['#1d1d1f', '#3a3a3c'], opacity: 0.75, texture: 0.25 }
+export const THEME_PRESET_GROUPS: { label: string; presets: SpaceTheme[] }[] = [
+  {
+    // Quiet, low-saturation tones that sit back behind your tabs.
+    label: 'Subtle',
+    presets: [
+      { colors: [], opacity: 0.5, texture: 0 },
+      { colors: ['#c8d4e3', '#e2e7ee'], opacity: 0.7, texture: 0 },
+      { colors: ['#a9bccb', '#c9d6df', '#e4e9ed'], opacity: 0.65, texture: 0.05 },
+      { colors: ['#bcd9df', '#d8e2f0'], opacity: 0.65, texture: 0 },
+      { colors: ['#b8cbb9', '#d7e1d3'], opacity: 0.7, texture: 0.05 },
+      { colors: ['#e2d3be', '#efe7da'], opacity: 0.7, texture: 0.05 },
+      { colors: ['#c9c3e4', '#dddaef'], opacity: 0.7, texture: 0 },
+      { colors: ['#c4bfdc', '#e2cdd3', '#f0dfd0'], opacity: 0.65, texture: 0.05 },
+      { colors: ['#e5cad0', '#f0dfe1'], opacity: 0.7, texture: 0 },
+      { colors: ['#3b4252', '#4c566a'], opacity: 0.75, texture: 0.1 },
+      { colors: ['#1f2a3c', '#34445c'], opacity: 0.75, texture: 0.1 },
+      { colors: ['#22332c', '#365246'], opacity: 0.75, texture: 0.1 }
+    ]
+  },
+  {
+    label: 'Vivid',
+    presets: [
+      { colors: ['#f4efdf'], opacity: 0.5, texture: 0 },
+      { colors: ['#f0b8cd', '#e9c3e3'], opacity: 0.55, texture: 0 },
+      { colors: ['#da7682', '#eb8570', '#dcce7f'], opacity: 0.55, texture: 0.15 },
+      { colors: ['#5becad', '#7cc6e8'], opacity: 0.5, texture: 0 },
+      { colors: ['#919bb5', '#c3b6e8', '#e8d3c3'], opacity: 0.55, texture: 0.1 },
+      { colors: ['#7b6cf6', '#c06cf6', '#f66cb4'], opacity: 0.6, texture: 0.15 },
+      { colors: ['#2d6cdf', '#1fb6c9'], opacity: 0.6, texture: 0 },
+      { colors: ['#3fb6a8', '#4f7fe0', '#8a5cf0'], opacity: 0.6, texture: 0.1 },
+      { colors: ['#3a7d44', '#9bc53d'], opacity: 0.55, texture: 0.1 },
+      { colors: ['#e07a2d', '#f2b134'], opacity: 0.55, texture: 0 },
+      { colors: ['#ff8a5c', '#ff5f8f', '#ffb86b'], opacity: 0.55, texture: 0.1 },
+      { colors: ['#5b2a86', '#1b1f3b'], opacity: 0.7, texture: 0.2 },
+      { colors: ['#1d1d1f', '#3a3a3c'], opacity: 0.75, texture: 0.25 }
+    ]
+  }
 ]
+
+export const THEME_PRESETS: SpaceTheme[] = THEME_PRESET_GROUPS.flatMap((group) => group.presets)
 
 export function hexToRgb(hex: string): [number, number, number] {
   const value = hex.replace('#', '')

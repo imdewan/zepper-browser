@@ -41,7 +41,7 @@ The **main process owns all state**. Renderers never change it directly:
 ### Windows
 
 - **The main window** is persisted (`zepper-state.json`): spaces, tabs, folders, splits, sidebar width and window bounds.
-- **New windows** (⌘N) start from the current space: its look, sign-ins, Essentials and pinned tabs. They aren't saved.
+- **New windows** (⌘N) open on the current space (its look and sign-ins) with no tabs, at the size of the window you're in. They aren't saved. Closing the main window leaves other windows open; ⌘N then brings the main window back.
 - **Private windows** get an in-memory session that is cleared when the window closes.
 
 ### Sessions and profiles

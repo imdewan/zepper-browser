@@ -4,9 +4,16 @@ export function cx(...names: (string | false | null | undefined)[]): string {
   return names.filter(Boolean).join(' ')
 }
 
+/** A URL without its #fragment, normalised (so `https://a.com` and `https://a.com/` match). */
 export function stripHash(url: string): string {
-  const i = url.indexOf('#')
-  return i === -1 ? url : url.slice(0, i)
+  try {
+    const parsed = new URL(url)
+    parsed.hash = ''
+    return parsed.href
+  } catch {
+    const i = url.indexOf('#')
+    return i === -1 ? url : url.slice(0, i)
+  }
 }
 
 export function hostOf(url: string): string {

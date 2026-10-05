@@ -237,16 +237,14 @@ function makeSpace(name: string, icon: string, theme: SpaceTheme = DEFAULT_THEME
 export type BrowserKind = 'main' | 'blank' | 'private'
 
 /**
- * What a new window starts from: the window you were in's current space (its look,
- * sign-ins, Essentials and pinned tabs, unloaded), its size, and a fresh set of normal tabs.
+ * What a new window starts from: the size and sidebar of the window you were in and,
+ * optionally, its current space (name, look and sign-ins) with no tabs.
  */
 export interface WindowSeed {
   bounds: Rectangle
   sidebarWidth: number
   compact: boolean
   space?: Space
-  tabs?: Tab[]
-  folders?: Folder[]
 }
 
 export class Browser {
@@ -363,12 +361,10 @@ export class Browser {
       this.compact = false
     } else if (kind === 'blank' && seed?.space) {
       this.spaces = [seed.space]
-      this.tabs = seed.tabs ?? []
-      this.folders = seed.folders ?? []
+      this.tabs = []
       this.activeSpaceId = seed.space.id
       this.sidebarWidth = seed.sidebarWidth
       this.compact = seed.compact
-      this.normalizePinned()
     } else if (kind === 'blank') {
       const space = makeSpace('New Window', '🪟', DEFAULT_THEME, DEFAULT_PROFILE)
       this.spaces = [space]
@@ -776,18 +772,8 @@ export class Browser {
     const base = { bounds, sidebarWidth: this.sidebarWidth, compact: this.compact }
     const current = this.space(this.activeSpaceId)
     if (!includeSpace || !current) return base
-    // Fresh ids: the new window's copies are its own (they load when you open them).
-    const ids = new Map<string, string>()
-    const idFor = (id: string): string => ids.get(id) ?? (ids.set(id, randomUUID()), ids.get(id)!)
-    const copyTab = (t: Tab): Tab => makeTab({ ...t, id: idFor(t.id), loaded: false, loading: false, audible: false, media: null })
-    const ours = this.folders.filter((f) => f.spaceId === current.id)
-    const space: Space = { ...current, id: idFor(current.id), lastTabId: null, pinnedItems: current.pinnedItems.map(idFor) }
-    const folders = ours.map((f) => ({ ...f, id: idFor(f.id), spaceId: space.id, items: f.items.map(idFor) }))
-    const tabs = [
-      ...this.tabs.filter((t) => t.kind === 'essential').map(copyTab),
-      ...this.tabs.filter((t) => t.kind === 'pinned' && t.spaceId === current.id).map((t) => ({ ...copyTab(t), spaceId: space.id }))
-    ]
-    return { ...base, space, tabs, folders }
+    // The same space in a window of its own: its look and sign-ins, but none of its tabs.
+    return { ...base, space: { ...current, id: randomUUID(), lastTabId: null, pinnedItems: [], collapsedPins: false } }
   }
 
   window(): BrowserWindow {
@@ -2090,7 +2076,13 @@ export class Browser {
       if (this.tab(tabId)?.media) void this.refreshMedia(tabId, wc)
       if (this.kind !== 'private') this.history.updateTitle(wc.getURL(), title)
     })
-    wc.on('page-favicon-updated', (_event, favicons) => update({ favicon: favicons[0] ?? null }))
+    wc.on('page-favicon-updated', (_event, favicons) => {
+      const favicon = favicons[0] ?? null
+      // A pinned tab pinned before its page loaded learns its icon once it's on its pinned page.
+      const tab = this.tab(tabId)
+      if (favicon && tab?.pinned && !tab.pinned.favicon && stripHash(tab.url) === stripHash(tab.pinned.url)) tab.pinned.favicon = favicon
+      update({ favicon })
+    })
     wc.on('did-navigate', (_event, url) => {
       const failed = this.errorPages.get(url)
       if (failed) {

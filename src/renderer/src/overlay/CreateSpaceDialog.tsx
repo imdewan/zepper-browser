@@ -3,6 +3,7 @@ import { motion } from 'motion/react'
 import { DEFAULT_THEME, prefersDarkUi, themeBackground } from '@shared/theme'
 import type { ProfileChoice, Space, SpaceTheme } from '@shared/types'
 import { zepper } from '../bridge'
+import { IconClose } from '../icons'
 import { SPACE_EMOJI } from '../emoji'
 import { GradientEditor } from '../GradientEditor'
 import { cx } from '../util'
@@ -62,6 +63,9 @@ export function CreateSpaceDialog({ systemDark, spaces, activeSpaceId, onClose }
           create()
         }}
       >
+        <button type="button" className="settings-close" title="Close (Esc)" onClick={onClose}>
+          <IconClose size={14} />
+        </button>
         <div className="create-left">
           <h1>Create a Space</h1>
           <p className="create-sub">Each space keeps its own tabs, pinned sites, theme and sign-ins.</p>

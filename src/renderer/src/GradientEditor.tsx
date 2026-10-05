@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   HARMONIES,
-  THEME_PRESETS,
+  THEME_PRESET_GROUPS,
   dotsForTheme,
   harmoniesFor,
   harmonyDots,
@@ -181,30 +181,36 @@ export function GradientEditor({ theme, onChange }: GradientEditorProps): React.
         />
       </label>
 
-      <div className="swatches">
-        {THEME_PRESETS.map((preset, i) => (
-          <button
-            key={i}
-            className={cx(
-              'swatch',
-              preset.colors.join() === local.colors.join() && 'selected',
-              preset.colors.length === 0 && 'swatch-default'
-            )}
-            style={{ background: preset.colors.length ? themeBackground({ ...preset, opacity: 1 }) : undefined }}
-            onClick={() => {
-              const presetDots = preset.colors.map(wheelPoint)
-              update({
-                ...local,
-                colors: preset.colors,
-                dots: presetDots,
-                harmony: harmoniesFor(Math.max(1, presetDots.length))[0],
-                opacity: preset.colors.length ? preset.opacity : local.opacity,
-                texture: preset.texture
-              })
-            }}
-          />
-        ))}
-      </div>
+      {THEME_PRESET_GROUPS.map((group) => (
+        <div key={group.label} className="swatch-group">
+          <div className="swatch-group-label">{group.label}</div>
+          <div className="swatches">
+            {group.presets.map((preset, i) => (
+              <button
+                key={i}
+                title={group.label}
+                className={cx(
+                  'swatch',
+                  preset.colors.join() === local.colors.join() && 'selected',
+                  preset.colors.length === 0 && 'swatch-default'
+                )}
+                style={{ background: preset.colors.length ? themeBackground({ ...preset, opacity: 1 }) : undefined }}
+                onClick={() => {
+                  const presetDots = preset.colors.map(wheelPoint)
+                  update({
+                    ...local,
+                    colors: preset.colors,
+                    dots: presetDots,
+                    harmony: harmoniesFor(Math.max(1, presetDots.length))[0],
+                    opacity: preset.colors.length ? preset.opacity : local.opacity,
+                    texture: preset.texture
+                  })
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

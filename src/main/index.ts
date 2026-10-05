@@ -11,6 +11,11 @@ app.setName('Zepper')
 
 // With Widevine off we disable castLabs' component updater, and its own background
 // install then rejects internally ("No component available"). That's expected.
+// Logged rather than shown as Electron's "A JavaScript error occurred" dialog; Zepper keeps running.
+process.on('uncaughtException', (error) => {
+  console.error('[zepper] Uncaught error in the main process:', error)
+})
+
 process.on('unhandledRejection', (reason) => {
   if (reason instanceof Error && reason.message === 'No component available') return
   console.error('Unhandled promise rejection:', reason)

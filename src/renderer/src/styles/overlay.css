@@ -1124,6 +1124,7 @@
 /* ---- Create a Space dialog ------------------------------------------------------ */
 
 .create-dialog {
+  position: relative;
   width: min(760px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
   display: flex;
@@ -1348,8 +1349,30 @@
 
 /* Leave room for the close button next to headers. */
 .site-header,
-.popover-title {
+.popover-title,
+.permission-title,
+.js-dialog-title,
+.auth-header {
   padding-right: 30px;
+}
+
+.palette-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-right: -8px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease;
+}
+
+.palette-close:hover {
+  background: var(--hover);
+  color: var(--text);
 }
 
 .cert-header {

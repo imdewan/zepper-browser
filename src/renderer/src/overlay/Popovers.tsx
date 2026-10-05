@@ -73,8 +73,16 @@ export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }:
         exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.12 } }}
         transition={{ type: 'spring', bounce: 0.15, duration: 0.3 }}
       >
-        {popover.kind !== 'permission' && popover.kind !== 'spaces' && popover.kind !== 'widevine' && !modal && (
-          <button className="popover-close" title="Close (Esc)" onClick={onClose}>
+        {!modal && (
+          <button
+            className="popover-close"
+            title={popover.kind === 'permission' ? 'Not now' : 'Close (Esc)'}
+            onClick={() => {
+              // Closing the Widevine prompt means "not now" (it may ask again later).
+              if (popover.kind === 'widevine') zepper.send({ type: 'widevine.respond', host: popover.host, choice: 'later' })
+              onClose()
+            }}
+          >
             <IconClose size={13} />
           </button>
         )}

@@ -257,7 +257,10 @@ export function SettingsPanel({ settings, widevine, tidy, onClose }: SettingsPan
                 >
                   <Toggle checked={settings.showTidy} onChange={(showTidy) => set({ showTidy })} />
                 </Row>
-                <Row label="New windows open" hint="⌘N. On this space brings its Essentials and pinned tabs along.">
+                <Row
+                  label="New windows open"
+                  hint="⌘N. On this space: the same space and sign-ins in a window of its own, without its tabs."
+                >
                   <Segmented
                     value={settings.newWindowSpace}
                     options={[

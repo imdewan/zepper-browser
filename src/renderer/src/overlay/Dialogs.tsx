@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AuthSpec, JsDialogSpec } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconLock } from '../icons'
+import { IconClose, IconLock } from '../icons'
 
 /** A page's alert(), confirm() or prompt(): "example.com says…", like Chrome. Return answers, Esc cancels. */
 export function JsDialog({ dialog, onDone }: { dialog: JsDialogSpec; onDone: () => void }): React.JSX.Element {
@@ -40,6 +40,9 @@ export function JsDialog({ dialog, onDone }: { dialog: JsDialogSpec; onDone: () 
 
   return (
     <div className="js-dialog">
+      <button className="popover-close" title={dialog.kind === 'alert' ? 'Close' : 'Cancel'} onClick={() => respond(false)}>
+        <IconClose size={13} />
+      </button>
       <div className="js-dialog-title">{dialog.embedded ? `An embedded page at ${dialog.host} says` : `${dialog.host} says`}</div>
       {dialog.message && <div className="js-dialog-message">{dialog.message}</div>}
       {dialog.kind === 'prompt' && (
@@ -94,6 +97,9 @@ export function AuthDialog({ auth, onDone }: { auth: AuthSpec; onDone: () => voi
         respond(true)
       }}
     >
+      <button type="button" className="popover-close" title="Cancel" onClick={() => respond(false)}>
+        <IconClose size={13} />
+      </button>
       <div className="auth-header">
         <IconLock size={15} />
         <span>Sign in</span>
