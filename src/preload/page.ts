@@ -26,6 +26,12 @@ interface PageConfig {
   vendor: string
   blockWidevine: boolean
   askForWidevine: boolean
+  globalPrivacyControl: boolean
+}
+
+/** Global Privacy Control's JavaScript signal (runs in the page's world). */
+function privacyControlShim(): void {
+  Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: () => true, configurable: true, enumerable: true })
 }
 
 const DRM_NEEDED_CHANNEL = 'zepper:drm-needed'
@@ -133,6 +139,7 @@ function applyCompat(): void {
   try {
     const config = ipcRenderer.sendSync(PAGE_CONFIG_CHANNEL) as PageConfig
     if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
+    if (config.globalPrivacyControl) contextBridge.executeInMainWorld({ func: privacyControlShim })
     if (config.signInCompat && location.hostname === 'accounts.google.com') contextBridge.executeInMainWorld({ func: signInPageShim })
     if (config.blockWidevine) {
       contextBridge.executeInMainWorld({ func: widevineShim, args: [DRM_NEEDED_EVENT] })

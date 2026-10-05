@@ -67,8 +67,8 @@ export function SpacesPicker({ snapshot, onClose }: { snapshot: Snapshot; onClos
       <button
         className="spaces-picker-new"
         onClick={() => {
+          // The Create Space dialog replaces the picker (closing it would hand focus back to the page).
           zepper.send({ type: 'ui.createSpace' })
-          onClose()
         }}
       >
         <IconPlus size={14} />

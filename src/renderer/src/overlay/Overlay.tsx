@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
+import { SEARCH_ENGINES } from '@shared/settings'
 import { prefersDarkUi, themeAccent } from '@shared/theme'
 import type { AboutInfo, FindResult, OverlayMode, PopoverSpec, ToastSpec, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
@@ -15,6 +16,7 @@ import { DownloadsPanel } from './DownloadsPanel'
 import { HistoryPanel } from './HistoryPanel'
 import { Popover } from './Popovers'
 import { Toasts } from './Toasts'
+import { cx, setViewOffsetX } from '../util'
 
 /**
  * The transparent view stacked above web content. It tells the main process
@@ -54,23 +56,35 @@ export function Overlay(): React.JSX.Element | null {
       } else if (event.type === 'settings.open') {
         setPalette(null)
         setPopover(null)
+        setHistoryOpen(false)
+        setDownloadsOpen(false)
+        setAbout(null)
         setSettingsOpen(true)
       } else if (event.type === 'space.startCreate') {
         setPalette(null)
         setPopover(null)
         setCreatingSpace(true)
       } else if (event.type === 'downloads.open') {
+        // One panel at a time: a new one replaces whatever was open.
         setPalette(null)
         setPopover(null)
+        setSettingsOpen(false)
+        setHistoryOpen(false)
+        setAbout(null)
         setDownloadsOpen(true)
       } else if (event.type === 'about.open') {
         setPalette(null)
         setPopover(null)
+        setSettingsOpen(false)
+        setHistoryOpen(false)
+        setDownloadsOpen(false)
         setAbout(event.info)
       } else if (event.type === 'history.open') {
         setPalette(null)
         setPopover(null)
         setSettingsOpen(false)
+        setDownloadsOpen(false)
+        setAbout(null)
         setHistoryOpen(true)
       } else if (event.type === 'peek.show') {
         setPeek('shown')
@@ -90,6 +104,12 @@ export function Overlay(): React.JSX.Element | null {
 
   const wantsFull =
     palette !== null || popover !== null || settingsOpen || historyOpen || downloadsOpen || about !== null || creatingSpace || exiting
+  // During a right-hand peek this view sits at the window's right edge; rects sent to main are in window coordinates.
+  const peekOffset =
+    peek === 'shown' && !wantsFull && snapshot?.settings.sidebarPosition === 'right'
+      ? snapshot.windowSize.width - (snapshot.sidebarWidth + 24)
+      : 0
+  useEffect(() => setViewOffsetX(peekOffset), [peekOffset])
   const mode: OverlayMode = wantsFull ? 'full' : peek ? 'peek' : toasts.length > 0 || find ? 'corner' : 'hidden'
   useEffect(() => {
     if (lastMode.current === mode) return
@@ -168,6 +188,7 @@ export function Overlay(): React.JSX.Element | null {
             settings={snapshot.settings}
             widevine={snapshot.widevine}
             tidy={snapshot.tidy}
+            defaultBrowser={snapshot.defaultBrowser}
             onClose={closeSettings}
           />
         )}
@@ -180,6 +201,7 @@ export function Overlay(): React.JSX.Element | null {
             systemDark={systemDark}
             spaces={snapshot.spaces}
             activeSpaceId={snapshot.activeSpaceId}
+            windowKind={snapshot.kind}
             onClose={closeCreate}
           />
         )}
@@ -188,6 +210,7 @@ export function Overlay(): React.JSX.Element | null {
             key={palette.key}
             mode={palette.mode}
             currentUrl={palette.currentUrl}
+            engineName={SEARCH_ENGINES[snapshot.settings.searchEngine].name}
             onClose={closePalette}
             // Centred on the page area, not the whole window (the sidebar takes the rest).
             insetLeft={!snapshot.compact && snapshot.settings.sidebarPosition === 'left' ? snapshot.sidebarWidth : 0}
@@ -205,7 +228,7 @@ export function Overlay(): React.JSX.Element | null {
           />
         )}
       </AnimatePresence>
-      <div className="corner">
+      <div className={cx('corner', peek === 'shown' && !wantsFull && 'corner-in-peek')}>
         <AnimatePresence>{find && <FindBar key="find" result={find.result} focusKey={find.key} onClose={closeFind} />}</AnimatePresence>
         <Toasts toasts={toasts} onDismiss={(id) => setToasts((list) => list.filter((t) => t.id !== id))} />
       </div>

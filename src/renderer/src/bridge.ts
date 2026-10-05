@@ -136,6 +136,7 @@ function createMock(): ZepperApi {
     paletteOpen: false,
     folders: [],
     tidy: { kind: 'ai' },
+    defaultBrowser: false,
     windowSize: { width: window.innerWidth, height: window.innerHeight },
     splits: [],
     panes: []

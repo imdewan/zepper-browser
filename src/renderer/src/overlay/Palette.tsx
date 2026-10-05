@@ -14,12 +14,14 @@ interface PaletteProps {
   mode: 'new' | 'current' | 'split'
   currentUrl: string | null
   onClose: () => void
+  /** The chosen search engine's name, for "Search with …". */
+  engineName: string
   /** Sidebar width on either side, so the bar centres on the page. */
   insetLeft?: number
   insetRight?: number
 }
 
-export function Palette({ mode, currentUrl, onClose, insetLeft = 0, insetRight = 0 }: PaletteProps): React.JSX.Element {
+export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, insetRight = 0 }: PaletteProps): React.JSX.Element {
   const [text, setText] = useState(() => currentUrl ?? (Date.now() - lastTyped.at < KEEP_TYPED_MS ? lastTyped.text : ''))
   // Suggestions arrive a little after typing; `query` says which text they belong to.
   const [{ query: resultsQuery, results }, setResults] = useState<{ query: string | null; results: Suggestion[] }>({
@@ -136,6 +138,7 @@ export function Palette({ mode, currentUrl, onClose, insetLeft = 0, insetRight =
                 mode={mode}
                 suggestion={suggestion}
                 selected={i === selected}
+                engineName={engineName}
                 onHover={() => setSelected(i)}
                 onChoose={() => choose(suggestion)}
               />
@@ -151,11 +154,12 @@ interface SuggestionRowProps {
   mode: 'new' | 'current' | 'split'
   suggestion: Suggestion
   selected: boolean
+  engineName: string
   onHover: () => void
   onChoose: () => void
 }
 
-function SuggestionRow({ mode, suggestion, selected, onHover, onChoose }: SuggestionRowProps): React.JSX.Element {
+function SuggestionRow({ mode, suggestion, selected, engineName, onHover, onChoose }: SuggestionRowProps): React.JSX.Element {
   let icon: React.JSX.Element
   let title: string
   let detail: string | null = null
@@ -181,7 +185,7 @@ function SuggestionRow({ mode, suggestion, selected, onHover, onChoose }: Sugges
     case 'search':
       icon = <IconSearch size={16} />
       title = suggestion.query
-      detail = suggestion.fromProvider ? null : 'Search with Google'
+      detail = suggestion.fromProvider ? null : `Search with ${engineName}`
       break
     case 'bang':
       icon = suggestion.domain ? <Favicon src={`https://${suggestion.domain}/favicon.ico`} size={16} /> : <IconSearch size={16} />

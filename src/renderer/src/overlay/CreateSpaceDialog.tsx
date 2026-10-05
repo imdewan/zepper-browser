@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { DEFAULT_THEME, prefersDarkUi, themeBackground } from '@shared/theme'
-import type { ProfileChoice, Space, SpaceTheme } from '@shared/types'
+import type { ProfileChoice, Snapshot, Space, SpaceTheme } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose } from '../icons'
 import { SPACE_EMOJI } from '../emoji'
@@ -13,11 +13,13 @@ interface CreateSpaceDialogProps {
   /** Existing spaces, to copy or share sign-ins from. */
   spaces: Space[]
   activeSpaceId: string
+  /** Only the main window offers separate sign-ins. */
+  windowKind: Snapshot['kind']
   onClose: () => void
 }
 
 /** Modal "Create a Space" sheet with a live preview of the new space's sidebar. */
-export function CreateSpaceDialog({ systemDark, spaces, activeSpaceId, onClose }: CreateSpaceDialogProps): React.JSX.Element {
+export function CreateSpaceDialog({ systemDark, spaces, activeSpaceId, windowKind, onClose }: CreateSpaceDialogProps): React.JSX.Element {
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('✨')
   const [theme, setTheme] = useState<SpaceTheme>(DEFAULT_THEME)
@@ -130,31 +132,41 @@ export function CreateSpaceDialog({ systemDark, spaces, activeSpaceId, onClose }
           )}
 
           <div className="create-section-title create-signins-title">Sign-ins &amp; site data</div>
-          <select className="create-select" value={signIns} onChange={(e) => setSignIns(e.target.value)}>
-            <option value="new">Start fresh</option>
-            <optgroup label="Copy sign-ins from (stays separate)">
-              {ordered.map((s) => (
-                <option key={`copy:${s.id}`} value={`copy:${s.id}`}>
-                  {s.icon} {s.name}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Share sign-ins with (always in sync)">
-              {ordered.map((s) => (
-                <option key={`share:${s.id}`} value={`share:${s.id}`}>
-                  {s.icon} {s.name}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-          <p className="create-note">
-            {signIns === 'new'
-              ? 'Its own cookies, logins and site data, like a new profile.'
-              : signIns.startsWith('copy:')
-                ? 'Starts signed in where that space is (cookies are copied), then stays separate.'
-                : 'Uses the same cookies, logins and site data as that space.'}{' '}
-            History is shared between spaces.
-          </p>
+          {windowKind !== 'main' ? (
+            <p className="create-note">
+              {windowKind === 'private'
+                ? 'This is a private window: nothing is kept after it closes.'
+                : 'Spaces made in this window use your main sign-ins. To give a space its own, create it in the main window.'}
+            </p>
+          ) : (
+            <>
+              <select className="create-select" value={signIns} onChange={(e) => setSignIns(e.target.value)}>
+                <option value="new">Start fresh</option>
+                <optgroup label="Copy sign-ins from (stays separate)">
+                  {ordered.map((s) => (
+                    <option key={`copy:${s.id}`} value={`copy:${s.id}`}>
+                      {s.icon} {s.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Share sign-ins with (always in sync)">
+                  {ordered.map((s) => (
+                    <option key={`share:${s.id}`} value={`share:${s.id}`}>
+                      {s.icon} {s.name}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              <p className="create-note">
+                {signIns === 'new'
+                  ? 'Its own cookies, logins and site data, like a new profile.'
+                  : signIns.startsWith('copy:')
+                    ? 'Starts signed in where that space is (cookies are copied), then stays separate.'
+                    : 'Uses the same cookies, logins and site data as that space.'}{' '}
+                History is shared between spaces.
+              </p>
+            </>
+          )}
 
           <div className="create-buttons">
             <button type="button" className="panel-button" onClick={onClose}>

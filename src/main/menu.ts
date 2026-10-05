@@ -1,4 +1,4 @@
-import { Menu, app, type MenuItemConstructorOptions } from 'electron'
+import { Menu, app, type BrowserWindow, type MenuItemConstructorOptions } from 'electron'
 import type { Browser } from './browser'
 import type { Hub } from './hub'
 
@@ -7,8 +7,13 @@ import type { Hub } from './hub'
  * accelerators fire even when a web page has focus.
  */
 export function buildMenu(hub: Hub): Menu {
-  /** Shortcuts act on whichever window is focused. */
-  const run = (fn: (browser: Browser) => void) => () => {
+  /**
+   * Shortcuts act on whichever window is focused. With a sign-in popup in front, page
+   * shortcuts (close, reload, zoom…) act on the popup instead, never on the window behind it.
+   */
+  const run = (fn: (browser: Browser) => void, onPopup?: (popup: BrowserWindow) => void) => (): void => {
+    const popup = hub.focusedForeignWindow()
+    if (popup) return onPopup?.(popup)
     const browser = hub.focused()
     if (browser) fn(browser)
   }
@@ -61,12 +66,43 @@ export function buildMenu(hub: Hub): Menu {
           accelerator: 'CmdOrCtrl+L',
           click: run((browser) => browser.handle({ type: 'ui.openPalette', mode: 'current' }))
         },
+        {
+          label: 'Open File…',
+          accelerator: 'CmdOrCtrl+O',
+          click: run((browser) => void browser.openFileDialog())
+        },
         { type: 'separator' },
-        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: run((browser) => browser.closeActive()) },
+        {
+          label: 'Close Tab',
+          accelerator: 'CmdOrCtrl+W',
+          click: run(
+            (browser) => browser.closeActive(),
+            (popup) => popup.close()
+          )
+        },
+        {
+          label: 'Close Window',
+          accelerator: 'CmdOrCtrl+Shift+W',
+          click: run(
+            (browser) => browser.window().close(),
+            (popup) => popup.close()
+          )
+        },
         {
           label: 'Reopen Closed Tab',
           accelerator: 'CmdOrCtrl+Shift+T',
           click: run((browser) => browser.handle({ type: 'tab.reopenClosed' }))
+        },
+        { type: 'separator' },
+        { label: 'Save Page As…', accelerator: 'CmdOrCtrl+Shift+S', click: run((browser) => void browser.savePageAs()) },
+        { label: 'Export as PDF…', click: run((browser) => void browser.exportPdf()) },
+        {
+          label: 'Print…',
+          accelerator: 'CmdOrCtrl+P',
+          click: run(
+            (browser) => browser.printActive(),
+            (popup) => popup.webContents.print({}, () => {})
+          )
         },
         { type: 'separator' },
         { label: 'Take Screenshot', accelerator: 'CmdOrCtrl+Shift+2', click: run((browser) => void browser.screenshot()) },
@@ -99,8 +135,22 @@ export function buildMenu(hub: Hub): Menu {
     {
       label: 'View',
       submenu: [
-        { label: 'Reload Page', accelerator: 'CmdOrCtrl+R', click: run((browser) => browser.reloadActive(false)) },
-        { label: 'Reload Ignoring Cache', accelerator: 'CmdOrCtrl+Shift+R', click: run((browser) => browser.reloadActive(true)) },
+        {
+          label: 'Reload Page',
+          accelerator: 'CmdOrCtrl+R',
+          click: run(
+            (browser) => browser.reloadActive(false),
+            (popup) => popup.webContents.reload()
+          )
+        },
+        {
+          label: 'Reload Ignoring Cache',
+          accelerator: 'CmdOrCtrl+Shift+R',
+          click: run(
+            (browser) => browser.reloadActive(true),
+            (popup) => popup.webContents.reloadIgnoringCache()
+          )
+        },
         { type: 'separator' },
         { label: 'Toggle Compact Mode', accelerator: 'CmdOrCtrl+S', click: run((browser) => browser.handle({ type: 'ui.toggleCompact' })) },
         { type: 'separator' },
@@ -109,7 +159,15 @@ export function buildMenu(hub: Hub): Menu {
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: run((browser) => browser.zoomActive(-1)) },
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: run((browser) => browser.zoomActive(0)) },
         { type: 'separator' },
-        { label: 'Developer Tools', accelerator: 'CmdOrCtrl+Alt+I', click: run((browser) => browser.toggleDevTools()) },
+        { label: 'View Page Source', accelerator: 'CmdOrCtrl+Alt+U', click: run((browser) => browser.viewSource()) },
+        {
+          label: 'Developer Tools',
+          accelerator: 'CmdOrCtrl+Alt+I',
+          click: run(
+            (browser) => browser.toggleDevTools(),
+            (popup) => popup.webContents.toggleDevTools()
+          )
+        },
         ...(isDev
           ? [
               {

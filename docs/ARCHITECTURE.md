@@ -88,6 +88,10 @@ Zepper uses castLabs' Electron build. Widevine is opt-in: while it's off, `compo
 - A second, isolated instance can run alongside your own: `ZEPPER_PROFILE=<folder> ZEPPER_DEBUG_PORT=9877 node_modules/.bin/electron .` (after `npm run build`). Stop it by the process listening on its port: `kill $(lsof -ti tcp:9877 -sTCP:LISTEN)`.
 - `npm run check` runs type checking, ESLint and Prettier; CI runs the same on every push.
 
+## Packaging
+
+`npm run dist` builds the app with electron-builder. Its `afterPack` hook (`scripts/after-pack.cjs`) flips Electron's fuses (no running as Node, no Node debugging flags, app code only from the integrity-checked asar, cookies encrypted on disk) and then VMP-signs, in that order, because the signature covers the framework binary the fuses change. Hardened-runtime entitlements (`build/entitlements.mac.plist`) allow JIT, the Widevine library, and the camera, microphone and location for sites you allow. The app registers for `http`/`https` links and web page files, so it can be the default browser.
+
 ## Licensing note
 
 `electron-chrome-extensions` is licensed under GPL-3.0 unless a commercial license is bought. `src/main/extensions.ts` uses it under GPL-3.0, which means Zepper's own source must be GPL-3.0-compatible if it's distributed.

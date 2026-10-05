@@ -17,6 +17,15 @@ export const PIP_WIDTH: Record<PipSize, number> = { small: 0.18, medium: 0.25, l
 
 export type SearchEngineId = 'google' | 'duckduckgo' | 'bing' | 'brave' | 'kagi' | 'ecosia' | 'perplexity'
 
+export type SecureDns = 'off' | 'automatic' | 'cloudflare' | 'quad9' | 'google'
+
+/** DNS-over-HTTPS endpoints for the providers offered in Settings. */
+export const SECURE_DNS_SERVERS = {
+  cloudflare: 'https://chrome.cloudflare-dns.com/dns-query',
+  quad9: 'https://dns.quad9.net/dns-query',
+  google: 'https://dns.google/dns-query{?dns}'
+} as const
+
 export interface Settings {
   // Appearance
   colorScheme: 'system' | 'light' | 'dark'
@@ -58,6 +67,8 @@ export interface Settings {
   // Windows and downloads
   /** ⌘N opens on the current space or an empty window. */
   newWindowSpace: 'current' | 'empty'
+  /** DNS over HTTPS: off, automatic (when your DNS provider supports it), or a provider. */
+  secureDns: SecureDns
   /** Where downloads are saved ('' means the Downloads folder). */
   downloadPath: string
   /** Ask where to save each download. */
@@ -113,6 +124,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bangs: true,
   paletteRecents: true,
   newWindowSpace: 'current',
+  secureDns: 'automatic',
   downloadPath: '',
   downloadAsk: false,
   swipeBetweenSpaces: true,

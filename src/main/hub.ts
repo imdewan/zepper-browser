@@ -1,4 +1,16 @@
-import { BrowserWindow, components, ipcMain, nativeTheme, session, app, webContents, type Session, type WebContents } from 'electron'
+import {
+  BrowserWindow,
+  components,
+  desktopCapturer,
+  dialog,
+  ipcMain,
+  nativeTheme,
+  session,
+  app,
+  webContents,
+  type Session,
+  type WebContents
+} from 'electron'
 import { join } from 'node:path'
 import { IPC, type Command, type WidevineStatus } from '@shared/types'
 import type { AdBlock } from './adblock'
@@ -8,6 +20,8 @@ import { bangs } from './bangs'
 import { Downloads } from './downloads'
 import { Extensions } from './extensions'
 import { tidyMode, type TidyMode } from './tidy'
+import { ZoomLevels } from './zoom'
+import { SECURE_DNS_SERVERS } from '@shared/settings'
 import type { History } from './history'
 import type { SettingsStore } from './settings-store'
 import { CertificateStore, SitePermissions } from './site'
@@ -34,6 +48,13 @@ export class Hub {
   readonly services: Services
   /** How Tidy works on this Mac (until checked: by site). */
   tidy: TidyMode = { kind: 'site', reason: 'Checking for Apple Intelligence…' }
+  /** Page zoom per site, shared by all windows. */
+  readonly zoom = new ZoomLevels()
+  /** Whether Zepper opens links from other apps (macOS default browser). */
+  defaultBrowser = false
+  /** Set when quitting on purpose (restart), so Zepper doesn't ask first. */
+  quitWithoutAsking = false
+  private secureDns: string | null = null
   /** Every download, shared by all windows. */
   readonly downloads = new Downloads(() => {
     for (const browser of this.browsers) browser.refresh()
@@ -87,6 +108,15 @@ export class Hub {
       browser.onLogin(wc ?? null, authInfo, callback)
     })
     servePageConfig(services.settings, () => this.userAgent)
+    // Client certificates: you choose which (if any) a site gets.
+    app.on('select-client-certificate', (event, wc, url, list, callback) => {
+      event.preventDefault()
+      const browser = this.owner(wc) ?? this.focused()
+      if (browser) void browser.selectClientCertificate(url, list, callback)
+      else callback()
+    })
+    app.on('browser-window-focus', () => this.refreshDefaultBrowser())
+    this.refreshDefaultBrowser()
 
     nativeTheme.on('updated', () => this.applyAppIcon())
     services.settings.onChange(() => {
@@ -123,9 +153,10 @@ export class Hub {
     const ses = kind === 'private' ? session.fromPartition(`zepper-private-${++this.privateCount}`) : session.defaultSession
     this.attachSession(ses)
     // A new window opens on the space you're in, at your window's size.
-    const from = kind === 'main' ? undefined : kind === 'blank' ? this.focusedNormal() : this.focused()
+    // Its size comes from the window you're in; its space only from a normal (not private) one.
+    const from = kind === 'main' ? undefined : this.focused()
     const seed: WindowSeed | undefined = from?.seedForNewWindow(
-      kind === 'blank' && this.services.settings.get().newWindowSpace === 'current'
+      kind === 'blank' && from.kind !== 'private' && this.services.settings.get().newWindowSpace === 'current'
     )
     const browser = new Browser(this, kind, ses, seed)
     this.browsers.add(browser)
@@ -174,6 +205,7 @@ export class Hub {
 
   persist(): void {
     this.main?.persistNow()
+    this.zoom.flush()
     this.downloads.flush()
     this.services.permissions.flush()
     this.services.settings.flush()
@@ -212,6 +244,91 @@ export class Hub {
       return browser ? browser.checkPermission(permission, requestingOrigin, details) : false
     })
     ses.on('will-download', (_event, item, wc) => (this.owner(wc) ?? this.focused())?.handleDownload(item))
+    // Screen sharing (getDisplayMedia): macOS's own picker, or a simple screen choice where it isn't available.
+    ses.setDisplayMediaRequestHandler(
+      (request, callback) => {
+        void desktopCapturer
+          .getSources({ types: ['screen'] })
+          .then(async (screens) => {
+            const host = (() => {
+              try {
+                return new URL(request.securityOrigin).host
+              } catch {
+                return 'This site'
+              }
+            })()
+            const win = BrowserWindow.getFocusedWindow()
+            const options = {
+              type: 'question' as const,
+              message: `${host} wants to share your screen`,
+              buttons: [
+                ...screens.map((s, i) => (screens.length === 1 ? 'Share Screen' : `Share ${s.name || `Screen ${i + 1}`}`)),
+                'Cancel'
+              ],
+              defaultId: 0,
+              cancelId: screens.length
+            }
+            const { response } = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options)
+            const source = screens[response]
+            callback(source ? { video: source } : {})
+          })
+          .catch(() => callback({}))
+      },
+      { useSystemPicker: true }
+    )
+  }
+
+  /** Opens a link or file from another app in the window you're using. */
+  openUrl(url: string): void {
+    this.focusedNormal().openFromOutside(url)
+  }
+
+  /** Windows whose tabs won't come back after quitting (everything but the main window). */
+  unrestoredWindows(): number {
+    return [...this.browsers].filter((b) => b !== this.main && b.tabCount() > 0).length
+  }
+
+  /** The focused window when it isn't one of Zepper's (a sign-in popup, say). */
+  focusedForeignWindow(): BrowserWindow | null {
+    const win = BrowserWindow.getFocusedWindow()
+    if (!win) return null
+    for (const browser of this.browsers) if (browser.window() === win) return null
+    return win
+  }
+
+  makeDefaultBrowser(): void {
+    app.setAsDefaultProtocolClient('http')
+    app.setAsDefaultProtocolClient('https')
+    // macOS asks you to confirm; check again once you have.
+    setTimeout(() => this.refreshDefaultBrowser(), 1000)
+  }
+
+  private refreshDefaultBrowser(): void {
+    const now = app.isDefaultProtocolClient('https')
+    if (now === this.defaultBrowser) return
+    this.defaultBrowser = now
+    for (const browser of this.browsers) browser.refresh()
+  }
+
+  /** Clears browsing data in every profile (normal windows; private ones forget everything anyway). */
+  async clearBrowsingData(what: { since: number; history: boolean; cookies: boolean; cache: boolean; downloads: boolean }): Promise<void> {
+    if (what.history) this.services.history.clearSince(what.since)
+    if (what.downloads) this.downloads.clear()
+    const sessions = [...this.sessions].filter((ses) => !this.isPrivateSession(ses))
+    for (const ses of sessions) {
+      if (what.cookies) {
+        await ses.clearStorageData().catch(() => {})
+        await ses.clearAuthCache().catch(() => {})
+      }
+      if (what.cache) {
+        await ses.clearCache().catch(() => {})
+        await ses.clearCodeCaches({}).catch(() => {})
+      }
+    }
+  }
+
+  private isPrivateSession(ses: Session): boolean {
+    return !ses.isPersistent()
   }
 
   /** Ad blocking switches and the browser identity, from settings. */
@@ -221,6 +338,7 @@ export class Hub {
     bangs.enabled = settings.bangs
     this.services.adblock.setEnabled(settings.adblock)
     this.services.adblock.setAllowlist(settings.adblockAllowlist)
+    this.applySecureDns(settings.secureDns)
 
     const ua = userAgentFor(settings, this.chromeUa)
     if (ua === this.userAgent) return
@@ -280,8 +398,23 @@ export class Hub {
     return !components.status()[components.WIDEVINE_CDM_ID]?.version
   }
 
+  /** DNS over HTTPS: off, upgrade when your DNS provider supports it, or always via a chosen provider. */
+  private applySecureDns(choice: string): void {
+    if (choice === this.secureDns) return
+    this.secureDns = choice
+    const servers = SECURE_DNS_SERVERS[choice as keyof typeof SECURE_DNS_SERVERS]
+    try {
+      if (choice === 'off') app.configureHostResolver({ secureDnsMode: 'off' })
+      else if (servers) app.configureHostResolver({ secureDnsMode: 'secure', secureDnsServers: [servers] })
+      else app.configureHostResolver({ secureDnsMode: 'automatic' })
+    } catch (error) {
+      console.warn('[dns] could not configure secure DNS', error)
+    }
+  }
+
   /** Restarts Zepper (tabs and spaces are restored). */
   relaunch(): void {
+    this.quitWithoutAsking = true
     // In development the renderer dev server goes away with this process; use the built UI.
     Reflect.deleteProperty(process.env, 'ELECTRON_RENDERER_URL')
     app.relaunch()

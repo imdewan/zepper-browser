@@ -151,6 +151,8 @@ export interface Snapshot {
   folders: Folder[]
   /** How Tidy groups tabs here: Apple Intelligence, or by site (with why). */
   tidy: { kind: 'ai' } | { kind: 'site'; reason: string }
+  /** Zepper opens links from other apps. */
+  defaultBrowser: boolean
   /** The command bar is open (the empty page steps back while it is). */
   paletteOpen: boolean
   /** Window content size, so floating UI can line up with the window's background. */
@@ -346,6 +348,9 @@ export type Command =
   | { type: 'site.setAdblock'; domain: string; enabled: boolean }
   | { type: 'widevine.respond'; host: string; choice: 'install' | 'later' | 'never' }
   | { type: 'app.relaunch' }
+  | { type: 'app.makeDefaultBrowser' }
+  /** Settings › Privacy › Clear browsing data. `since` (ms since epoch) applies to history. */
+  | { type: 'data.clear'; since: number; history: boolean; cookies: boolean; cache: boolean; downloads: boolean }
   | { type: 'window.open'; kind: 'blank' | 'private' }
   /** Compact-mode peek: the card has slid in (show the traffic lights) or started leaving (hide them). */
   | { type: 'ui.peekLights'; visible: boolean }
@@ -357,6 +362,7 @@ export type Command =
   | { type: 'site.clearData'; origin: string }
   | { type: 'site.clearDomain'; domain: string }
   | { type: 'permission.respond'; id: number; allow: boolean }
+  | { type: 'page.zoom'; direction: 1 | -1 | 0 }
   | { type: 'find.query'; text: string; forward: boolean; findNext: boolean }
   | { type: 'find.stop' }
   | { type: 'download.show'; path: string }

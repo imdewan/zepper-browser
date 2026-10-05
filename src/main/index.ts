@@ -1,5 +1,6 @@
-import { Menu, app } from 'electron'
+import { Menu, app, dialog } from 'electron'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { AdBlock } from './adblock'
 import { bangs } from './bangs'
 import { History } from './history'
@@ -41,6 +42,22 @@ if (!app.requestSingleInstanceLock()) {
   let hub: Hub | null = null
   const history = new History()
 
+  // Links and files opened from other apps (Zepper as the default browser). They can arrive
+  // before the first window exists, so they wait for it.
+  const pendingUrls: string[] = []
+  const openFromOutside = (url: string): void => {
+    if (hub) hub.openUrl(url)
+    else pendingUrls.push(url)
+  }
+  app.on('open-url', (event, url) => {
+    event.preventDefault()
+    openFromOutside(url)
+  })
+  app.on('open-file', (event, path) => {
+    event.preventDefault()
+    openFromOutside(pathToFileURL(path).href)
+  })
+
   void app.whenReady().then(async () => {
     const icon = join(__dirname, '../../resources/icon.png')
     app.setAboutPanelOptions({
@@ -59,6 +76,7 @@ if (!app.requestSingleInstanceLock()) {
     })
     await hub.widevineSettled(15_000)
     hub.openWindow('main')
+    for (const url of pendingUrls.splice(0)) hub.openUrl(url)
     hub.startExtensions()
     Menu.setApplicationMenu(buildMenu(hub))
     await adblock.start()
@@ -72,7 +90,22 @@ if (!app.requestSingleInstanceLock()) {
     win.focus()
   })
 
-  app.on('before-quit', () => {
+  let quitConfirmed = false
+  app.on('before-quit', (event) => {
+    // Only the main window comes back after a restart: ask before closing other windows' tabs.
+    const others = hub && !hub.quitWithoutAsking ? hub.unrestoredWindows() : 0
+    if (!quitConfirmed && others > 0) {
+      const choice = dialog.showMessageBoxSync({
+        type: 'question',
+        message: 'Quit Zepper?',
+        detail: `${others === 1 ? 'Another window is' : `${others} other windows are`} open. Only the main window’s tabs come back next time.`,
+        buttons: ['Quit', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1
+      })
+      if (choice !== 0) return event.preventDefault()
+      quitConfirmed = true
+    }
     if (hub?.services.settings.get().clearHistoryOnQuit) history.clearSince(0)
     hub?.persist()
     history.flush()

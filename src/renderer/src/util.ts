@@ -29,9 +29,17 @@ export function isPinnedChanged(tab: Tab): boolean {
   return !!tab.pinned && stripHash(tab.url) !== stripHash(tab.pinned.url)
 }
 
+/** How far this view sits from the window's left edge (the overlay moves during a right-hand peek). */
+let viewOffsetX = 0
+
+export function setViewOffsetX(x: number): void {
+  viewOffsetX = x
+}
+
+/** An element's rect in window coordinates, which is what main and popups expect. */
 export function rectOf(el: Element): Rect {
   const r = el.getBoundingClientRect()
-  return { x: r.left, y: r.top, width: r.width, height: r.height }
+  return { x: r.left + viewOffsetX, y: r.top, width: r.width, height: r.height }
 }
 
 export const isMac = navigator.platform.toLowerCase().includes('mac')

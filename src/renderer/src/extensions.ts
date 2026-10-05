@@ -1,4 +1,5 @@
 import { createElement, useEffect, useRef, useState } from 'react'
+import { rectOf } from './util'
 
 /** Where Chrome extensions live (see main/extensions.ts). */
 export const EXTENSIONS_PARTITION = 'zepper-browsing'
@@ -70,7 +71,8 @@ export function activateExtension(
   anchor: Element | { x: number; y: number; width: number; height: number },
   eventType: 'click' | 'contextmenu' = 'click'
 ): void {
-  const rect = anchor instanceof Element ? anchor.getBoundingClientRect() : { left: anchor.x, top: anchor.y, ...anchor }
+  const box = anchor instanceof Element ? rectOf(anchor) : anchor
+  const rect = { left: box.x, top: box.y, width: box.width, height: box.height }
   void api()?.activate(EXTENSIONS_PARTITION, {
     eventType,
     extensionId: id,

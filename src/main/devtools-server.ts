@@ -1,5 +1,5 @@
 import { app, type WebContents } from 'electron'
-import { createServer } from 'node:http'
+import { createServer, type Server } from 'node:http'
 import { writeFile } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 import type { Command, Rect } from '@shared/types'
@@ -32,10 +32,16 @@ function captureRoots(): string[] {
  * the app: capture each layer (chrome, active tab, overlay) and send commands.
  * Never started in packaged builds.
  */
-export function startDebugServer(target: DebugTarget): void {
+let server: Server | null = null
+/** The window the server drives: the latest main window (a reopened one replaces a closed one). */
+let target: DebugTarget
+
+export function startDebugServer(next: DebugTarget): void {
   if (app.isPackaged) return
+  target = next
+  if (server) return
   const port = Number(process.env['ZEPPER_DEBUG_PORT'] ?? 9876)
-  const server = createServer(async (req, res) => {
+  server = createServer(async (req, res) => {
     // Only local tools (curl, scripts) may drive the app: web pages send Origin or Sec-Fetch-*
     // headers, and a DNS-rebinding page would arrive with a foreign Host.
     const host = req.headers.host ?? ''

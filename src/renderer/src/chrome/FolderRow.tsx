@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import type { Folder, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
@@ -21,6 +21,7 @@ interface FolderRowProps {
  */
 export const FolderRow = memo(function FolderRow({ folder, place, count }: FolderRowProps): React.JSX.Element {
   const [renaming, setRenaming] = useState(false)
+  const clickTimer = useRef(0)
   useUiEvents(
     useCallback(
       (event: UiEvent) => {
@@ -58,9 +59,18 @@ export const FolderRow = memo(function FolderRow({ folder, place, count }: Folde
         {...drop.props}
         className={cx('tab', 'folder-row', folder.collapsed && 'collapsed', drop.position && `dnd-${drop.position}`)}
         title={folder.name}
-        onClick={() => !renaming && zepper.send({ type: 'folder.update', folderId: folder.id, patch: { collapsed: !folder.collapsed } })}
+        onClick={(e) => {
+          // A single click toggles, a moment later, so a double-click can rename instead.
+          if (renaming || e.detail > 1) return
+          window.clearTimeout(clickTimer.current)
+          clickTimer.current = window.setTimeout(
+            () => zepper.send({ type: 'folder.update', folderId: folder.id, patch: { collapsed: !folder.collapsed } }),
+            200
+          )
+        }}
         onDoubleClick={(e) => {
           e.stopPropagation()
+          window.clearTimeout(clickTimer.current)
           setRenaming(true)
         }}
         onContextMenu={(e) => {

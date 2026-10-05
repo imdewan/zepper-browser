@@ -1,9 +1,12 @@
-import { shell, type DownloadItem } from 'electron'
+import { dialog, shell, type DownloadItem } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import type { DownloadEntry } from '@shared/types'
 import { JsonFile } from './persist'
+
+/** Files that run code when opened. */
+const RUNNABLE = /\.(app|command|tool|terminal|sh|zsh|bash|pkg|mpkg|dmg|scpt|applescript|workflow|jar|py|rb|pl)$/i
 
 const MAX_ENTRIES = 100
 /** Progress updates arrive many times a second; windows hear about them a few times a second. */
@@ -72,7 +75,20 @@ export class Downloads {
 
   open(id: string): void {
     const entry = this.entry(id)
-    if (entry && existsSync(entry.path)) void shell.openPath(entry.path)
+    if (!entry || !existsSync(entry.path)) return
+    // Programs and installers can change your Mac: check before running one from the web.
+    if (RUNNABLE.test(entry.path)) {
+      const choice = dialog.showMessageBoxSync({
+        type: 'warning',
+        message: `Open “${basename(entry.path)}”?`,
+        detail: 'This file is a program or installer from the web. Open it only if you trust where it came from.',
+        buttons: ['Open', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1
+      })
+      if (choice !== 0) return
+    }
+    void shell.openPath(entry.path)
   }
 
   reveal(id: string): void {

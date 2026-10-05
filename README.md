@@ -30,7 +30,8 @@
 **Privacy.**
 
 - Ad and tracker blocking with uBlock Origin's filter lists, including YouTube ads. It can be turned off per site.
-- Pop-up blocking.
+- Pop-up blocking, HTTPS first for typed addresses, and Secure DNS (DNS over HTTPS).
+- Clear browsing data across every space.
 - Private windows with a throwaway session.
 - Global Privacy Control.
 - A choice of browser identity: Chrome, Edge, Firefox, Safari or a custom string.
@@ -43,6 +44,9 @@
 
 **Also:**
 
+- Works as your default browser: links and files from other apps open in Zepper.
+- Print, Save Page As, Export as PDF, Open File, View Source, and a built-in PDF viewer.
+- Per-site zoom that's remembered, and pinch to zoom.
 - Chrome Web Store extensions, managed from Settings.
 - A downloads window and a searchable history page.
 - Page dialogs that say which site is asking.
@@ -79,7 +83,7 @@ npm run vmp:signup     # create your EVS account (asks for email, name, password
 npm run vmp:sign       # sign the development runtime in node_modules/electron/dist
 ```
 
-Re-run `npm run vmp:sign` after reinstalling Electron, and `npm run vmp:login` when the login expires. `npm run dist` signs the packaged app automatically, before Apple code signing (`scripts/vmp-sign.cjs`). `npm run vmp:verify` shows which certificate the runtime has.
+Re-run `npm run vmp:sign` after reinstalling Electron, and `npm run vmp:login` when the login expires. `npm run dist` signs the packaged app automatically, before Apple code signing (`scripts/after-pack.cjs`, which first flips Electron's security fuses, including cookie encryption). `npm run vmp:verify` shows which certificate the runtime has.
 
 ## Keyboard shortcuts
 

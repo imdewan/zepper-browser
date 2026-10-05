@@ -6,6 +6,7 @@ import {
   USER_AGENT_LABELS,
   type PinnedCloseBehavior,
   type SearchEngineId,
+  type SecureDns,
   type Settings,
   type UserAgentChoice
 } from '@shared/settings'
@@ -16,9 +17,10 @@ import { cx, isMac } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
 import { Toggle } from './Toggle'
 
-type Section = 'appearance' | 'tabs' | 'media' | 'search' | 'downloads' | 'gestures' | 'privacy' | 'extensions' | 'shortcuts'
+type Section = 'general' | 'appearance' | 'tabs' | 'media' | 'search' | 'downloads' | 'gestures' | 'privacy' | 'extensions' | 'shortcuts'
 
 const SECTIONS: { id: Section; label: string; icon: string }[] = [
+  { id: 'general', label: 'General', icon: '⚙️' },
   { id: 'appearance', label: 'Appearance', icon: '🎨' },
   { id: 'tabs', label: 'Tabs', icon: '🗂️' },
   { id: 'media', label: 'Media', icon: '🎵' },
@@ -34,7 +36,7 @@ const SHORTCUTS: [string, string][] = [
   ['Command bar / new tab', '⌘T'],
   ['Open location', '⌘L'],
   ['Toggle sidebar (compact mode)', '⌘S'],
-  ['Close tab', '⌘W'],
+  ['Close tab / window', '⌘W / ⇧⌘W'],
   ['Reopen closed tab', '⇧⌘T'],
   ['Switch to recent tab', '⌃⇥'],
   ['Next / previous tab in sidebar', '⌥⌘↓ / ⌥⌘↑'],
@@ -51,6 +53,9 @@ const SHORTCUTS: [string, string][] = [
   ['Split side by side / stacked / grid', '⌥⌘V / ⌥⌘H / ⌥⌘G'],
   ['Unsplit all', '⌥⌘U'],
   ['Screenshot', '⇧⌘2'],
+  ['Print / save page as', '⌘P / ⇧⌘S'],
+  ['Open file', '⌘O'],
+  ['View page source', '⌥⌘U'],
   ['Find in page', '⌘F'],
   ['History / downloads', '⌘Y / ⌥⌘L'],
   ['Back / forward', '⌘[ / ⌘]'],
@@ -63,6 +68,7 @@ interface SettingsPanelProps {
   settings: Settings
   widevine: WidevineStatus
   tidy: Snapshot['tidy']
+  defaultBrowser: boolean
   onClose: () => void
 }
 
@@ -84,8 +90,8 @@ function widevineHint(status: WidevineStatus): string {
 }
 
 /** Settings sheet: every change applies immediately. */
-export function SettingsPanel({ settings, widevine, tidy, onClose }: SettingsPanelProps): React.JSX.Element {
-  const [section, setSection] = useState<Section>('appearance')
+export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, onClose }: SettingsPanelProps): React.JSX.Element {
+  const [section, setSection] = useState<Section>('general')
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
 
   useEffect(() => {
@@ -130,6 +136,41 @@ export function SettingsPanel({ settings, widevine, tidy, onClose }: SettingsPan
             animate={{ opacity: 1, x: 0 }}
             transition={{ type: 'spring', bounce: 0, duration: 0.25 }}
           >
+            {section === 'general' && (
+              <>
+                <h2>General</h2>
+                <Row
+                  label="Default browser"
+                  hint={
+                    defaultBrowser
+                      ? 'Links you open in other apps open in Zepper.'
+                      : 'Open links from other apps (Mail, Slack, Notes…) in Zepper.'
+                  }
+                >
+                  {defaultBrowser ? (
+                    <span className="settings-status">Zepper is your default browser</span>
+                  ) : (
+                    <button className="panel-button" onClick={() => zepper.send({ type: 'app.makeDefaultBrowser' })}>
+                      Make Default
+                    </button>
+                  )}
+                </Row>
+                <Row
+                  label="New windows open"
+                  hint="⌘N. On this space: the same space and sign-ins in a window of its own, without its tabs."
+                >
+                  <Segmented
+                    value={settings.newWindowSpace}
+                    options={[
+                      ['current', 'On this space'],
+                      ['empty', 'Empty']
+                    ]}
+                    onChange={(newWindowSpace) => set({ newWindowSpace })}
+                  />
+                </Row>
+              </>
+            )}
+
             {section === 'appearance' && (
               <>
                 <h2>Appearance</h2>
@@ -256,19 +297,6 @@ export function SettingsPanel({ settings, widevine, tidy, onClose }: SettingsPan
                   }
                 >
                   <Toggle checked={settings.showTidy} onChange={(showTidy) => set({ showTidy })} />
-                </Row>
-                <Row
-                  label="New windows open"
-                  hint="⌘N. On this space: the same space and sign-ins in a window of its own, without its tabs."
-                >
-                  <Segmented
-                    value={settings.newWindowSpace}
-                    options={[
-                      ['current', 'On this space'],
-                      ['empty', 'Empty']
-                    ]}
-                    onChange={(newWindowSpace) => set({ newWindowSpace })}
-                  />
                 </Row>
               </>
             )}
@@ -413,12 +441,25 @@ export function SettingsPanel({ settings, widevine, tidy, onClose }: SettingsPan
                     </div>
                   </div>
                 )}
+                <Row
+                  label="Secure DNS"
+                  hint="Encrypts site lookups, so your network can’t see or change where you go. Automatic uses your DNS provider’s encryption when it offers it."
+                >
+                  <select value={settings.secureDns} onChange={(e) => set({ secureDns: e.target.value as SecureDns })}>
+                    <option value="automatic">Automatic</option>
+                    <option value="cloudflare">Cloudflare</option>
+                    <option value="quad9">Quad9</option>
+                    <option value="google">Google</option>
+                    <option value="off">Off</option>
+                  </select>
+                </Row>
                 <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
                   <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
                 </Row>
                 <Row label="Clear history when Zepper quits" hint="Your tabs, spaces and sign-ins stay.">
                   <Toggle checked={settings.clearHistoryOnQuit} onChange={(clearHistoryOnQuit) => set({ clearHistoryOnQuit })} />
                 </Row>
+                <ClearBrowsingData />
                 <Row label="Browsing history" hint="Search it, open pages again or delete them. ⌘Y">
                   <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openHistory' })}>
                     Show History
@@ -464,6 +505,70 @@ export function SettingsPanel({ settings, widevine, tidy, onClose }: SettingsPan
         </div>
       </motion.div>
     </motion.div>
+  )
+}
+
+/** Settings › Privacy: clear history, cookies, cache or the downloads list in one go. */
+function ClearBrowsingData(): React.JSX.Element {
+  const [range, setRange] = useState('hour')
+  const [what, setWhat] = useState({ history: true, cookies: false, cache: true, downloads: false })
+  const [confirming, setConfirming] = useState(false)
+  const nothing = !Object.values(what).some(Boolean)
+  const toggle = (key: keyof typeof what): void => setWhat((w) => ({ ...w, [key]: !w[key] }))
+  const clear = (): void => {
+    if (!confirming) {
+      setConfirming(true)
+      setTimeout(() => setConfirming(false), 4000)
+      return
+    }
+    const now = new Date()
+    const since =
+      range === 'hour'
+        ? now.getTime() - 3_600_000
+        : range === 'day'
+          ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+          : range === 'week'
+            ? now.getTime() - 7 * 86_400_000
+            : 0
+    zepper.send({ type: 'data.clear', since, ...what })
+    setConfirming(false)
+  }
+  return (
+    <div className="settings-row settings-row-stacked">
+      <div className="settings-row-text">
+        <div className="settings-row-label">Clear browsing data</div>
+        <div className="settings-row-hint">
+          Cookies, site data and cached files are cleared from every space, for all time. Clearing cookies signs you out of sites.
+        </div>
+      </div>
+      <div className="clear-data">
+        <label className="clear-data-option">
+          <input type="checkbox" checked={what.history} onChange={() => toggle('history')} />
+          History from
+          <select value={range} onChange={(e) => setRange(e.target.value)} disabled={!what.history}>
+            <option value="hour">the last hour</option>
+            <option value="day">today</option>
+            <option value="week">the last 7 days</option>
+            <option value="all">all time</option>
+          </select>
+        </label>
+        <label className="clear-data-option">
+          <input type="checkbox" checked={what.cookies} onChange={() => toggle('cookies')} />
+          Cookies and site data
+        </label>
+        <label className="clear-data-option">
+          <input type="checkbox" checked={what.cache} onChange={() => toggle('cache')} />
+          Cached images and files
+        </label>
+        <label className="clear-data-option">
+          <input type="checkbox" checked={what.downloads} onChange={() => toggle('downloads')} />
+          Downloads list
+        </label>
+        <button className={cx('panel-button', confirming && 'danger')} disabled={nothing} onClick={clear}>
+          {confirming ? 'Click again to clear' : 'Clear Data'}
+        </button>
+      </div>
+    </div>
   )
 }
 

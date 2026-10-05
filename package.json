@@ -57,7 +57,37 @@
     "appId": "app.zepper.browser",
     "productName": "Zepper",
     "electronDist": "node_modules/electron/dist",
-    "afterPack": "scripts/vmp-sign.cjs",
+    "afterPack": "scripts/after-pack.cjs",
+    "protocols": [
+      {
+        "name": "Web page",
+        "schemes": [
+          "http",
+          "https"
+        ],
+        "role": "Viewer"
+      }
+    ],
+    "fileAssociations": [
+      {
+        "name": "Web page",
+        "ext": [
+          "html",
+          "htm",
+          "xhtml",
+          "shtml"
+        ],
+        "role": "Viewer"
+      },
+      {
+        "name": "PDF document",
+        "ext": [
+          "pdf"
+        ],
+        "role": "Viewer",
+        "rank": "Alternate"
+      }
+    ],
     "extraResources": [
       {
         "from": "build/bin/zepper-tidy",
@@ -76,6 +106,15 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Websites you allow can use your camera.",
+        "NSMicrophoneUsageDescription": "Websites you allow can use your microphone.",
+        "NSLocationWhenInUseUsageDescription": "Websites you allow can use your location.",
+        "NSLocationUsageDescription": "Websites you allow can use your location."
+      },
       "target": [
         "dmg",
         "zip"

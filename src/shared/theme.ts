@@ -36,8 +36,7 @@ export const THEME_PRESET_GROUPS: { label: string; presets: SpaceTheme[] }[] = [
       { colors: ['#3a7d44', '#9bc53d'], opacity: 0.55, texture: 0.1 },
       { colors: ['#e07a2d', '#f2b134'], opacity: 0.55, texture: 0 },
       { colors: ['#ff8a5c', '#ff5f8f', '#ffb86b'], opacity: 0.55, texture: 0.1 },
-      { colors: ['#5b2a86', '#1b1f3b'], opacity: 0.7, texture: 0.2 },
-      { colors: ['#1d1d1f', '#3a3a3c'], opacity: 0.75, texture: 0.25 }
+      { colors: ['#5b2a86', '#1b1f3b'], opacity: 0.7, texture: 0.2 }
     ]
   }
 ]

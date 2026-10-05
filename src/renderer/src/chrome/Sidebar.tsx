@@ -72,7 +72,7 @@ function TopRow({ tab, isPrivate, extensionsRow }: { tab: Tab | null; isPrivate:
   return (
     <div className="top-row drag">
       <div className="traffic-light-space" />
-      {!isPrivate && extensions.actions.length > 0 && (
+      {!isPrivate && (
         <>
           <button
             ref={extensionsRef}
@@ -147,6 +147,7 @@ function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
           <button className={cx('site-button', !secure && 'insecure')} title="View site information" onClick={openSiteInfo}>
             {secure ? <IconLock size={12} /> : <IconGlobe size={12} />}
           </button>
+          {/^http:/.test(tab.url) && <span className="url-pill-insecure">Not secure</span>}
           <span className="url-pill-host">{hostOf(tab.url)}</span>
           <button className={cx('url-pill-copy', copied && 'copied')} title="Copy URL (⇧⌘C)" onClick={copy}>
             {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
@@ -232,6 +233,7 @@ function useSnapshotPinnedExtensions(extensions: ReturnType<typeof useExtensions
 function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element | null {
   const list = useRef<HTMLDivElement>(null)
   const [fade, setFade] = useState({ start: false, end: false })
+  const essentials = new Set(snapshot.tabs.filter((t) => t.kind === 'essential').map((t) => t.id))
 
   useEffect(() => {
     const el = list.current
@@ -269,6 +271,7 @@ function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element 
       {snapshot.spaces.map((space) => (
         <SpaceDot
           key={space.id}
+          essentials={essentials}
           space={space}
           active={space.id === snapshot.activeSpaceId}
           playing={snapshot.tabs.some((t) => t.spaceId === space.id && t.audible)}
@@ -282,11 +285,22 @@ function SpaceSwitcher({ snapshot }: { snapshot: Snapshot }): React.JSX.Element 
 }
 
 /** A space in the bottom bar: click to switch, drop a tab or folder on it to move it there. */
-function SpaceDot({ space, active, playing }: { space: Snapshot['spaces'][number]; active: boolean; playing: boolean }): React.JSX.Element {
+function SpaceDot({
+  space,
+  active,
+  playing,
+  essentials
+}: {
+  space: Snapshot['spaces'][number]
+  active: boolean
+  playing: boolean
+  /** Essentials belong to every space, so they can't be moved to one. */
+  essentials: Set<string>
+}): React.JSX.Element {
   const drop = useDrop({
     key: `space-dot:${space.id}`,
     whole: 'into',
-    target: () => (active ? null : { zone: 'space', spaceId: space.id })
+    target: (_position, item) => (active || (item.kind === 'tab' && essentials.has(item.id)) ? null : { zone: 'space', spaceId: space.id })
   })
   return (
     <button

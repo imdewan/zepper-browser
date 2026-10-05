@@ -11,6 +11,7 @@ import {
   session,
   shell,
   type AuthInfo,
+  type Certificate,
   type ContextMenuParams,
   type DownloadItem,
   type IpcMainEvent,
@@ -27,6 +28,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { PIP_WIDTH, type Settings } from '@shared/settings'
 import { DEFAULT_THEME } from '@shared/theme'
 import {
@@ -63,7 +65,8 @@ import { parse as parseDomain } from 'tldts-experimental'
 import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
 import { suggest } from './suggest'
 import { tidyGroups } from './tidy'
-import { resolveInput, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
+import { resolveInput, searchEngineName, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
+import { nextZoom } from './zoom'
 
 /** Height reserved for the traffic lights when the sidebar is on the right. */
 const TITLEBAR_STRIP = 34
@@ -205,17 +208,21 @@ const MEDIA_PAUSE_SCRIPT = `(() => {
   document.querySelectorAll('video, audio').forEach((el) => { if (!el.paused) el.pause() })
 })()`
 
-/** Pauses whatever is playing, or resumes what we paused last time. */
-const MEDIA_TOGGLE_SCRIPT = `(() => {
+/** Pauses whatever is playing in a frame (remembering it); 'paused' if anything was. */
+const MEDIA_PAUSE_PLAYING_SCRIPT = `(() => {
+  const playing = Array.from(document.querySelectorAll('video, audio')).filter((el) => !el.paused)
+  if (!playing.length) return 'idle'
+  playing.forEach((el) => el.pause())
+  window.__zepperPaused = playing
+  return 'paused'
+})()`
+
+/** Resumes what we paused last time in a frame (or its first media element); 'playing' if it did. */
+const MEDIA_RESUME_SCRIPT = `(() => {
   const media = Array.from(document.querySelectorAll('video, audio'))
-  const playing = media.filter((el) => !el.paused)
-  if (playing.length) {
-    playing.forEach((el) => el.pause())
-    window.__zepperPaused = playing
-    return 'paused'
-  }
   const resume = (window.__zepperPaused || media).filter((el) => el.isConnected)
-  if (resume[0]) resume[0].play()
+  if (!resume[0]) return 'none'
+  resume[0].play()
   return 'playing'
 })()`
 
@@ -290,6 +297,13 @@ export class Browser {
   private readonly mediaTipShown = new Set<string>()
   /** Folders in spaces' pinned areas (the tree itself is space.pinnedItems and folder.items). */
   private folders: Folder[] = []
+  /** Typed addresses tried over HTTPS first (see did-fail-load). */
+  private readonly httpsFirst = new Set<string>()
+  /** Tabs with a "not responding" question open. */
+  private readonly hungTabs = new Set<string>()
+  /** Tabs closing once their page agrees (a "Leave site?" question may be open). */
+  private readonly closingTabs = new Set<string>()
+  private readonly askingToLeave = new Set<string>()
   /** Popup windows opened by this window's tabs, with the tab that opened each. */
   private readonly popups = new Map<BrowserWindow, string>()
   /** When each tab's page last had a click or key press (for pop-up blocking). */
@@ -649,9 +663,41 @@ export class Browser {
 
   /** A popup window (OAuth, payments) belongs to the window whose tab opened it, and closes with it. */
   private adoptPopup(win: BrowserWindow, openerId: string): void {
-    if (this.tabByWebContents.has(win.webContents.id)) return
+    const wc = win.webContents
+    if (this.tabByWebContents.has(wc.id)) return
     this.popups.set(win, openerId)
     win.once('closed', () => this.popups.delete(win))
+    // Popups have no address bar, so the title says which site you're on (sign-in, payment…).
+    const retitle = (): void => {
+      if (!win.isDestroyed()) win.setTitle(`${safeHost(wc.getURL()) || 'Pop-up'} — ${wc.getTitle()}`)
+    }
+    wc.on('page-title-updated', (event) => {
+      event.preventDefault()
+      retitle()
+    })
+    wc.on('did-navigate', retitle)
+    const wcId = wc.id
+    wc.on('input-event', (_event, input) => {
+      if (USER_INPUT.has(input.type)) this.lastInput.set(wcId, Date.now())
+    })
+    wc.once('destroyed', () => this.lastInput.delete(wcId))
+    wc.on('did-create-window', (child) => this.adoptPopup(child, openerId))
+    wc.setWindowOpenHandler((details) => {
+      if (Date.now() - (this.lastInput.get(wcId) ?? 0) > USER_ACTIVATION_MS) return { action: 'deny' }
+      if (details.disposition === 'new-window' && details.features) {
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            width: 520,
+            height: 700,
+            webPreferences: { sandbox: true, contextIsolation: true, safeDialogs: true, plugins: true }
+          }
+        }
+      }
+      // Links a popup opens in a new tab go to a tab in this window.
+      this.openTab(details.url, { background: details.disposition === 'background-tab' })
+      return { action: 'deny' }
+    })
   }
 
   private popupWindow(webContentsId: number): BrowserWindow | undefined {
@@ -880,10 +926,7 @@ export class Browser {
       case 'clipboard.write':
         return void clipboard.writeText(command.text)
       case 'media.toggle':
-        return void this.views
-          .get(command.tabId)
-          ?.webContents.executeJavaScript(MEDIA_TOGGLE_SCRIPT, true)
-          .catch(() => {})
+        return void this.toggleMedia(command.tabId)
       case 'dialog.respond':
         return this.respondToDialog(command.id, command.ok, command.value, command.suppress)
       case 'auth.respond':
@@ -896,6 +939,22 @@ export class Browser {
         return this.respondToWidevine(command.choice)
       case 'app.relaunch':
         return this.hub.relaunch()
+      case 'app.makeDefaultBrowser':
+        return this.hub.makeDefaultBrowser()
+      case 'data.clear': {
+        const { type: _type, ...what } = command
+        return void this.hub.clearBrowsingData(what).then(() => {
+          const cleared = [
+            what.history && 'history',
+            what.cookies && 'cookies and site data',
+            what.cache && 'cached files',
+            what.downloads && 'downloads list'
+          ]
+            .filter(Boolean)
+            .join(', ')
+          this.toast({ id: 'data-cleared', message: 'Browsing data cleared', description: cleared, timeout: 3500 })
+        })
+      }
       case 'window.open':
         return void this.hub.openWindow(command.kind)
       case 'site.setAdblock':
@@ -929,6 +988,8 @@ export class Browser {
         return void this.clearSiteData(command.origin)
       case 'permission.respond':
         return this.respondToPrompt(command.id, command.allow)
+      case 'page.zoom':
+        return this.zoomActive(command.direction)
       case 'find.query':
         return this.find(command.text, command.forward, command.findNext)
       case 'find.stop':
@@ -1071,6 +1132,11 @@ export class Browser {
 
   private openInput(input: string, where: 'new' | 'current' | 'split'): void {
     const url = resolveInput(input)
+    // Typed without a scheme and sent to HTTPS: fall back to HTTP if the site has no HTTPS.
+    if (/^https:/.test(url) && !/^[a-z][a-z0-9+.-]*:\/\//i.test(input.trim()) && !/\s/.test(input.trim())) {
+      this.httpsFirst.add(normalizedUrl(url))
+      if (this.httpsFirst.size > 50) this.httpsFirst.delete(this.httpsFirst.values().next().value!)
+    }
     const current = this.tab(this.activeTabId)
     if (where === 'split') {
       const tab = makeTab({ kind: 'normal', url, spaceId: this.activeSpaceId })
@@ -1210,6 +1276,21 @@ export class Browser {
   }
 
   /** Runs a script in every frame (videos are often in iframes), stopping at the first frame returning `stopOn`. */
+  /** Play/pause from the media card or player: pauses what's playing in any frame (embedded players too), or resumes. */
+  private async toggleMedia(tabId: string): Promise<void> {
+    const wc = this.views.get(tabId)?.webContents
+    if (!wc || wc.isDestroyed()) return
+    let paused = false
+    for (const frame of wc.mainFrame.framesInSubtree) {
+      try {
+        if ((await frame.executeJavaScript(MEDIA_PAUSE_PLAYING_SCRIPT, true)) === 'paused') paused = true
+      } catch {
+        // Cross-origin or detached frames can refuse.
+      }
+    }
+    if (!paused) await this.runInFrames(wc, MEDIA_RESUME_SCRIPT, true, 'playing')
+  }
+
   private async runInFrames(wc: WebContents, script: string, userGesture: boolean, stopOn?: unknown): Promise<boolean> {
     if (wc.isDestroyed()) return false
     for (const frame of wc.mainFrame.framesInSubtree) {
@@ -1258,8 +1339,31 @@ export class Browser {
       this.closePinned(tab)
       return
     }
-    this.closed.push({ ...tab, batch: ++this.closeBatch })
-    this.removeTab(tab)
+    const wc = this.views.get(id)?.webContents
+    if (!wc || wc.isDestroyed() || wc.isCrashed()) {
+      this.closed.push({ ...tab, batch: ++this.closeBatch })
+      return this.removeTab(tab)
+    }
+    // The page gets to run its beforeunload handler (and ask "Leave site?") before it closes.
+    if (this.closingTabs.has(id)) return
+    this.closingTabs.add(id)
+    const finish = (): void => {
+      clearTimeout(timer)
+      if (!this.closingTabs.delete(id)) return
+      const current = this.tab(id)
+      if (!current) return
+      this.closed.push({ ...current, batch: ++this.closeBatch })
+      this.removeTab(current)
+    }
+    // 'close' is when the page agreed to close (Electron doesn't reliably run 'destroyed' listeners here).
+    ;(wc as NodeJS.EventEmitter).once('close', finish)
+    wc.once('destroyed', finish)
+    // A page that doesn't answer (hung) closes anyway.
+    const timer = setTimeout(() => {
+      if (!this.closingTabs.has(id) || this.askingToLeave.has(id)) return
+      finish()
+    }, 1500)
+    wc.close({ waitForBeforeUnload: true })
   }
 
   /** ⌘W on a pinned tab or Essential, following the "pinned close behaviour" setting. */
@@ -1289,7 +1393,11 @@ export class Browser {
     const tab = this.tab(id)
     if (!tab) return
     if (tab.kind === 'normal') return this.closeTab(id)
-    if (tab.kind === 'pinned' && !tab.loaded) return this.removeTab(tab)
+    if (tab.kind === 'pinned' && !tab.loaded) {
+      // Removes it, but ⇧⌘T brings it back.
+      this.closed.push({ ...tab, batch: ++this.closeBatch })
+      return this.removeTab(tab)
+    }
     this.unloadPinned(tab, true)
   }
 
@@ -1503,6 +1611,12 @@ export class Browser {
     if (!tab) return
     if (target.zone === 'space') {
       if (tab.kind === 'essential' || tab.spaceId === target.spaceId) return
+      // The tab you're on leaves this space, so another of its tabs takes its place.
+      if (this.activeTabId === tab.id) {
+        const next = this.pickNextTab(tab)
+        if (next && next.spaceId === tab.spaceId) this.activateTab(next.id)
+        else this.clearActiveTab()
+      }
       this.setTabSpace(tab, target.spaceId)
       this.rehome(tab)
       const space = this.space(target.spaceId)
@@ -1684,7 +1798,7 @@ export class Browser {
     space.collapsedPins = false
     this.syncPinnedOrder()
     this.broadcast()
-    this.emit({ type: 'folder.startRename', folderId: folder.id }, 'chrome')
+    this.emitToSidebars({ type: 'folder.startRename', folderId: folder.id })
   }
 
   private updateFolder(id: string, patch: { name?: string; collapsed?: boolean }): void {
@@ -1721,7 +1835,7 @@ export class Browser {
     if (!folder) return
     const count = this.flattenPinned(folder.items).length
     this.popup([
-      { label: 'Rename Folder', click: () => this.emit({ type: 'folder.startRename', folderId: id }, 'chrome') },
+      { label: 'Rename Folder', click: () => this.emitToSidebars({ type: 'folder.startRename', folderId: id }) },
       { label: 'New Folder Inside', click: () => this.createFolder(folder.spaceId, id) },
       { label: folder.collapsed ? 'Expand' : 'Collapse', click: () => this.updateFolder(id, { collapsed: !folder.collapsed }) },
       { type: 'separator' },
@@ -1930,8 +2044,126 @@ export class Browser {
 
   zoomActive(direction: 1 | -1 | 0): void {
     const wc = this.activeWebContents()
-    if (!wc) return
-    wc.setZoomLevel(direction === 0 ? 0 : wc.getZoomLevel() + direction * 0.5)
+    if (wc) this.zoomPage(wc, direction)
+  }
+
+  /** Zooms a page in Chrome's steps; the level is remembered for its site. */
+  private zoomPage(wc: WebContents, direction: 1 | -1 | 0): void {
+    const factor = nextZoom(wc.getZoomFactor(), direction)
+    wc.setZoomFactor(factor)
+    const host = safeHost(wc.getURL())
+    if (this.kind !== 'private') this.hub.zoom.set(host, factor)
+    this.toast({
+      id: 'zoom',
+      message: `Zoom ${Math.round(factor * 100)}%`,
+      description: host.replace(/^www\./, '') || undefined,
+      action: factor !== 1 ? { label: 'Reset', command: { type: 'page.zoom', direction: 0 } } : undefined,
+      timeout: 2500
+    })
+  }
+
+  /** A page opens at the zoom you chose for its site. */
+  private applySiteZoom(wc: WebContents, url: string): void {
+    if (this.kind === 'private') return
+    const factor = this.hub.zoom.get(safeHost(url))
+    if (Math.abs(wc.getZoomFactor() - factor) > 0.001) wc.setZoomFactor(factor)
+  }
+
+  printActive(): void {
+    this.activeWebContents()?.print({}, () => {})
+  }
+
+  /** File › Save Page As… (complete, or HTML only). */
+  async savePageAs(): Promise<void> {
+    const wc = this.activeWebContents()
+    const tab = this.tab(this.activeTabId)
+    if (!wc || !tab) return
+    const { canceled, filePath } = await dialog.showSaveDialog(this.win, {
+      defaultPath: join(this.settings.downloadPath || app.getPath('downloads'), `${fileNameFor(tab.title)}.html`),
+      filters: [
+        { name: 'Web Page, Complete', extensions: ['html'] },
+        { name: 'Web Page, HTML Only', extensions: ['htm'] }
+      ]
+    })
+    if (canceled || !filePath) return
+    try {
+      await wc.savePage(filePath, filePath.endsWith('.htm') ? 'HTMLOnly' : 'HTMLComplete')
+      this.toast({ id: 'saved-page', message: 'Page saved', description: basename(filePath), timeout: 3000 })
+    } catch {
+      this.toast({ id: 'saved-page', message: 'Couldn’t save the page', description: basename(filePath), timeout: 4000 })
+    }
+  }
+
+  /** File › Export as PDF… */
+  async exportPdf(): Promise<void> {
+    const wc = this.activeWebContents()
+    const tab = this.tab(this.activeTabId)
+    if (!wc || !tab) return
+    const { canceled, filePath } = await dialog.showSaveDialog(this.win, {
+      defaultPath: join(this.settings.downloadPath || app.getPath('downloads'), `${fileNameFor(tab.title)}.pdf`),
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    })
+    if (canceled || !filePath) return
+    try {
+      await writeFile(filePath, await wc.printToPDF({ printBackground: true }))
+      this.toast({ id: 'saved-page', message: 'Exported as PDF', description: basename(filePath), timeout: 3000 })
+    } catch {
+      this.toast({ id: 'saved-page', message: 'Couldn’t export the page', description: basename(filePath), timeout: 4000 })
+    }
+  }
+
+  viewSource(): void {
+    const tab = this.tab(this.activeTabId)
+    if (tab && /^(https?|file):/.test(tab.url)) this.openTab(`view-source:${tab.url}`, { afterTabId: tab.id })
+  }
+
+  /** File › Open File… */
+  async openFileDialog(): Promise<void> {
+    const { canceled, filePaths } = await dialog.showOpenDialog(this.win, { properties: ['openFile', 'multiSelections'] })
+    if (canceled) return
+    for (const path of filePaths) this.openTab(pathToFileURL(path).href)
+  }
+
+  /** A link or file opened from another app (Zepper as the default browser). */
+  openFromOutside(url: string): void {
+    this.openTab(url)
+    if (this.win.isMinimized()) this.win.restore()
+    this.win.show()
+  }
+
+  /** Tabs in this window (to warn before quitting windows that aren't restored). */
+  tabCount(): number {
+    return this.tabs.length
+  }
+
+  /** A site asks for a client certificate: you choose (Electron would send the first one silently). */
+  async selectClientCertificate(url: string, list: Certificate[], callback: (certificate?: Certificate) => void): Promise<void> {
+    const shown = list.slice(0, 6)
+    const { response } = await dialog.showMessageBox(this.win, {
+      type: 'question',
+      message: `${safeHost(url) || 'This site'} wants a certificate to identify you`,
+      detail: 'Only choose one if you trust this site. You can also continue without sending one.',
+      buttons: [...shown.map((c) => c.subjectName || c.issuerName || 'Certificate'), 'Don’t Send'],
+      defaultId: shown.length,
+      cancelId: shown.length
+    })
+    callback(shown[response])
+  }
+
+  /** A page stopped responding: wait, or end it (it then shows the crash page with Reload). */
+  private async onUnresponsive(tabId: string, wc: WebContents): Promise<void> {
+    if (this.hungTabs.has(tabId) || this.windowClosed) return
+    this.hungTabs.add(tabId)
+    const { response } = await dialog.showMessageBox(this.win, {
+      type: 'warning',
+      message: 'Page isn’t responding',
+      detail: `${safeHost(this.tab(tabId)?.url ?? '') || 'This page'} has stopped responding. You can wait for it, or close the page.`,
+      buttons: ['Wait', 'Close Page'],
+      defaultId: 0,
+      cancelId: 0
+    })
+    this.hungTabs.delete(tabId)
+    if (response === 1 && !wc.isDestroyed()) wc.forcefullyCrashRenderer()
   }
 
   toggleDevTools(): void {
@@ -1958,6 +2190,8 @@ export class Browser {
             session: this.sessionFor(tab),
             scrollBounce: true,
             spellcheck: true,
+            // Chromium's PDF viewer.
+            plugins: true,
             // Frames Zepper's dialog shim doesn't reach (iframes) get a "stop dialogs" option.
             safeDialogs: true
           }
@@ -2054,6 +2288,7 @@ export class Browser {
     // A page with unsaved changes asks before it's left, as in Chrome (Electron would otherwise cancel silently).
     wc.on('will-prevent-unload', (event) => {
       if (this.win.isDestroyed()) return event.preventDefault()
+      this.askingToLeave.add(tabId)
       const choice = dialog.showMessageBoxSync(this.win, {
         type: 'question',
         buttons: ['Leave', 'Stay'],
@@ -2062,7 +2297,10 @@ export class Browser {
         message: 'Leave site?',
         detail: 'Changes you made may not be saved.'
       })
+      this.askingToLeave.delete(tabId)
       if (choice === 0) event.preventDefault()
+      // Staying cancels a tab close that was waiting for the page.
+      else this.closingTabs.delete(tabId)
     })
     // Dialogs belong to the page that asked; a new page (or a closed tab) cancels them.
     wc.on('did-start-navigation', (details) => {
@@ -2097,6 +2335,7 @@ export class Browser {
         return update({ url: failed, blockedCount: 0, media: null, ...navState() })
       }
       update({ url, blockedCount: 0, media: null, ...navState() })
+      this.applySiteZoom(wc, url)
       if (this.kind !== 'private') this.history.record(url, wc.getTitle())
     })
     wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
@@ -2123,11 +2362,31 @@ export class Browser {
     })
     wc.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
       if (!isMainFrame || code === -3) return
-      const page = errorPage(url, description)
+      // A typed address goes to HTTPS first; a site without it gets plain HTTP instead of an error.
+      const typed = normalizedUrl(url)
+      if (this.httpsFirst.delete(typed) && code !== -105 && /^https:/.test(typed)) {
+        wc.loadURL(typed.replace(/^https:/, 'http:')).catch(() => {})
+        return
+      }
+      const page = errorPage(url, description, code <= -200 && code > -300 ? 'certificate' : 'network')
       this.errorPages.set(page, url)
       if (this.errorPages.size > 100) this.errorPages.delete(this.errorPages.keys().next().value!)
       wc.loadURL(page).catch(() => {})
     })
+    wc.on('render-process-gone', (_event, details) => {
+      if (details.reason === 'clean-exit' || this.windowClosed) return
+      const tab = this.tab(tabId)
+      if (!tab || !tab.loaded) return
+      // The tab stays, with a page explaining what happened; reloading brings the page back.
+      const page = errorPage(tab.url, details.reason === 'oom' ? 'Out of memory' : `Reason: ${details.reason}`, 'crash')
+      this.errorPages.set(page, tab.url)
+      update({ loading: false, audible: false, media: null })
+      wc.loadURL(page).catch(() => {})
+    })
+    wc.on('unresponsive', () => void this.onUnresponsive(tabId, wc))
+    // ⌘-scroll zooms like the menu does; pinch-to-zoom magnifies (Electron turns it off by default).
+    wc.on('zoom-changed', (_event, direction) => this.zoomPage(wc, direction === 'in' ? 1 : -1))
+    wc.on('did-finish-load', () => void wc.setVisualZoomLevelLimits(1, 3).catch(() => {}))
     wc.on('found-in-page', (_event, result) => {
       if (tabId !== this.activeTabId) return
       this.emit({ type: 'find.result', result: { active: result.activeMatchOrdinal, matches: result.matches } }, 'overlay')
@@ -2165,7 +2424,7 @@ export class Browser {
         overrideBrowserWindowOptions: {
           width: 520,
           height: 700,
-          webPreferences: { sandbox: true, contextIsolation: true, safeDialogs: true }
+          webPreferences: { sandbox: true, contextIsolation: true, safeDialogs: true, plugins: true }
         }
       }
     }
@@ -2932,7 +3191,7 @@ export class Browser {
     if (this.lastFindText) this.find(this.lastFindText, forward, true)
   }
 
-  private find(text: string, forward: boolean, findNext: boolean): void {
+  private find(text: string, forward: boolean, again: boolean): void {
     const wc = this.activeWebContents()
     if (!wc) return
     this.lastFindText = text
@@ -2941,7 +3200,8 @@ export class Browser {
       this.emit({ type: 'find.result', result: { active: 0, matches: 0 } }, 'overlay')
       return
     }
-    wc.findInPage(text, { forward, findNext })
+    // Electron's findNext starts a new search; ours means "the next match of the same text".
+    wc.findInPage(text, { forward, findNext: !again })
   }
 
   // ---------------------------------------------------------------------------
@@ -3040,7 +3300,7 @@ export class Browser {
     const space = this.space(id)
     if (!space) return
     this.popup([
-      { label: 'Rename Space', click: () => this.emit({ type: 'space.startRename', spaceId: id }, 'chrome') },
+      { label: 'Rename Space', click: () => this.emitToSidebars({ type: 'space.startRename', spaceId: id }) },
       { label: 'Change Icon…', click: () => this.handle({ type: 'ui.openPopover', popover: { kind: 'emoji', spaceId: id, anchor } }) },
       { label: 'Edit Theme…', click: () => this.handle({ type: 'ui.openPopover', popover: { kind: 'theme', spaceId: id, anchor } }) },
       { type: 'separator' },
@@ -3247,10 +3507,15 @@ export class Browser {
           }
         },
         ...this.openInSpaceItems(params.linkURL, tab?.spaceId ?? null),
-        { label: 'Open Link in New Window', click: () => void this.hub.openWindow('blank', params.linkURL) },
+        // From a private window, links stay private.
+        {
+          label: 'Open Link in New Window',
+          click: () => void this.hub.openWindow(this.kind === 'private' ? 'private' : 'blank', params.linkURL)
+        },
         { label: 'Open Link in Private Window', click: () => void this.hub.openWindow('private', params.linkURL) },
         { type: 'separator' },
-        { label: 'Copy Link', click: () => clipboard.writeText(params.linkURL) },
+        { label: 'Save Link As…', click: () => wc.downloadURL(params.linkURL) },
+        { label: 'Copy Link', click: () => clipboard.writeText(stripTracking(params.linkURL)) },
         { type: 'separator' }
       )
     }
@@ -3260,6 +3525,21 @@ export class Browser {
         { label: 'Copy Image', click: () => wc.copyImageAt(params.x, params.y) },
         { label: 'Copy Image Address', click: () => clipboard.writeText(params.srcURL) },
         { label: 'Save Image As…', click: () => wc.downloadURL(params.srcURL) },
+        { type: 'separator' }
+      )
+    }
+    if ((params.mediaType === 'video' || params.mediaType === 'audio') && params.srcURL && !params.srcURL.startsWith('blob:')) {
+      const noun = params.mediaType === 'video' ? 'Video' : 'Audio'
+      items.push(
+        { label: `Open ${noun} in New Tab`, click: () => this.openTab(params.srcURL, { background: true, afterTabId: tabId }) },
+        { label: `Copy ${noun} Address`, click: () => clipboard.writeText(params.srcURL) },
+        { label: `Save ${noun} As…`, click: () => wc.downloadURL(params.srcURL) },
+        { type: 'separator' }
+      )
+    }
+    if (params.misspelledWord) {
+      items.push(
+        { label: 'Add to Dictionary', click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord) },
         { type: 'separator' }
       )
     }
@@ -3279,7 +3559,7 @@ export class Browser {
       const short = text.length > 24 ? `${text.slice(0, 24)}…` : text
       items.push(
         { role: 'copy' },
-        { label: `Search Google for “${short}”`, click: () => this.openTab(searchUrl(text), { afterTabId: tabId }) },
+        { label: `Search ${searchEngineName()} for “${short}”`, click: () => this.openTab(searchUrl(text), { afterTabId: tabId }) },
         { type: 'separator' }
       )
     }
@@ -3288,6 +3568,14 @@ export class Browser {
         { label: 'Back', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() },
         { label: 'Forward', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
         { label: 'Reload', click: () => this.reloadPage(wc) },
+        { type: 'separator' },
+        { label: 'Save Page As…', click: () => void this.savePageAs() },
+        { label: 'Print…', click: () => wc.print({}, () => {}) },
+        {
+          label: 'View Page Source',
+          enabled: /^(https?|file):/.test(wc.getURL()),
+          click: () => this.openTab(`view-source:${wc.getURL()}`, { afterTabId: tabId })
+        },
         { type: 'separator' }
       )
     }
@@ -3495,6 +3783,7 @@ export class Browser {
       paletteOpen: this.paletteOpen,
       folders: this.folders,
       tidy: this.hub.tidy,
+      defaultBrowser: this.hub.defaultBrowser,
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : []
@@ -3518,6 +3807,12 @@ export class Browser {
       this.pip?.controlsWebContents()?.send(IPC.snapshot, snapshot)
       this.stateFile?.schedule(this.persistedState())
     }, 16)
+  }
+
+  /** Events for the sidebar go to both copies: the docked one and the floating one in compact mode. */
+  private emitToSidebars(event: UiEvent): void {
+    this.emit(event, 'chrome')
+    this.emit(event, 'overlay')
   }
 
   private emit(event: UiEvent, target: 'chrome' | 'overlay'): void {
@@ -3615,17 +3910,47 @@ function safeHost(url: string): string {
   }
 }
 
-function errorPage(url: string, description: string): string {
+const ERROR_PAGES = {
+  network: { title: 'Can’t reach this page', text: '' },
+  certificate: {
+    title: 'Your connection isn’t private',
+    text: 'Zepper couldn’t confirm this site’s identity, so it didn’t load the page. Someone could be trying to intercept your connection, or the site is set up incorrectly.'
+  },
+  crash: { title: 'This page crashed', text: 'Reload the page (⌘R) to try again.' }
+}
+
+/** A URL in its canonical form (so typed and loaded addresses compare equal). */
+function normalizedUrl(url: string): string {
+  try {
+    return new URL(url).href
+  } catch {
+    return url
+  }
+}
+
+/** A title made safe to use as a file name. */
+function fileNameFor(title: string): string {
+  return (
+    (title || 'Page')
+      .replace(/[/\\:*?"<>|]+/g, '-')
+      .trim()
+      .slice(0, 100) || 'Page'
+  )
+}
+
+function errorPage(url: string, description: string, kind: keyof typeof ERROR_PAGES = 'network'): string {
   const escape = (s: string): string => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
-  const html = `<!doctype html><meta charset="utf-8"><title>Can’t reach this page</title>
+  const { title, text } = ERROR_PAGES[kind]
+  const html = `<!doctype html><meta charset="utf-8"><title>${title}</title>
 <style>
   :root { color-scheme: light dark; font-family: -apple-system, system-ui, sans-serif; }
   body { margin: 0; height: 100vh; display: grid; place-items: center; background: light-dark(#fafafa, #1c1c1e); color: light-dark(#333, #ddd); }
   main { max-width: 440px; padding: 24px; }
   h1 { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
   p { margin: 0 0 6px; opacity: .7; line-height: 1.5; word-break: break-all; }
+  p.text { opacity: .85; word-break: normal; margin-bottom: 12px; }
   code { font-size: 12px; opacity: .6; }
 </style>
-<main><h1>Can’t reach this page</h1><p>${escape(url)}</p><code>${escape(description)}</code></main>`
+<main><h1>${title}</h1>${text ? `<p class="text">${text}</p>` : ''}<p>${escape(url)}</p><code>${escape(description)}</code></main>`
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
 }

@@ -11,6 +11,12 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - Compact mode (⌘S): the sidebar hides and floats back in when you reach the window edge
 - The main window remembers its size and position
 - New windows (⌘N) open on the space you're in, with no tabs, at your window's size
+- Default browser: links and files opened from other apps open in Zepper (Settings → General)
+- Print (⌘P), Save Page As (⇧⌘S), Export as PDF, Open File (⌘O), View Source (⌥⌘U), and Chromium's PDF viewer
+- Zoom in Chrome's steps, remembered per site, with a notice to reset; pinch to zoom
+- A crashed page keeps its tab and offers Reload; a page that stops responding can be waited for or closed
+- Closing a tab with unsaved changes asks first ("Leave site?")
+- Quitting asks first when other windows (which aren't restored) are open
 
 ## Spaces
 
@@ -44,6 +50,12 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 ## Privacy and security
 
 - **Ad blocking:** built in, using uBlock Origin's filter lists (refreshed daily). Covers network requests, cosmetic filtering and scriptlets, including YouTube ads. It can be turned off per site.
+- **HTTPS first:** typed addresses go to HTTPS, falling back to HTTP only when a site has no HTTPS; plain-HTTP pages say "Not secure".
+- **Secure DNS:** DNS over HTTPS, automatic or through Cloudflare, Quad9 or Google.
+- **Certificate errors** get their own page, and sites asking for a client certificate let you choose (or send none).
+- **Clear browsing data:** history (by time range), cookies and site data, cached files and the downloads list, across every space.
+- **Downloads:** opening a program or installer asks first.
+- **Pop-ups** have no address bar, so their title shows the site you're on.
 - **Pop-up blocking:** pages can open tabs and windows only right after a click or key press; blocked ones can be opened from a notice.
 - **Private windows** with an in-memory session.
 - **Global Privacy Control** and Do Not Track.
