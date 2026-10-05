@@ -44,7 +44,10 @@ export async function tidyGroups(tabs: TidyTab[]): Promise<TidyGroup[]> {
 function clean(groups: TidyGroup[], count: number): TidyGroup[] {
   const used = new Set<number>()
   return groups
-    .map((g) => ({ name: g.name.trim().slice(0, 40) || 'Group', tabs: g.tabs.filter((i) => i >= 0 && i < count && !used.has(i) && used.add(i)) }))
+    .map((g) => ({
+      name: g.name.trim().slice(0, 40) || 'Group',
+      tabs: g.tabs.filter((i) => i >= 0 && i < count && !used.has(i) && used.add(i))
+    }))
     .filter((g) => g.tabs.length >= 2)
 }
 
@@ -55,7 +58,9 @@ function bySite(tabs: TidyTab[]): TidyGroup[] {
     const site = parse(tab.url).domain
     if (site) sites.set(site, [...(sites.get(site) ?? []), i])
   })
-  return [...sites.entries()].filter(([, indexes]) => indexes.length >= 2).map(([site, indexes]) => ({ name: siteName(site), tabs: indexes }))
+  return [...sites.entries()]
+    .filter(([, indexes]) => indexes.length >= 2)
+    .map(([site, indexes]) => ({ name: siteName(site), tabs: indexes }))
 }
 
 function siteName(domain: string): string {
