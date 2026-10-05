@@ -106,14 +106,11 @@
 }
 
 .empty-logo {
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  margin-bottom: 10px;
-  background: linear-gradient(120deg, var(--text-2), var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  width: 150px;
+  height: auto;
+  margin-bottom: 14px;
+  opacity: 0.92;
+  filter: drop-shadow(0 6px 18px rgba(40, 70, 160, 0.25));
 }
 
 .empty-hint {

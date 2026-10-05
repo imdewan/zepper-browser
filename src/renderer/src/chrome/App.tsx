@@ -6,6 +6,7 @@ import type { Snapshot, SpaceTheme, Tab, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconBack, IconForward } from '../icons'
 import { useSnapshot, useSystemDark, useUiEvents } from '../useSnapshot'
+import logo from '../assets/logo.png'
 import { Sidebar } from './Sidebar'
 
 export const GRAIN =
@@ -135,7 +136,7 @@ function ContentCard({ tab }: { tab: Tab | null }): React.JSX.Element {
       <div className="content-card">
         {!tab && (
           <div className="empty-state">
-            <div className="empty-logo">Zepper</div>
+            <img className="empty-logo" src={logo} alt="Zepper" draggable={false} />
             <div className="empty-hint">
               Press <kbd>⌘</kbd>
               <kbd>T</kbd> to search or enter an address

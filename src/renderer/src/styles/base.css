@@ -1,6 +1,7 @@
 :root {
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
-  --system-accent: #8b7cf6;
+  /* Zepper blue, from the logo. */
+  --system-accent: #5f86f5;
   --accent: var(--system-accent);
   --spring: cubic-bezier(0.22, 1, 0.36, 1);
 }

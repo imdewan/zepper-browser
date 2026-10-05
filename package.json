@@ -34,5 +34,26 @@
     "electron@44.5.1": true,
     "esbuild@0.25.12": true,
     "esbuild@0.28.2": true
+  },
+  "build": {
+    "appId": "app.zepper.browser",
+    "productName": "Zepper",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "out/**",
+      "resources/**",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
   }
 }

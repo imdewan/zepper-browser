@@ -21,6 +21,15 @@ if (!app.requestSingleInstanceLock()) {
   const history = new History()
 
   void app.whenReady().then(async () => {
+    const icon = join(__dirname, '../../resources/icon.png')
+    // Packaged builds take their icon from build/icon.icns; in development set it explicitly.
+    if (!app.isPackaged) app.dock?.setIcon(icon)
+    app.setAboutPanelOptions({
+      applicationName: 'Zepper',
+      applicationVersion: app.getVersion(),
+      copyright: '© 2026 Dewan Shakil',
+      iconPath: icon
+    })
     const adblock = new AdBlock(session.defaultSession, (id) => browser?.onAdBlocked(id))
     browser = new Browser(history, adblock, new SettingsStore())
     Menu.setApplicationMenu(buildMenu(browser))
