@@ -800,7 +800,6 @@ export class Browser {
     if (!tab) return
     const previousId = this.activeTabId
     const sameSplit = !!previousId && this.splitOf(previousId) !== undefined && this.splitOf(previousId) === this.splitOf(id)
-    if (previousId && previousId !== id && !sameSplit) void this.autoPictureInPicture(previousId)
     if (tab.kind !== 'essential' && tab.spaceId && tab.spaceId !== this.activeSpaceId) {
       this.activeSpaceId = tab.spaceId
     }
@@ -808,6 +807,8 @@ export class Browser {
     this.activeTabId = id
     const view = this.ensureView(tab)
     this.syncAttachedViews()
+    // Only once the old tab is off screen can its video float.
+    if (previousId && previousId !== id && !sameSplit) void this.autoPictureInPicture(previousId)
 
     if (!options.keepRecency) tab.lastActiveAt = Date.now()
     const space = this.space(this.activeSpaceId)
@@ -876,7 +877,7 @@ export class Browser {
       message: others.length === 1 ? 'Another tab is still playing' : `${others.length} other tabs are playing`,
       description: names,
       action: { label: others.length === 1 ? 'Pause it' : 'Pause others', command: { type: 'media.pauseOthers', keepTabId: tabId } },
-      timeout: 6000
+      timeout: 4000
     })
   }
 
@@ -909,9 +910,10 @@ export class Browser {
   }
 
   private clearActiveTab(): void {
-    if (this.activeTabId) void this.autoPictureInPicture(this.activeTabId)
+    const previousId = this.activeTabId
     this.activeTabId = null
     this.syncAttachedViews()
+    if (previousId) void this.autoPictureInPicture(previousId)
     const space = this.space(this.activeSpaceId)
     if (space) space.lastTabId = null
     this.broadcast()

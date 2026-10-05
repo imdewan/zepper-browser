@@ -237,8 +237,28 @@
   transform-origin: top center;
 }
 
-.toast:not(:has(.toast-action)) {
-  padding-right: 18px;
+.toast-text {
+  min-width: 0;
+  max-width: 280px;
+}
+
+.toast-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-left: -4px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.7);
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease;
+}
+
+.toast-close:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
 }
 
 .toast-message {
@@ -251,6 +271,9 @@
   font-size: 12px;
   font-weight: 500;
   opacity: 0.72;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .toast-action {

@@ -1,22 +1,49 @@
 import { BrowserWindow, WebContentsView, screen, type Rectangle, type WebContents } from 'electron'
 
-/** Marks the page's playing video and reports its size; null when nothing is playing. */
+/**
+ * Marks the page's playing video (and its ancestors) and reports its size;
+ * null when nothing is playing. The largest playing video wins, so a muted
+ * preview thumbnail never beats the main player.
+ */
 const MARK_SCRIPT = `(() => {
-  const video = Array.from(document.querySelectorAll('video')).find(
+  const playing = Array.from(document.querySelectorAll('video')).filter(
     (v) => !v.paused && !v.ended && v.readyState >= 2 && v.videoWidth >= 160
   )
+  const area = (v) => v.getBoundingClientRect().width * v.getBoundingClientRect().height
+  const video = playing.sort((a, b) => area(b) - area(a))[0]
   if (!video) return null
   video.setAttribute('data-zepper-pip', '')
+  for (let el = video.parentElement; el; el = el.parentElement) el.setAttribute('data-zepper-pip-ancestor', '')
+  document.documentElement.setAttribute('data-zepper-pip-active', '')
   return { width: video.videoWidth, height: video.videoHeight }
 })()`
 
 const UNMARK_SCRIPT = `(() => {
-  document.querySelectorAll('video[data-zepper-pip]').forEach((v) => v.removeAttribute('data-zepper-pip'))
+  document.querySelectorAll('[data-zepper-pip], [data-zepper-pip-ancestor]').forEach((el) => {
+    el.removeAttribute('data-zepper-pip')
+    el.removeAttribute('data-zepper-pip-ancestor')
+  })
+  document.documentElement.removeAttribute('data-zepper-pip-active')
 })()`
 
-/** Makes the marked video fill the (small) window; author !important beats the player's inline styles. */
+/**
+ * Makes the marked video fill the (small) window. Everything else on the page
+ * is hidden, and the video's ancestors lose anything that would trap a fixed
+ * element (transforms, filters, containment). Author !important beats the
+ * player's inline styles.
+ */
 const PIP_CSS = `
+html[data-zepper-pip-active] * { visibility: hidden !important; }
+html[data-zepper-pip-active], html[data-zepper-pip-active] body {
+  overflow: hidden !important; background: #000 !important;
+}
+[data-zepper-pip-ancestor] {
+  transform: none !important; filter: none !important; backdrop-filter: none !important;
+  perspective: none !important; contain: none !important; will-change: auto !important;
+  clip-path: none !important; mask: none !important;
+}
 video[data-zepper-pip] {
+  visibility: visible !important;
   position: fixed !important; inset: 0 !important;
   width: 100vw !important; height: 100vh !important;
   max-width: none !important; max-height: none !important;
@@ -24,7 +51,6 @@ video[data-zepper-pip] {
   object-fit: contain !important; background: #000 !important;
   z-index: 2147483647 !important;
 }
-html, body { overflow: hidden !important; background: #000 !important; }
 `
 
 const MIN_WIDTH = 280
