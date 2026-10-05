@@ -72,7 +72,7 @@ function TopRow({ tab, isPrivate }: { tab: Tab | null; isPrivate: boolean }): Re
       {isPrivate && (
         <span className="private-badge" title="Private window: history, cookies and site data are discarded when it closes">
           <IconPrivate size={13} />
-          Private
+          <span className="private-badge-label">Private</span>
         </span>
       )}
       <div className="top-row-spacer" />

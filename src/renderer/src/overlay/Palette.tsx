@@ -52,9 +52,17 @@ export function Palette({ mode, currentUrl, onClose }: PaletteProps): React.JSX.
   }
 
   const choose = (suggestion: Suggestion | undefined): void => {
+    if (suggestion?.kind === 'bang' && suggestion.url === null) {
+      // A bang completion: fill it in and keep typing the query.
+      setText((t) => t.replace(/(^|\s)!(\S*)$/, `$1!${suggestion.trigger} `))
+      input.current?.focus()
+      return
+    }
     if (!suggestion) {
       if (!text.trim()) return
       zepper.send({ type: 'tab.open', input: text, where: mode })
+    } else if (suggestion.kind === 'bang' && suggestion.url) {
+      zepper.send({ type: 'tab.open', input: suggestion.url, where: mode })
     } else if (suggestion.kind === 'tab') {
       zepper.send(mode === 'split' ? { type: 'split.add', tabId: suggestion.tabId } : { type: 'tab.activate', tabId: suggestion.tabId })
     } else {
@@ -159,6 +167,18 @@ function SuggestionRow({ mode, suggestion, selected, onHover, onChoose }: Sugges
       icon = <IconSearch size={16} />
       title = suggestion.query
       detail = suggestion.fromProvider ? null : 'Search with Google'
+      break
+    case 'bang':
+      icon = suggestion.domain ? <Favicon src={`https://${suggestion.domain}/favicon.ico`} size={16} /> : <IconSearch size={16} />
+      if (suggestion.url) {
+        title = suggestion.query || suggestion.name
+        detail = suggestion.query ? `Search ${suggestion.name}` : suggestion.domain
+        chip = `!${suggestion.trigger}`
+      } else {
+        title = `!${suggestion.trigger}`
+        detail = suggestion.name
+        chip = 'Bang'
+      }
       break
   }
 

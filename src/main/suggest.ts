@@ -1,5 +1,6 @@
 import type { Suggestion, Tab } from '@shared/types'
 import type { History } from './history'
+import { bangs } from './bangs'
 import { looksLikeUrl, resolveInput, searchUrl, suggestUrl } from './url'
 
 const PROVIDER_TIMEOUT_MS = 700
@@ -44,6 +45,19 @@ export async function suggest(
   }
 
   const results: Suggestion[] = []
+  const bang = bangs.resolve(query)
+  const completions = bangs.complete(query)
+  if (bang) {
+    const { t, s, d } = bang.bang
+    results.push({ kind: 'bang', trigger: t, name: s, domain: d, query: bang.query, url: bang.url })
+  }
+  // Typing a bang: offer to complete it (choosing one fills it in instead of navigating).
+  for (const b of completions) {
+    if (bang && b.t === bang.bang.t) continue
+    results.push({ kind: 'bang', trigger: b.t, name: b.s, domain: b.d, query: '', url: null })
+  }
+  if (bang || completions.length > 0) return results
+
   if (looksLikeUrl(query)) {
     const url = resolveInput(query)
     results.push({ kind: 'url', url, title: url })

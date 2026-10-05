@@ -229,17 +229,30 @@
   margin-left: 4px;
 }
 
-/* Narrow sidebars drop the least important buttons instead of clipping (reload always stays).
-   Measured: everything needs 196px of row; without the compact toggle, 162px. */
+/* Narrow sidebars: every control stays; the buttons shrink to share the row instead
+   (measured: they all fit at full size from 196px of row). */
 @container (max-width: 195.5px) {
+  .top-row {
+    gap: 0;
+  }
   .top-row .compact-toggle {
+    margin-left: 0;
+  }
+  .top-row .icon-button {
+    width: clamp(20px, calc((100cqw - 70px) / 4), 28px);
+  }
+  .top-row .private-badge {
     display: none;
   }
 }
 
-@container (max-width: 161.5px) {
-  .top-row .forward-button {
+/* The private badge shortens to its icon before it would crowd the buttons. */
+@container (max-width: 260px) {
+  .private-badge-label {
     display: none;
+  }
+  .top-row .private-badge {
+    padding: 0 5px;
   }
 }
 

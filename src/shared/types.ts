@@ -120,6 +120,8 @@ export type Suggestion =
   | { kind: 'search'; query: string; url: string; fromProvider: boolean }
   | { kind: 'tab'; tabId: string; url: string; title: string; favicon: string | null }
   | { kind: 'history'; url: string; title: string }
+  /** A DuckDuckGo bang: a query to send (url set), or a completion for the bang being typed (url null). */
+  | { kind: 'bang'; trigger: string; name: string; domain: string; query: string; url: string | null }
 
 export interface ToastSpec {
   id: string

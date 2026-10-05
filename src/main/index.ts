@@ -1,6 +1,7 @@
 import { Menu, app } from 'electron'
 import { join } from 'node:path'
 import { AdBlock } from './adblock'
+import { bangs } from './bangs'
 import { History } from './history'
 import { Hub } from './hub'
 import { buildMenu } from './menu'
@@ -51,6 +52,7 @@ if (!app.requestSingleInstanceLock()) {
     hub.startExtensions()
     Menu.setApplicationMenu(buildMenu(hub))
     await adblock.start()
+    void bangs.load()
   })
 
   app.on('second-instance', () => {

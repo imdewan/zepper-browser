@@ -1,4 +1,5 @@
 import { SEARCH_ENGINES, type SearchEngineId } from '@shared/settings'
+import { bangs } from './bangs'
 
 let engine: SearchEngineId = 'google'
 
@@ -32,9 +33,14 @@ export function looksLikeUrl(input: string): boolean {
   return HOST_LIKE.test(text)
 }
 
-/** Turns palette input into a URL: full URLs pass through, hosts get a scheme, anything else is a search. */
+/**
+ * Turns palette input into a URL: DuckDuckGo bangs go straight to their site,
+ * full URLs pass through, hosts get a scheme, anything else is a search.
+ */
 export function resolveInput(input: string): string {
   const text = input.trim()
+  const bang = bangs.resolve(text)
+  if (bang) return bang.url
   if (!looksLikeUrl(text)) return searchUrl(text)
   if (SCHEME.test(text) && !/^[a-z0-9-]+:\d+/i.test(text)) return text
   const isLocal = /^(localhost|127\.|\d{1,3}(\.\d{1,3}){3})/i.test(text)
