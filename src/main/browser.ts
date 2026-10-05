@@ -29,7 +29,7 @@ import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { PIP_WIDTH, type Settings } from '@shared/settings'
+import { PIP_WIDTH, PROTECTIONS, type Protection, type Settings } from '@shared/settings'
 import { DEFAULT_THEME } from '@shared/theme'
 import {
   IPC,
@@ -955,6 +955,17 @@ export class Browser {
         return this.hub.relaunch()
       case 'app.makeDefaultBrowser':
         return this.hub.makeDefaultBrowser()
+      case 'site.setProtection':
+        return this.setSiteProtection(command.domain, command.key, command.enabled)
+      case 'site.resetProtections': {
+        const exceptions = { ...this.settings.siteExceptions }
+        delete exceptions[command.domain]
+        this.settingsStore.update({
+          siteExceptions: exceptions,
+          adblockAllowlist: this.settings.adblockAllowlist.filter((d) => d !== command.domain)
+        })
+        return this.reloadSite(command.domain)
+      }
       case 'data.clear': {
         const { type: _type, ...what } = command
         return void this.hub.clearBrowsingData(what).then(() => {
@@ -2958,6 +2969,12 @@ export class Browser {
       adblockEnabled: this.settings.adblock,
       adblockSite: this.adblock.protects(tab.url),
       siteDomain: parseDomain(tab.url).domain || host,
+      protections: PROTECTIONS.map(({ key, label, setting }) => ({
+        key,
+        label,
+        global: this.settings[setting] === true,
+        site: this.adblock.protects(tab.url, key)
+      })),
       permissions: /^https?:/.test(tab.url) ? this.permissions.list(origin) : []
     }
   }
@@ -3034,14 +3051,30 @@ export class Browser {
   }
 
   /** Turns ad blocking off (or back on) for one site, then reloads its tabs so it takes effect. */
-  private setSiteAdblock(domain: string, enabled: boolean): void {
-    if (!domain) return
-    const list = this.settings.adblockAllowlist.filter((d) => d !== domain)
-    this.settingsStore.update({ adblockAllowlist: enabled ? list : [...list, domain] })
+  /** One protection on or off for one site; its pages reload so it takes effect. */
+  private setSiteProtection(domain: string, key: Protection, enabled: boolean): void {
+    if (!domain || !PROTECTIONS.some((p) => p.key === key)) return
+    const current = (this.settings.siteExceptions[domain] ?? []).filter((k) => k !== key)
+    const next = enabled ? current : [...current, key]
+    const exceptions = { ...this.settings.siteExceptions }
+    if (next.length > 0) exceptions[domain] = next
+    else delete exceptions[domain]
+    this.settingsStore.update({ siteExceptions: exceptions })
+    this.reloadSite(domain)
+  }
+
+  private reloadSite(domain: string): void {
     for (const tab of this.tabs) {
       if (!tab.loaded || (parseDomain(tab.url).domain || safeHost(tab.url)) !== domain) continue
       this.reloadPage(this.views.get(tab.id)?.webContents)
     }
+  }
+
+  private setSiteAdblock(domain: string, enabled: boolean): void {
+    if (!domain) return
+    const list = this.settings.adblockAllowlist.filter((d) => d !== domain)
+    this.settingsStore.update({ adblockAllowlist: enabled ? list : [...list, domain] })
+    this.reloadSite(domain)
   }
 
   private async exportCertificate(index: number): Promise<void> {

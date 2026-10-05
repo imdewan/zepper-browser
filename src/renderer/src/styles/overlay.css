@@ -469,6 +469,59 @@
   min-width: 0;
 }
 
+/* The site panel's Protections: a master switch, and one switch per protection behind the chevron. */
+.protections-toggle {
+  text-align: left;
+  color: inherit;
+}
+
+.protections-toggle:disabled {
+  cursor: default;
+}
+
+.protections-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.protections-chevron {
+  color: var(--text-3);
+  transition: transform 0.18s ease;
+}
+
+.protections-chevron.open {
+  transform: rotate(180deg);
+}
+
+.protection-list {
+  overflow: hidden;
+  margin: 0 0 0 25px;
+}
+
+.protection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0 0;
+  font-size: 12.5px;
+}
+
+.protection-row:first-child {
+  padding-top: 10px;
+}
+
+.protection-row.off-globally .protection-label {
+  color: var(--text-3);
+}
+
+.protection-note {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
 .site-row-sub {
   margin-top: 1px;
   font-size: 11.5px;
@@ -838,6 +891,12 @@
   gap: 6px;
 }
 
+.site-chip-detail {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
 .site-chip {
   height: 26px;
   padding: 0 4px 0 10px;
@@ -888,6 +947,21 @@
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.toggle.small {
+  width: 30px;
+  height: 18px;
+}
+
+.toggle.small .toggle-knob {
+  width: 14px;
+  height: 14px;
+}
+
+.toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .shortcut-list {

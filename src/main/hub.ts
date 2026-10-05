@@ -110,7 +110,7 @@ export class Hub {
     servePageConfig(
       services.settings,
       () => this.userAgent,
-      (url) => services.adblock.protects(url)
+      (url) => services.adblock.protects(url, 'fingerprinting')
     )
     // Client certificates: you choose which (if any) a site gets.
     app.on('select-client-certificate', (event, wc, url, list, callback) => {
@@ -346,7 +346,7 @@ export class Hub {
     this.applyWidevine(settings.widevine)
     bangs.enabled = settings.bangs
     this.services.adblock.setEnabled(settings.adblock)
-    this.services.adblock.setAllowlist(settings.adblockAllowlist)
+    this.services.adblock.setAllowlist(settings.adblockAllowlist, settings.siteExceptions)
     this.services.adblock.setAnnoyances(settings.hideCookieBanners)
     this.services.adblock.setProtections({
       httpsUpgrade: settings.httpsUpgrade,

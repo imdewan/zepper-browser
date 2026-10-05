@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import {
   PINNED_CLOSE_LABELS,
+  PROTECTIONS,
   SEARCH_ENGINES,
   USER_AGENT_LABELS,
   type PinnedCloseBehavior,
@@ -427,24 +428,30 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, onClos
                 >
                   <Toggle checked={settings.adblock} onChange={(adblock) => set({ adblock })} />
                 </Row>
-                {settings.adblockAllowlist.length > 0 && (
+                {(settings.adblockAllowlist.length > 0 || Object.keys(settings.siteExceptions).length > 0) && (
                   <div className="settings-row settings-row-stacked">
                     <div className="settings-row-text">
-                      <div className="settings-row-label">Blocking is off on</div>
-                      <div className="settings-row-hint">Turn it back on here, or from the site panel behind the lock icon.</div>
+                      <div className="settings-row-label">Sites with protections off</div>
+                      <div className="settings-row-hint">Change them from the lock icon on the site, or turn them all back on here.</div>
                     </div>
                     <div className="site-chips">
-                      {settings.adblockAllowlist.map((domain) => (
-                        <span key={domain} className="site-chip">
-                          {domain}
-                          <button
-                            title={`Block ads on ${domain} again`}
-                            onClick={() => zepper.send({ type: 'site.setAdblock', domain, enabled: true })}
-                          >
-                            <IconClose size={9} />
-                          </button>
-                        </span>
-                      ))}
+                      {[...new Set([...settings.adblockAllowlist, ...Object.keys(settings.siteExceptions)])].map((domain) => {
+                        const off = settings.adblockAllowlist.includes(domain)
+                          ? 'all'
+                          : (settings.siteExceptions[domain] ?? []).map((key) => PROTECTIONS.find((p) => p.key === key)?.label).join(', ')
+                        return (
+                          <span key={domain} className="site-chip" title={`Off: ${off}`}>
+                            {domain}
+                            <span className="site-chip-detail">{off === 'all' ? 'all off' : off}</span>
+                            <button
+                              title={`Turn protections back on for ${domain}`}
+                              onClick={() => zepper.send({ type: 'site.resetProtections', domain })}
+                            >
+                              <IconClose size={9} />
+                            </button>
+                          </span>
+                        )
+                      })}
                     </div>
                   </div>
                 )}

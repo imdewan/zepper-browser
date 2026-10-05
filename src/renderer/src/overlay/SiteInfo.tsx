@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { CertificateChain, PermissionPrompt, PermissionState, SiteInfo } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconArrowRight, IconBack, IconCookie, IconGlobe, IconLock, IconShield, IconTrash } from '../icons'
+import { IconArrowRight, IconBack, IconChevronDown, IconCookie, IconGlobe, IconLock, IconShield, IconTrash } from '../icons'
 import { cx } from '../util'
 import { Toggle } from './Toggle'
 
@@ -57,6 +57,9 @@ interface SiteSummaryProps {
 function SiteSummary({ info, onShowCertificate, onShowData }: SiteSummaryProps): React.JSX.Element {
   const [permissions, setPermissions] = useState(info.permissions)
   const [blocking, setBlocking] = useState(info.adblockSite)
+  const [protections, setProtections] = useState(info.protections)
+  const [expanded, setExpanded] = useState(false)
+  const offHere = protections.filter((p) => p.global && !p.site).length
   const web = /^https?:/.test(info.url)
   const cert = info.certificate
   const [openedAt] = useState(() => Date.now())
@@ -100,25 +103,62 @@ function SiteSummary({ info, onShowCertificate, onShowData }: SiteSummaryProps):
       )}
 
       {web && (
-        <section className="site-section site-row">
-          <IconShield size={15} className="site-row-icon" />
-          <div className="site-row-label">
-            <div>Protections</div>
-            <div className="site-row-sub">
-              {!blocking
-                ? `Off on ${info.siteDomain}: ads, trackers, fingerprinting and cross-site cookies are allowed`
-                : info.adblockEnabled
-                  ? `${info.blockedCount} ads and trackers blocked on this page`
-                  : 'Fingerprinting and cross-site cookies blocked'}
-            </div>
+        <section className="site-section">
+          <div className="site-row">
+            <IconShield size={15} className="site-row-icon" />
+            <button className="site-row-label protections-toggle" onClick={() => blocking && setExpanded((e) => !e)} disabled={!blocking}>
+              <div className="protections-title">
+                Protections
+                {blocking && <IconChevronDown size={12} className={cx('protections-chevron', expanded && 'open')} />}
+              </div>
+              <div className="site-row-sub">
+                {!blocking
+                  ? `All off on ${info.siteDomain}`
+                  : offHere > 0
+                    ? `${offHere} turned off on ${info.siteDomain}`
+                    : info.adblockEnabled
+                      ? `${info.blockedCount} ads and trackers blocked on this page`
+                      : 'On for this site'}
+              </div>
+            </button>
+            <Toggle
+              checked={blocking}
+              onChange={(enabled) => {
+                setBlocking(enabled)
+                if (!enabled) setExpanded(false)
+                zepper.send({ type: 'site.setAdblock', domain: info.siteDomain, enabled })
+              }}
+            />
           </div>
-          <Toggle
-            checked={blocking}
-            onChange={(enabled) => {
-              setBlocking(enabled)
-              zepper.send({ type: 'site.setAdblock', domain: info.siteDomain, enabled })
-            }}
-          />
+          <AnimatePresence initial={false}>
+            {blocking && expanded && (
+              <motion.div
+                className="protection-list"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
+                {protections.map((protection) => (
+                  <div key={protection.key} className={cx('protection-row', !protection.global && 'off-globally')}>
+                    <div className="protection-label">
+                      {protection.label}
+                      {!protection.global && <span className="protection-note">Off in Settings</span>}
+                    </div>
+                    <Toggle
+                      small
+                      disabled={!protection.global}
+                      checked={protection.global && protection.site}
+                      onChange={(enabled) => {
+                        setProtections((list) => list.map((p) => (p.key === protection.key ? { ...p, site: enabled } : p)))
+                        zepper.send({ type: 'site.setProtection', domain: info.siteDomain, key: protection.key, enabled })
+                      }}
+                    />
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
       )}
 

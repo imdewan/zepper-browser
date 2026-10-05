@@ -19,6 +19,18 @@ export type SearchEngineId = 'google' | 'duckduckgo' | 'bing' | 'brave' | 'kagi'
 
 export type SecureDns = 'off' | 'automatic' | 'cloudflare' | 'quad9' | 'google'
 
+/** Protections that can be turned off for one site from the lock icon. */
+export type Protection = 'ads' | 'cookieBanners' | 'fingerprinting' | 'crossSiteCookies' | 'httpsUpgrade' | 'cleanLinks'
+
+export const PROTECTIONS: { key: Protection; label: string; setting: keyof Settings }[] = [
+  { key: 'ads', label: 'Ads and trackers', setting: 'adblock' },
+  { key: 'cookieBanners', label: 'Cookie banners', setting: 'hideCookieBanners' },
+  { key: 'fingerprinting', label: 'Fingerprinting', setting: 'blockFingerprinting' },
+  { key: 'crossSiteCookies', label: 'Cross-site cookies', setting: 'blockCrossSiteCookies' },
+  { key: 'httpsUpgrade', label: 'Upgrade to HTTPS', setting: 'httpsUpgrade' },
+  { key: 'cleanLinks', label: 'Tracker-free links', setting: 'cleanLinks' }
+]
+
 /** DNS-over-HTTPS endpoints for the providers offered in Settings. */
 export const SECURE_DNS_SERVERS = {
   cloudflare: 'https://chrome.cloudflare-dns.com/dns-query',
@@ -85,6 +97,8 @@ export interface Settings {
   httpsUpgrade: boolean
   /** Remove click identifiers (fbclid, gclid…) and Google AMP wrappers from links you open. */
   cleanLinks: boolean
+  /** Protections turned off for single sites (registrable domain → protections off there). */
+  siteExceptions: Record<string, Protection[]>
   /** DNS over HTTPS: off, automatic (when your DNS provider supports it), or a provider. */
   secureDns: SecureDns
   /** Where downloads are saved ('' means the Downloads folder). */
@@ -150,6 +164,7 @@ export const DEFAULT_SETTINGS: Settings = {
   blockCrossSiteCookies: true,
   httpsUpgrade: true,
   cleanLinks: true,
+  siteExceptions: {},
   downloadPath: '',
   downloadAsk: false,
   swipeBetweenSpaces: true,

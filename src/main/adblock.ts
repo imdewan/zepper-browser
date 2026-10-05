@@ -12,6 +12,7 @@ import {
 import { readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse } from 'tldts-experimental'
+import type { Protection } from '@shared/settings'
 import { HttpsUpgrades, cleanLink } from './shields'
 
 const REFRESH_AFTER_MS = 24 * 60 * 60 * 1000
@@ -74,7 +75,10 @@ function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): str
 const MAX_DOM_TOKENS = 2000
 
 export class AdBlock {
-  private blocker: ElectronBlocker | null = null
+  /** uBlock Origin's ad and tracker lists. */
+  private base: ElectronBlocker | null = null
+  /** The same plus the annoyance lists (cookie banners), loaded while that's turned on. */
+  private full: ElectronBlocker | null = null
   private enabled = true
   /** Also hide cookie banners and other annoyances (uBlock Origin's annoyance lists). */
   private annoyances = false
@@ -82,13 +86,16 @@ export class AdBlock {
   /** The other protections (see shields.ts), each switchable in Settings › Privacy. */
   private protections = { httpsUpgrade: true, cleanLinks: true, crossSiteCookies: true }
   readonly https = new HttpsUpgrades()
-  /** Registrable domains where blocking is off. */
+  /** Registrable domains where every protection is off. */
   private allowlist = new Set<string>()
+  /** Registrable domains where some protections are off. */
+  private exceptions: Record<string, Protection[]> = {}
   private readonly sessions = new Set<Session>()
 
   constructor(private readonly onBlocked: (webContentsId: number) => void) {
     ipcMain.on(COSMETICS_CHANNEL, (event, url: string) => {
-      event.returnValue = this.blocksOn(topUrlOf(event.senderFrame, url)) ? this.cosmetics(url) : { styles: '', scripts: [] }
+      const page = topUrlOf(event.senderFrame, url)
+      event.returnValue = this.blocksOn(page) ? this.cosmetics(url, page) : { styles: '', scripts: [] }
     })
     ipcMain.handle(COSMETICS_DOM_CHANNEL, (event, payload: { url: string; classes: string[]; ids: string[]; hrefs: string[] }) => {
       // Pages shape what the preload sends (class names, links), so it's bounded here too.
@@ -96,41 +103,52 @@ export class AdBlock {
         Array.isArray(value) ? value.slice(0, MAX_DOM_TOKENS).filter((v): v is string => typeof v === 'string' && v.length <= 512) : []
       const url = String(payload?.url ?? '')
       const tokens = { url, classes: list(payload?.classes), ids: list(payload?.ids), hrefs: list(payload?.hrefs) }
-      return this.blocksOn(topUrlOf(event.senderFrame, url)) ? this.domCosmetics(tokens) : { styles: '', scripts: [] }
+      const page = topUrlOf(event.senderFrame, url)
+      return this.blocksOn(page) ? this.domCosmetics(tokens, page) : { styles: '', scripts: [] }
     })
   }
 
-  /** The engine for the current lists is cached separately from the other one's. */
-  private get cachePath(): string {
-    return join(app.getPath('userData'), this.annoyances ? 'adblock-engine-full.bin' : 'adblock-engine.bin')
+  private cachePath(full: boolean): string {
+    return join(app.getPath('userData'), full ? 'adblock-engine-full.bin' : 'adblock-engine.bin')
   }
 
   async start(): Promise<void> {
     this.started = true
-    const full = this.annoyances
-    if (await this.cacheIsStale()) await unlink(this.cachePath).catch(() => {})
+    this.base ??= await this.load(false)
+    if (this.annoyances && !this.full) this.full = await this.load(true)
+  }
+
+  /** Loads an engine from its cache (refreshed daily) or the prebuilt lists. */
+  private async load(full: boolean): Promise<ElectronBlocker | null> {
+    const path = this.cachePath(full)
+    if (await this.cacheIsStale(path)) await unlink(path).catch(() => {})
     try {
       const cache = {
-        path: this.cachePath,
-        read: async (path: string) => new Uint8Array(await readFile(path)),
-        write: (path: string, buffer: Uint8Array) => writeFile(path, buffer)
+        path,
+        read: async (file: string) => new Uint8Array(await readFile(file)),
+        write: (file: string, buffer: Uint8Array) => writeFile(file, buffer)
       }
       const blocker = full
         ? await ElectronBlocker.fromPrebuiltFull(fetch, cache)
         : await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, cache)
-      // A newer choice of lists may have arrived while these loaded.
-      if (full !== this.annoyances) return
       blocker.on('request-blocked', (request) => this.onBlocked(request.tabId))
-      this.blocker = blocker
+      return blocker
     } catch (error) {
       console.error('[adblock] failed to load filter lists', error)
+      return null
     }
+  }
+
+  /** The engine for a page: with the annoyance lists, unless cookie banners are allowed there. */
+  private blockerFor(pageUrl: string | undefined): ElectronBlocker | null {
+    if (this.annoyances && this.full && this.protects(pageUrl, 'cookieBanners')) return this.full
+    return this.base
   }
 
   /** When the filter lists on disk were last downloaded (0 if never). */
   async filtersUpdatedAt(): Promise<number> {
     try {
-      return (await stat(this.cachePath)).mtimeMs
+      return (await stat(this.cachePath(false))).mtimeMs
     } catch {
       return 0
     }
@@ -148,7 +166,11 @@ export class AdBlock {
   setAnnoyances(on: boolean): void {
     if (on === this.annoyances) return
     this.annoyances = on
-    if (this.started) void this.start()
+    if (!on) this.full = null
+    else if (this.started)
+      void this.load(true).then((blocker) => {
+        if (this.annoyances) this.full = blocker
+      })
   }
 
   setProtections(protections: { httpsUpgrade: boolean; cleanLinks: boolean; crossSiteCookies: boolean }): void {
@@ -159,7 +181,7 @@ export class AdBlock {
   crossSiteCookiesBlocked(details: RequestDetails): boolean {
     if (!this.protections.crossSiteCookies || details.resourceType === 'mainFrame') return false
     const page = pageUrlOf(details)
-    if (!page || !/^https?:/.test(page) || !this.protects(page)) return false
+    if (!page || !/^https?:/.test(page) || !this.protects(page, 'crossSiteCookies')) return false
     const site = siteOf(details.url)
     if (!site || site === siteOf(page)) return false
     try {
@@ -169,21 +191,23 @@ export class AdBlock {
     }
   }
 
-  /** Sites (registrable domains) where blocking is off. */
-  setAllowlist(domains: string[]): void {
+  /** Sites where every protection is off, and sites where only some are. */
+  setAllowlist(domains: string[], exceptions: Record<string, Protection[]> = {}): void {
     this.allowlist = new Set(domains)
+    this.exceptions = exceptions
   }
 
   /** Whether ad blocking applies to a page, by its top-level URL. */
   blocksOn(pageUrl: string | undefined): boolean {
-    return this.enabled && this.protects(pageUrl)
+    return this.enabled && this.protects(pageUrl, 'ads')
   }
 
-  /** Whether a site's protections are on (they're off for sites in the allowlist, from the site panel). */
-  protects(pageUrl: string | undefined): boolean {
-    if (!pageUrl || this.allowlist.size === 0) return true
+  /** Whether a site's protections (or one of them) are on; they're turned off per site from the lock icon. */
+  protects(pageUrl: string | undefined, protection?: Protection): boolean {
+    if (!pageUrl) return true
     const site = siteOf(pageUrl)
-    return !site || !this.allowlist.has(site)
+    if (!site || this.allowlist.has(site)) return !site
+    return !protection || !this.exceptions[site]?.includes(protection)
   }
 
   /** Blocks in another session too (e.g. a private window's). */
@@ -197,12 +221,15 @@ export class AdBlock {
   private readonly onBeforeRequest = (details: OnBeforeRequestListenerDetails, callback: (response: CallbackResponse) => void): void => {
     if (details.resourceType === 'mainFrame' && details.method === 'GET') {
       // Pages open without click trackers or AMP wrappers, and over HTTPS when the site has it.
-      const cleaned = this.protections.cleanLinks && this.protects(details.url) ? cleanLink(details.url) : null
-      const upgraded = this.protections.httpsUpgrade ? this.https.upgrade(cleaned ?? details.url) : null
+      const cleaned = this.protections.cleanLinks && this.protects(details.url, 'cleanLinks') ? cleanLink(details.url) : null
+      const upgraded =
+        this.protections.httpsUpgrade && this.protects(details.url, 'httpsUpgrade') ? this.https.upgrade(cleaned ?? details.url) : null
       if (upgraded || cleaned) return callback({ redirectURL: upgraded ?? cleaned! })
     }
-    if (!this.blocker || !this.blocksOn(pageUrlOf(details))) return callback({})
-    this.blocker.onBeforeRequest(details, callback)
+    const page = pageUrlOf(details)
+    const blocker = this.blockerFor(page)
+    if (!blocker || !this.blocksOn(page)) return callback({})
+    blocker.onBeforeRequest(details, callback)
   }
 
   private readonly onHeadersReceived = (
@@ -217,17 +244,20 @@ export class AdBlock {
       for (const key of Object.keys(headers)) if (key.toLowerCase() === 'set-cookie') delete headers[key]
       callback({ ...response, responseHeaders: headers })
     }
-    if (!this.blocker || !this.blocksOn(pageUrlOf(details))) return done({})
-    this.blocker.onHeadersReceived(details, done)
+    const page = pageUrlOf(details)
+    const blocker = this.blockerFor(page)
+    if (!blocker || !this.blocksOn(page)) return done({})
+    blocker.onHeadersReceived(details, done)
   }
 
   /** Hostname-specific hiding rules, generic base rules and scriptlets for a page. */
-  private cosmetics(url: string): CosmeticsResponse {
+  private cosmetics(url: string, pageUrl: string): CosmeticsResponse {
     const empty = { styles: '', scripts: [] }
-    if (!this.blocker || !this.enabled || !/^https?:/.test(url)) return empty
+    const blocker = this.blockerFor(pageUrl)
+    if (!blocker || !this.enabled || !/^https?:/.test(url)) return empty
     const { hostname, domain } = parse(url)
     if (!hostname) return empty
-    const result = this.blocker.getCosmeticsFilters({
+    const result = blocker.getCosmeticsFilters({
       url,
       hostname,
       domain,
@@ -241,12 +271,13 @@ export class AdBlock {
   }
 
   /** Generic class/id/href hiding rules for what the page actually contains. */
-  private domCosmetics(payload: { url: string; classes: string[]; ids: string[]; hrefs: string[] }): CosmeticsResponse {
+  private domCosmetics(payload: { url: string; classes: string[]; ids: string[]; hrefs: string[] }, pageUrl: string): CosmeticsResponse {
     const empty = { styles: '', scripts: [] }
-    if (!this.blocker || !this.enabled) return empty
+    const blocker = this.blockerFor(pageUrl)
+    if (!blocker || !this.enabled) return empty
     const { hostname, domain } = parse(payload.url)
     if (!hostname) return empty
-    const result = this.blocker.getCosmeticsFilters({
+    const result = blocker.getCosmeticsFilters({
       url: payload.url,
       hostname,
       domain,
@@ -262,9 +293,9 @@ export class AdBlock {
     return { styles: result.styles, scripts: [] }
   }
 
-  private async cacheIsStale(): Promise<boolean> {
+  private async cacheIsStale(path: string): Promise<boolean> {
     try {
-      const info = await stat(this.cachePath)
+      const info = await stat(path)
       return Date.now() - info.mtimeMs > REFRESH_AFTER_MS
     } catch {
       return false

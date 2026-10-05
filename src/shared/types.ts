@@ -1,6 +1,6 @@
 // State and IPC contract shared by the main process and both renderers.
 
-import type { Settings } from './settings'
+import type { Protection, Settings } from './settings'
 
 export type TabKind = 'essential' | 'pinned' | 'normal'
 
@@ -241,6 +241,8 @@ export interface SiteInfo {
   adblockSite: boolean
   /** The site the per-site switch applies to, e.g. youtube.com. */
   siteDomain: string
+  /** Each protection: on in Settings, and on for this site. */
+  protections: { key: Protection; label: string; global: boolean; site: boolean }[]
   permissions: { permission: string; label: string; state: PermissionState }[]
 }
 
@@ -348,6 +350,9 @@ export type Command =
   | { type: 'app.relaunch' }
   | { type: 'app.makeDefaultBrowser' }
   /** Settings › Privacy › Clear browsing data. `since` (ms since epoch) applies to history. */
+  /** One protection on or off for one site (from the lock icon). */
+  | { type: 'site.setProtection'; domain: string; key: Protection; enabled: boolean }
+  | { type: 'site.resetProtections'; domain: string }
   | { type: 'data.clear'; since: number; history: boolean; cookies: boolean; cache: boolean; downloads: boolean }
   | { type: 'window.open'; kind: 'blank' | 'private' }
   /** Compact-mode peek: the card has slid in (show the traffic lights) or started leaving (hide them). */
