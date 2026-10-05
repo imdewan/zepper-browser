@@ -149,6 +149,8 @@ export interface Snapshot {
   widevine: WidevineStatus
   downloads: DownloadEntry[]
   folders: Folder[]
+  /** How Tidy groups tabs here: Apple Intelligence, or by site (with why). */
+  tidy: { kind: 'ai' } | { kind: 'site'; reason: string }
   /** The command bar is open (the empty page steps back while it is). */
   paletteOpen: boolean
   /** Window content size, so floating UI can line up with the window's background. */
@@ -317,6 +319,9 @@ export type Command =
   | { type: 'folder.create'; spaceId: string; parentId: string | null; tabIds?: string[] }
   | { type: 'folder.update'; folderId: string; patch: { name?: string; collapsed?: boolean } }
   | { type: 'folder.contextMenu'; folderId: string }
+  /** Group a space's normal tabs into folders (Apple Intelligence where available). */
+  | { type: 'space.tidy'; spaceId: string }
+  | { type: 'space.untidy'; token: number }
   | {
       type: 'space.update'
       spaceId: string

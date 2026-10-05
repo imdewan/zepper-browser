@@ -7,6 +7,7 @@ import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
 import { bangs } from './bangs'
 import { Downloads } from './downloads'
 import { Extensions } from './extensions'
+import { tidyMode, type TidyMode } from './tidy'
 import type { History } from './history'
 import type { SettingsStore } from './settings-store'
 import { CertificateStore, SitePermissions } from './site'
@@ -31,6 +32,8 @@ export interface Services {
 export class Hub {
   readonly browsers = new Set<Browser>()
   readonly services: Services
+  /** How Tidy works on this Mac (until checked: by site). */
+  tidy: TidyMode = { kind: 'site', reason: 'Checking for Apple Intelligence…' }
   /** Every download, shared by all windows. */
   readonly downloads = new Downloads(() => {
     for (const browser of this.browsers) browser.refresh()
@@ -90,6 +93,10 @@ export class Hub {
     })
     this.applyAppIcon()
     this.applySettings()
+    void tidyMode().then((mode) => {
+      this.tidy = mode
+      for (const browser of this.browsers) browser.refresh()
+    })
   }
 
   /** Chrome extensions live in the shared session; they act on the focused normal window. */
@@ -113,7 +120,9 @@ export class Hub {
     this.attachSession(ses)
     // A new window opens on the space you're in, at your window's size.
     const from = kind === 'main' ? undefined : kind === 'blank' ? this.focusedNormal() : this.focused()
-    const seed: WindowSeed | undefined = from?.seedForNewWindow(kind === 'blank' && this.services.settings.get().newWindowSpace === 'current')
+    const seed: WindowSeed | undefined = from?.seedForNewWindow(
+      kind === 'blank' && this.services.settings.get().newWindowSpace === 'current'
+    )
     const browser = new Browser(this, kind, ses, seed)
     this.browsers.add(browser)
     if (kind === 'main') this.main = browser

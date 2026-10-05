@@ -88,14 +88,9 @@ export function Overlay(): React.JSX.Element | null {
     }, [])
   )
 
-  const wantsFull = palette !== null || popover !== null || settingsOpen || historyOpen || downloadsOpen || about !== null || creatingSpace || exiting
-  const mode: OverlayMode = wantsFull
-    ? 'full'
-    : peek
-      ? 'peek'
-      : toasts.length > 0 || find
-        ? 'corner'
-        : 'hidden'
+  const wantsFull =
+    palette !== null || popover !== null || settingsOpen || historyOpen || downloadsOpen || about !== null || creatingSpace || exiting
+  const mode: OverlayMode = wantsFull ? 'full' : peek ? 'peek' : toasts.length > 0 || find ? 'corner' : 'hidden'
   useEffect(() => {
     if (lastMode.current === mode) return
     lastMode.current = mode
@@ -145,8 +140,7 @@ export function Overlay(): React.JSX.Element | null {
 
   if (!snapshot) return null
   const space = snapshot.spaces.find((s) => s.id === snapshot.activeSpaceId)
-  const popoverSpace =
-    popover && 'spaceId' in popover ? snapshot.spaces.find((s) => s.id === popover.spaceId) : undefined
+  const popoverSpace = popover && 'spaceId' in popover ? snapshot.spaces.find((s) => s.id === popover.spaceId) : undefined
   const dark = space ? prefersDarkUi(space.theme, systemDark) : systemDark
   const accent = space ? themeAccent(space.theme) : null
 
@@ -163,20 +157,32 @@ export function Overlay(): React.JSX.Element | null {
           zepper.send({ type: 'ui.peekSidebar', show: false })
         }}
       >
-        {peek === 'shown' && !wantsFull && <Peek key="peek" snapshot={snapshot} onHide={() => setPeek('exiting')} onShow={() => setPeek('shown')} />}
+        {peek === 'shown' && !wantsFull && (
+          <Peek key="peek" snapshot={snapshot} onHide={() => setPeek('exiting')} onShow={() => setPeek('shown')} />
+        )}
       </AnimatePresence>
       <AnimatePresence onExitComplete={() => setExiting(false)}>
-        {settingsOpen && <SettingsPanel key="settings" settings={snapshot.settings} widevine={snapshot.widevine} onClose={closeSettings} />}
+        {settingsOpen && (
+          <SettingsPanel
+            key="settings"
+            settings={snapshot.settings}
+            widevine={snapshot.widevine}
+            tidy={snapshot.tidy}
+            onClose={closeSettings}
+          />
+        )}
         {historyOpen && <HistoryPanel key="history" onClose={closeHistory} />}
         {about && <AboutPanel key="about" info={about} onClose={closeAbout} />}
         {downloadsOpen && <DownloadsPanel key="downloads" downloads={snapshot.downloads} onClose={closeDownloads} />}
-        {creatingSpace && <CreateSpaceDialog
+        {creatingSpace && (
+          <CreateSpaceDialog
             key="create"
             systemDark={systemDark}
             spaces={snapshot.spaces}
             activeSpaceId={snapshot.activeSpaceId}
             onClose={closeCreate}
-          />}
+          />
+        )}
         {palette && (
           <Palette
             key={palette.key}

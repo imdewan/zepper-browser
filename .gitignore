@@ -6,3 +6,4 @@ dist/
 .vite/
 *.tsbuildinfo
 .evs/
+build/bin/

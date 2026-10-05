@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useMotionValue } from 'motion/react'
 import type { Folder, Snapshot, Space, Split, Tab } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconArrowDown, IconChevronDown, IconDots, IconPlus } from '../icons'
+import { IconArrowDown, IconChevronDown, IconDots, IconPlus, IconSparkle } from '../icons'
 import { cx, rectOf } from '../util'
 import { SplitRow } from './SplitRow'
 import { useDragging, useDrop } from './dnd'
@@ -54,7 +54,15 @@ function pinnedRows(
       if (!folder.collapsed) rows.push(...pinnedRows(folder.items, folder.id, depth + 1, ctx))
       else if (ctx.activeTabId && inside.includes(ctx.activeTabId)) {
         const active = ctx.tabs.get(ctx.activeTabId)
-        if (active) rows.push(<TabRow key={active.id} tab={active} active place={{ ...place, parentId: folder.id, index: folder.items.indexOf(active.id), depth: depth + 1 }} />)
+        if (active)
+          rows.push(
+            <TabRow
+              key={active.id}
+              tab={active}
+              active
+              place={{ ...place, parentId: folder.id, index: folder.items.indexOf(active.id), depth: depth + 1 }}
+            />
+          )
       }
       return
     }
@@ -103,7 +111,10 @@ const QUIET_MS = 140
 export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRename }: SpacesViewportProps): React.JSX.Element {
   const viewport = useRef<HTMLDivElement>(null)
   const width = useWidth(viewport)
-  const index = Math.max(0, snapshot.spaces.findIndex((s) => s.id === snapshot.activeSpaceId))
+  const index = Math.max(
+    0,
+    snapshot.spaces.findIndex((s) => s.id === snapshot.activeSpaceId)
+  )
   const count = snapshot.spaces.length
   const x = useMotionValue(0)
   const gesture = useRef({
@@ -304,6 +315,7 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
             splits={snapshot.splits}
             folders={snapshot.folders}
             newTabAtBottom={snapshot.settings.newTabPosition === 'bottom'}
+            tidy={snapshot.settings.showTidy ? snapshot.tidy : null}
             renaming={renamingId === space.id}
             onRenameDone={onRenameDone}
             onStartRename={() => onStartRename(space.id)}
@@ -321,12 +333,25 @@ interface SpaceViewProps {
   splits: Split[]
   folders: Folder[]
   newTabAtBottom: boolean
+  /** How Tidy works here, or null when its button is turned off. */
+  tidy: Snapshot['tidy'] | null
   renaming: boolean
   onRenameDone: () => void
   onStartRename: () => void
 }
 
-function SpaceView({ space, tabs, activeTabId, splits, folders, newTabAtBottom, renaming, onRenameDone, onStartRename }: SpaceViewProps): React.JSX.Element {
+function SpaceView({
+  space,
+  tabs,
+  activeTabId,
+  splits,
+  folders,
+  newTabAtBottom,
+  tidy,
+  renaming,
+  onRenameDone,
+  onStartRename
+}: SpaceViewProps): React.JSX.Element {
   const pinned = tabs.filter((t) => t.kind === 'pinned' && t.spaceId === space.id)
   const normal = tabs.filter((t) => t.kind === 'normal' && t.spaceId === space.id)
   const canClear = normal.some((t) => t.id !== activeTabId && !t.audible)
@@ -342,25 +367,38 @@ function SpaceView({ space, tabs, activeTabId, splits, folders, newTabAtBottom, 
   const hasPinnedArea = space.pinnedItems.length > 0
   // Collapsed pinned area: just the pinned tab you're on.
   const pinnedArea = space.collapsedPins
-    ? renderRows(pinned.filter((t) => t.id === activeTabId), tabs, splits, activeTabId)
+    ? renderRows(
+        pinned.filter((t) => t.id === activeTabId),
+        tabs,
+        splits,
+        activeTabId
+      )
     : pinnedRows(space.pinnedItems, null, 0, ctx)
   const normalPlace = (_tab: Tab, index: number): RowPlace => ({ zone: 'normal', spaceId: space.id, parentId: null, index, depth: 0 })
 
   return (
     <section className="space">
-      <SpaceHeader
-        space={space}
-        hasPinned={hasPinnedArea}
-        renaming={renaming}
-        onRenameDone={onRenameDone}
-        onStartRename={onStartRename}
-      />
+      <SpaceHeader space={space} hasPinned={hasPinnedArea} renaming={renaming} onRenameDone={onRenameDone} onStartRename={onStartRename} />
       <div className="space-scroll">
         <AnimatePresence initial={false}>{pinnedArea}</AnimatePresence>
         {dragging && <PinZone spaceId={space.id} index={space.pinnedItems.length} empty={!hasPinnedArea} />}
 
         <div className={cx('pinned-separator', normal.length === 0 && 'hidden')}>
           <span className="separator-line" />
+          {tidy && normal.length >= 3 && (
+            <button
+              className="clear-button tidy-button"
+              title={
+                tidy.kind === 'ai'
+                  ? 'Group related tabs into folders with Apple Intelligence'
+                  : `Group tabs from the same site into folders. ${tidy.reason}`
+              }
+              onClick={() => zepper.send({ type: 'space.tidy', spaceId: space.id })}
+            >
+              <IconSparkle size={10} />
+              Tidy
+            </button>
+          )}
           <button
             className={cx('clear-button', canClear && 'can-clear')}
             title="Close all unpinned tabs (⌘⇧K)"

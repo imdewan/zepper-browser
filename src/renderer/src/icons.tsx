@@ -162,6 +162,11 @@ export const IconArrowDown = (p: IconProps): React.JSX.Element => (
     <path d="M12 5v14M6 13l6 6 6-6" />
   </Icon>
 )
+export const IconSparkle = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <path d="M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9L12 3zM19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" />
+  </Icon>
+)
 export const IconShield = (p: IconProps): React.JSX.Element => (
   <Icon {...p}>
     <path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z" />

@@ -62,6 +62,7 @@ import { JsonFile } from './persist'
 import { parse as parseDomain } from 'tldts-experimental'
 import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
 import { suggest } from './suggest'
+import { tidyGroups } from './tidy'
 import { resolveInput, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
 
 /** Height reserved for the traffic lights when the sidebar is on the right. */
@@ -77,10 +78,7 @@ const MAX_ESSENTIALS = 12
 /** Top-right overlay region for toasts and the find bar. */
 const CORNER_REGION = { width: 440, height: 240 }
 
-type PersistedTab = Pick<
-  Tab,
-  'id' | 'kind' | 'spaceId' | 'url' | 'title' | 'favicon' | 'pinned' | 'lastActiveAt'
->
+type PersistedTab = Pick<Tab, 'id' | 'kind' | 'spaceId' | 'url' | 'title' | 'favicon' | 'pinned' | 'lastActiveAt'>
 
 interface PersistedState {
   version: 1
@@ -289,8 +287,13 @@ export class Browser {
   private readonly mediaTipShown = new Set<string>()
   /** Folders in spaces' pinned areas (the tree itself is space.pinnedItems and folder.items). */
   private folders: Folder[] = []
+  private tidying = false
+  private tidySeq = 0
+  /** The last Tidy, so Undo can put things back. */
+  private lastTidy: { token: number; spaceId: string; folders: string[]; tabs: string[]; before: string[] } | null = null
   /** Page dialogs (alert/confirm/prompt) and sign-in requests waiting for an answer, oldest first. */
-  private pendingDialogs: { id: number; tabId: string | undefined; popover: PopoverSpec; answer: (ok: boolean, value: string) => void }[] = []
+  private pendingDialogs: { id: number; tabId: string | undefined; popover: PopoverSpec; answer: (ok: boolean, value: string) => void }[] =
+    []
   private showingDialog: number | null = null
   private dialogSeq = 0
   /** Per tab, per page: how many dialogs it has shown, and whether you've blocked more. */
@@ -321,9 +324,7 @@ export class Browser {
       // separate any of them from its context menu (Sign-ins).
       this.spaces = saved.spaces.map((space) => ({ ...space, profile: space.profile ?? DEFAULT_PROFILE }))
       this.tabs = saved.tabs.map((t) => makeTab(t))
-      this.activeSpaceId = saved.spaces.some((s) => s.id === saved.activeSpaceId)
-        ? saved.activeSpaceId
-        : saved.spaces[0].id
+      this.activeSpaceId = saved.spaces.some((s) => s.id === saved.activeSpaceId) ? saved.activeSpaceId : saved.spaces[0].id
       this.restoreTabId = saved.activeTabId
       const ids = new Set(this.tabs.map((t) => t.id))
       this.splits = (saved.splits ?? [])
@@ -334,10 +335,16 @@ export class Browser {
       this.savedWindow = saved.window
       this.compact = saved.compact ?? false
       // Pinned areas from before folders: the pinned tabs in their saved order.
-      for (const space of this.spaces) space.pinnedItems ??= this.tabs.filter((t) => t.kind === 'pinned' && t.spaceId === space.id).map((t) => t.id)
+      for (const space of this.spaces)
+        space.pinnedItems ??= this.tabs.filter((t) => t.kind === 'pinned' && t.spaceId === space.id).map((t) => t.id)
       this.normalizePinned()
     } else if (kind === 'private') {
-      const space = makeSpace('Private', '🕶️', { colors: ['#3b2a6b', '#1b1934'], opacity: 0.7, texture: 0.15, scheme: 'dark' }, DEFAULT_PROFILE)
+      const space = makeSpace(
+        'Private',
+        '🕶️',
+        { colors: ['#3b2a6b', '#1b1934'], opacity: 0.7, texture: 0.15, scheme: 'dark' },
+        DEFAULT_PROFILE
+      )
       this.spaces = [space]
       this.tabs = []
       this.activeSpaceId = space.id
@@ -496,7 +503,11 @@ export class Browser {
         showingDialog: this.showingDialog,
         showingPrompt: this.showingPrompt,
         pendingDialogs: this.pendingDialogs.map((d) => ({ id: d.id, tabId: d.tabId, kind: d.popover.kind })),
-        windows: BrowserWindow.getAllWindows().map((w) => ({ title: w.getTitle(), url: w.webContents.getURL().slice(0, 80), visible: w.isVisible() })),
+        windows: BrowserWindow.getAllWindows().map((w) => ({
+          title: w.getTitle(),
+          url: w.webContents.getURL().slice(0, 80),
+          visible: w.isVisible()
+        })),
         browsers: [...this.hub.browsers].map((b) => b.debugSummary())
       }),
       drag: (layer, from, to) => {
@@ -684,7 +695,10 @@ export class Browser {
    * screen), otherwise a comfortable default; other windows cascade from the default.
    */
   private initialBounds(): Partial<Rectangle> {
-    const saved = this.kind === 'main' ? this.savedWindow?.bounds : this.seed && { ...this.seed.bounds, x: this.seed.bounds.x + 24, y: this.seed.bounds.y + 24 }
+    const saved =
+      this.kind === 'main'
+        ? this.savedWindow?.bounds
+        : this.seed && { ...this.seed.bounds, x: this.seed.bounds.x + 24, y: this.seed.bounds.y + 24 }
     if (saved && saved.width >= 640 && saved.height >= 495) {
       const area = screen.getDisplayMatching(saved).workArea
       const visibleX = Math.min(saved.x + saved.width, area.x + area.width) - Math.max(saved.x, area.x)
@@ -791,6 +805,10 @@ export class Browser {
         return this.createFolder(command.spaceId, command.parentId, command.tabIds)
       case 'folder.update':
         return this.updateFolder(command.folderId, command.patch)
+      case 'space.tidy':
+        return void this.tidySpace(command.spaceId)
+      case 'space.untidy':
+        return this.untidy(command.token)
       case 'folder.contextMenu':
         return this.folderContextMenu(command.folderId)
       case 'space.setProfile':
@@ -832,7 +850,10 @@ export class Browser {
       case 'clipboard.write':
         return void clipboard.writeText(command.text)
       case 'media.toggle':
-        return void this.views.get(command.tabId)?.webContents.executeJavaScript(MEDIA_TOGGLE_SCRIPT, true).catch(() => {})
+        return void this.views
+          .get(command.tabId)
+          ?.webContents.executeJavaScript(MEDIA_TOGGLE_SCRIPT, true)
+          .catch(() => {})
       case 'dialog.respond':
         return this.respondToDialog(command.id, command.ok, command.value, command.suppress)
       case 'auth.respond':
@@ -987,8 +1008,7 @@ export class Browser {
 
   /** Tabs in sidebar order for the active space: Essentials, pinned, then normal. */
   visibleTabs(): Tab[] {
-    const inSpace = (kind: TabKind): Tab[] =>
-      this.tabs.filter((t) => t.kind === kind && t.spaceId === this.activeSpaceId)
+    const inSpace = (kind: TabKind): Tab[] => this.tabs.filter((t) => t.kind === kind && t.spaceId === this.activeSpaceId)
     return [...this.tabs.filter((t) => t.kind === 'essential'), ...inSpace('pinned'), ...inSpace('normal')]
   }
 
@@ -997,10 +1017,7 @@ export class Browser {
   }
 
   /** Opens a URL in a new normal tab at the top of a space's list (newest first). */
-  openTab(
-    url: string,
-    options: { spaceId?: string; background?: boolean; afterTabId?: string } = {}
-  ): Tab {
+  openTab(url: string, options: { spaceId?: string; background?: boolean; afterTabId?: string } = {}): Tab {
     const tab = makeTab({ kind: 'normal', url, spaceId: options.spaceId ?? this.activeSpaceId })
     this.insertNormalTab(tab, options.afterTabId)
     if (options.background) {
@@ -1033,8 +1050,7 @@ export class Browser {
       return
     }
     // Navigating a pinned tab or Essential away from its site opens a new tab instead.
-    const leavesPin =
-      current?.pinned && new URL(url).host !== safeHost(current.pinned.url) && where === 'current'
+    const leavesPin = current?.pinned && new URL(url).host !== safeHost(current.pinned.url) && where === 'current'
     if (where === 'new' || !current || leavesPin) {
       this.openTab(url)
       return
@@ -1123,10 +1139,18 @@ export class Browser {
     if (this.tab(tabId)?.muted) return
     const others = this.tabs.filter((t) => t.audible && t.id !== tabId && !t.muted)
     if (behavior === 'nothing' || others.length === 0) return
-    const names = others.map((t) => t.media?.title || t.title).slice(0, 2).join(', ')
+    const names = others
+      .map((t) => t.media?.title || t.title)
+      .slice(0, 2)
+      .join(', ')
     if (behavior === 'pause') {
       this.pauseOthers(tabId)
-      this.toast({ id: 'media-others', message: others.length === 1 ? 'Paused the other tab' : `Paused ${others.length} other tabs`, description: names, timeout: 3000 })
+      this.toast({
+        id: 'media-others',
+        message: others.length === 1 ? 'Paused the other tab' : `Paused ${others.length} other tabs`,
+        description: names,
+        timeout: 3000
+      })
       return
     }
     if (this.mediaTipShown.has(tabId)) return
@@ -1180,16 +1204,17 @@ export class Browser {
 
   /** Next tab after closing or unloading the active one: opener, then most recently used. */
   private pickNextTab(leaving: Tab): Tab | undefined {
-    const candidates = this.visibleTabs().filter(
-      (t) => t.id !== leaving.id && (t.kind === 'normal' || t.loaded)
-    )
+    const candidates = this.visibleTabs().filter((t) => t.id !== leaving.id && (t.kind === 'normal' || t.loaded))
     const opener = this.tab(this.openers.get(leaving.id))
     if (opener && candidates.includes(opener)) return opener
     if (!this.settings.closeSelectsRecent) {
       const visible = this.visibleTabs()
       const index = visible.indexOf(leaving)
       const below = visible.slice(index + 1).find((t) => candidates.includes(t))
-      const above = visible.slice(0, index).reverse().find((t) => candidates.includes(t))
+      const above = visible
+        .slice(0, index)
+        .reverse()
+        .find((t) => candidates.includes(t))
       return below ?? above
     }
     return candidates.sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0]
@@ -1216,7 +1241,10 @@ export class Browser {
     // reset-switch / switch: keep the page loaded but move away from it.
     if (resetUrl && tab.pinned) {
       Object.assign(tab, tab.pinned)
-      void this.views.get(tab.id)?.webContents.loadURL(tab.pinned.url).catch(() => {})
+      void this.views
+        .get(tab.id)
+        ?.webContents.loadURL(tab.pinned.url)
+        .catch(() => {})
     }
     if (this.activeTabId === tab.id) {
       const next = this.pickNextTab(tab)
@@ -1447,7 +1475,13 @@ export class Browser {
       this.setTabSpace(tab, target.spaceId)
       this.rehome(tab)
       const space = this.space(target.spaceId)
-      if (space) this.toast({ id: 'moved-to-space', message: `Moved to ${space.name}`, description: tab.title, action: { label: 'Switch', command: { type: 'space.switch', spaceId: space.id } } })
+      if (space)
+        this.toast({
+          id: 'moved-to-space',
+          message: `Moved to ${space.name}`,
+          description: tab.title,
+          action: { label: 'Switch', command: { type: 'space.switch', spaceId: space.id } }
+        })
       return
     }
     if (target.zone === 'essentials') {
@@ -1529,6 +1563,85 @@ export class Browser {
     }
   }
 
+  /** Tidy Tabs: related normal tabs go into named folders in the pinned area, with Undo. */
+  private async tidySpace(spaceId: string): Promise<void> {
+    const space = this.space(spaceId)
+    const normals = this.tabs.filter((t) => t.kind === 'normal' && t.spaceId === spaceId)
+    if (!space || normals.length < 3 || this.tidying) return
+    this.tidying = true
+    const ai = this.hub.tidy.kind === 'ai'
+    this.toast({ id: 'tidy', message: ai ? 'Tidying with Apple Intelligence…' : 'Tidying by site…', timeout: 30_000 })
+    try {
+      const groups = await tidyGroups(normals.map((t) => ({ title: t.title, url: t.url })))
+      if (this.win.isDestroyed() || !this.space(spaceId)) return
+      // Tabs closed or moved meanwhile are left out.
+      const usable = groups
+        .map((g) => ({
+          name: g.name,
+          tabs: g.tabs.map((i) => normals[i]).filter((t) => this.tab(t.id)?.kind === 'normal' && t.spaceId === spaceId)
+        }))
+        .filter((g) => g.tabs.length >= 2)
+      if (usable.length === 0) {
+        this.toast({ id: 'tidy', message: 'Nothing to tidy', description: 'These tabs don’t have much in common.', timeout: 3000 })
+        return
+      }
+      const before = this.tabs.filter((t) => t.kind === 'normal' && t.spaceId === spaceId).map((t) => t.id)
+      const folders: string[] = []
+      for (const group of usable) {
+        const folder: Folder = { id: randomUUID(), spaceId, name: group.name, collapsed: false, items: [] }
+        this.folders.push(folder)
+        space.pinnedItems.push(folder.id)
+        folders.push(folder.id)
+        for (const tab of group.tabs) this.dropTab(tab.id, { zone: 'pinned', spaceId, parentId: folder.id, index: folder.items.length })
+      }
+      space.collapsedPins = false
+      this.syncPinnedOrder()
+      this.broadcast()
+      const token = ++this.tidySeq
+      this.lastTidy = { token, spaceId, folders, tabs: usable.flatMap((g) => g.tabs.map((t) => t.id)), before }
+      const moved = this.lastTidy.tabs.length
+      this.toast({
+        id: 'tidy',
+        message: `Tidied ${moved} tabs into ${usable.length} ${usable.length === 1 ? 'folder' : 'folders'}`,
+        description: usable.map((g) => g.name).join(', '),
+        action: { label: 'Undo', command: { type: 'space.untidy', token } },
+        timeout: 8000
+      })
+    } finally {
+      this.tidying = false
+    }
+  }
+
+  /** Undoes the last Tidy: its tabs go back among the normal tabs, in their old order, and its folders go. */
+  private untidy(token: number): void {
+    const last = this.lastTidy
+    if (!last || last.token !== token) return
+    this.lastTidy = null
+    for (const tabId of last.tabs) {
+      const tab = this.tab(tabId)
+      // Only tabs still inside a Tidy folder; anything moved since stays where you put it.
+      const at = this.containerOf(tabId)
+      if (!tab || tab.kind !== 'pinned' || !last.folders.some((f) => this.folder(f)?.items === at?.list)) continue
+      this.detachPinned(tabId)
+      tab.kind = 'normal'
+      tab.pinned = null
+      tab.spaceId = last.spaceId
+    }
+    // Folders left empty go; anything you added to one stays pinned in its place.
+    for (const folderId of last.folders) {
+      const folder = this.folder(folderId)
+      if (folder) this.removeFolder(folderId, false)
+    }
+    const order = new Map(last.before.map((id, i) => [id, i]))
+    const rank = (t: Tab): number => order.get(t.id) ?? last.before.length
+    const sorted = this.tabs.filter((t) => t.kind === 'normal' && t.spaceId === last.spaceId).sort((a, b) => rank(a) - rank(b))
+    let next = 0
+    this.tabs = this.tabs.map((t) => (t.kind === 'normal' && t.spaceId === last.spaceId ? sorted[next++] : t))
+    this.syncPinnedOrder()
+    this.broadcast()
+    this.toast({ id: 'tidy', message: 'Tidy undone', timeout: 2000 })
+  }
+
   private createFolder(spaceId: string, parentId: string | null, tabIds: string[] = []): void {
     const space = this.space(spaceId)
     const parent = this.folder(parentId)
@@ -1582,7 +1695,10 @@ export class Browser {
       { label: folder.collapsed ? 'Expand' : 'Collapse', click: () => this.updateFolder(id, { collapsed: !folder.collapsed }) },
       { type: 'separator' },
       { label: 'Ungroup (Keep Tabs)', click: () => this.removeFolder(id, false) },
-      { label: count > 0 ? `Delete Folder and ${count} ${count === 1 ? 'Tab' : 'Tabs'}` : 'Delete Folder', click: () => this.removeFolder(id, true) }
+      {
+        label: count > 0 ? `Delete Folder and ${count} ${count === 1 ? 'Tab' : 'Tabs'}` : 'Delete Folder',
+        click: () => this.removeFolder(id, true)
+      }
     ])
   }
 
@@ -1607,11 +1723,23 @@ export class Browser {
         submenu: [
           { label: 'New Folder', click: () => this.createFolder(spaceId, null, [tab.id]) },
           ...(targets.length > 0 ? [{ type: 'separator' } as MenuItemConstructorOptions] : []),
-          ...targets.map((f) => ({ label: label(f), click: () => this.dropItem({ kind: 'tab', id: tab.id }, { zone: 'pinned', spaceId, parentId: f.id, index: f.items.length }) }))
+          ...targets.map((f) => ({
+            label: label(f),
+            click: () => this.dropItem({ kind: 'tab', id: tab.id }, { zone: 'pinned', spaceId, parentId: f.id, index: f.items.length })
+          }))
         ]
       },
       ...(current
-        ? [{ label: 'Remove from Folder', click: () => this.dropItem({ kind: 'tab', id: tab.id }, { zone: 'pinned', spaceId, parentId: null, index: this.space(spaceId)!.pinnedItems.length }) }]
+        ? [
+            {
+              label: 'Remove from Folder',
+              click: () =>
+                this.dropItem(
+                  { kind: 'tab', id: tab.id },
+                  { zone: 'pinned', spaceId, parentId: null, index: this.space(spaceId)!.pinnedItems.length }
+                )
+            }
+          ]
         : [])
     ]
   }
@@ -2070,7 +2198,12 @@ export class Browser {
     // A profile nothing uses any more is cleared (the default one always stays).
     if (previous !== DEFAULT_PROFILE && !this.spaces.some((s) => s.profile === previous)) void this.clearProfile(previous)
     this.broadcast()
-    const label = choice.mode === 'share' ? `Sharing sign-ins with ${this.space(choice.from)?.name}` : choice.mode === 'copy' ? 'Copied sign-ins' : 'Started fresh'
+    const label =
+      choice.mode === 'share'
+        ? `Sharing sign-ins with ${this.space(choice.from)?.name}`
+        : choice.mode === 'copy'
+          ? 'Copied sign-ins'
+          : 'Started fresh'
     this.toast({ id: 'space-profile', message: label, description: space.name })
   }
 
@@ -2353,7 +2486,12 @@ export class Browser {
       const t = Math.min(1, (Date.now() - start) / duration)
       const k = ease(t)
       const lerp = (a: number, b: number): number => Math.round(a + (b - a) * k)
-      view.setBounds({ x: lerp(from.x, to.x), y: lerp(from.y, to.y), width: lerp(from.width, to.width), height: lerp(from.height, to.height) })
+      view.setBounds({
+        x: lerp(from.x, to.x),
+        y: lerp(from.y, to.y),
+        width: lerp(from.width, to.width),
+        height: lerp(from.height, to.height)
+      })
       if (t < 1) {
         this.layoutAnimation = setTimeout(tick, 8)
       } else {
@@ -2457,9 +2595,19 @@ export class Browser {
       this.toast({ id: 'widevine', message: 'Installing Widevine…', description: 'Downloading it from Google', timeout: 8000 })
     } else if (choice === 'never') {
       this.settingsStore.update({ widevinePrompt: false })
-      this.toast({ id: 'widevine', message: 'Zepper won’t ask again', description: 'Turn on Widevine any time in Settings → Media.', timeout: 4500 })
+      this.toast({
+        id: 'widevine',
+        message: 'Zepper won’t ask again',
+        description: 'Turn on Widevine any time in Settings → Media.',
+        timeout: 4500
+      })
     } else {
-      this.toast({ id: 'widevine', message: 'Protected video won’t play here', description: 'Turn on Widevine any time in Settings → Media.', timeout: 3500 })
+      this.toast({
+        id: 'widevine',
+        message: 'Protected video won’t play here',
+        description: 'Turn on Widevine any time in Settings → Media.',
+        timeout: 3500
+      })
     }
   }
 
@@ -2478,7 +2626,12 @@ export class Browser {
 
   onWidevineFailed(): void {
     if (this.widevineTabs.size === 0 && !this.win.isFocused()) return
-    this.toast({ id: 'widevine', message: 'Couldn’t install Widevine', description: 'Check your connection, then try again in Settings → Media.', timeout: 5000 })
+    this.toast({
+      id: 'widevine',
+      message: 'Couldn’t install Widevine',
+      description: 'Check your connection, then try again in Settings → Media.',
+      timeout: 5000
+    })
   }
 
   /** Turns ad blocking off (or back on) for one site, then reloads its tabs so it takes effect. */
@@ -2803,8 +2956,19 @@ export class Browser {
           { label: 'Start Fresh (Separate)', click: choose({ mode: 'new' }) },
           ...(others.length > 0
             ? ([
-                { label: 'Share With', submenu: others.map((s) => ({ label: `${s.icon}  ${s.name}`, type: 'checkbox', checked: s.profile === space.profile, click: choose({ mode: 'share', from: s.id }) })) },
-                { label: 'Copy From', submenu: others.map((s) => ({ label: `${s.icon}  ${s.name}`, click: choose({ mode: 'copy', from: s.id }) })) }
+                {
+                  label: 'Share With',
+                  submenu: others.map((s) => ({
+                    label: `${s.icon}  ${s.name}`,
+                    type: 'checkbox',
+                    checked: s.profile === space.profile,
+                    click: choose({ mode: 'share', from: s.id })
+                  }))
+                },
+                {
+                  label: 'Copy From',
+                  submenu: others.map((s) => ({ label: `${s.icon}  ${s.name}`, click: choose({ mode: 'copy', from: s.id }) }))
+                }
               ] satisfies MenuItemConstructorOptions[])
             : []),
           { type: 'separator' },
@@ -2906,7 +3070,11 @@ export class Browser {
         { label: 'Compact Mode', type: 'checkbox', checked: this.compact, accelerator: 'CmdOrCtrl+S', click: () => this.toggleCompact() },
         { type: 'separator' },
         { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => this.handle({ type: 'window.open', kind: 'blank' }) },
-        { label: 'New Private Window', accelerator: 'Shift+CmdOrCtrl+N', click: () => this.handle({ type: 'window.open', kind: 'private' }) },
+        {
+          label: 'New Private Window',
+          accelerator: 'Shift+CmdOrCtrl+N',
+          click: () => this.handle({ type: 'window.open', kind: 'private' })
+        },
         { type: 'separator' },
         { label: 'History', accelerator: 'CmdOrCtrl+Y', click: () => this.handle({ type: 'ui.openHistory' }) },
         { label: 'Downloads', accelerator: 'Alt+CmdOrCtrl+L', click: () => this.handle({ type: 'ui.downloads' }) },
@@ -3210,6 +3378,7 @@ export class Browser {
       downloads: this.hub.downloads.list(this.kind === 'private'),
       paletteOpen: this.paletteOpen,
       folders: this.folders,
+      tidy: this.hub.tidy,
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : []
@@ -3261,7 +3430,8 @@ export class Browser {
       adblockEnabled: this.settings.adblock,
       splits: this.splits,
       folders: this.folders,
-      window: this.win && !this.win.isDestroyed() ? { bounds: this.win.getNormalBounds(), maximized: this.win.isMaximized() } : this.savedWindow
+      window:
+        this.win && !this.win.isDestroyed() ? { bounds: this.win.getNormalBounds(), maximized: this.win.isMaximized() } : this.savedWindow
     }
   }
 }
@@ -3300,7 +3470,9 @@ function splitRects(split: Split, b: Rectangle, gap: number): Rectangle[] {
   raw.forEach((fraction, i) => {
     const length = i === n - 1 ? total - offset : Math.round((total * fraction) / sum)
     const start = offset + i * gap
-    rects.push(vertical ? { x: b.x, y: b.y + start, width: b.width, height: length } : { x: b.x + start, y: b.y, width: length, height: b.height })
+    rects.push(
+      vertical ? { x: b.x, y: b.y + start, width: b.width, height: length } : { x: b.x + start, y: b.y, width: length, height: b.height }
+    )
     offset += length
   })
   return rects

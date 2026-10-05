@@ -9,7 +9,7 @@ import {
   type Settings,
   type UserAgentChoice
 } from '@shared/settings'
-import type { WidevineStatus } from '@shared/types'
+import type { Snapshot, WidevineStatus } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose } from '../icons'
 import { cx, isMac } from '../util'
@@ -62,6 +62,7 @@ const SHORTCUTS: [string, string][] = [
 interface SettingsPanelProps {
   settings: Settings
   widevine: WidevineStatus
+  tidy: Snapshot['tidy']
   onClose: () => void
 }
 
@@ -83,7 +84,7 @@ function widevineHint(status: WidevineStatus): string {
 }
 
 /** Settings sheet: every change applies immediately. */
-export function SettingsPanel({ settings, widevine, onClose }: SettingsPanelProps): React.JSX.Element {
+export function SettingsPanel({ settings, widevine, tidy, onClose }: SettingsPanelProps): React.JSX.Element {
   const [section, setSection] = useState<Section>('appearance')
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
 
@@ -176,7 +177,9 @@ export function SettingsPanel({ settings, widevine, onClose }: SettingsPanelProp
                 </Row>
                 <Row
                   label="Transparency"
-                  hint={settings.windowTransparency === 0 ? 'Solid window' : `${Math.round(settings.windowTransparency * 100)}% see-through`}
+                  hint={
+                    settings.windowTransparency === 0 ? 'Solid window' : `${Math.round(settings.windowTransparency * 100)}% see-through`
+                  }
                 >
                   <input
                     type="range"
@@ -188,10 +191,24 @@ export function SettingsPanel({ settings, widevine, onClose }: SettingsPanelProp
                   />
                 </Row>
                 <Row label="Content gap" hint={`${settings.contentGap}px around the page`}>
-                  <input type="range" min={0} max={16} step={1} value={settings.contentGap} onChange={(e) => set({ contentGap: Number(e.target.value) })} />
+                  <input
+                    type="range"
+                    min={0}
+                    max={16}
+                    step={1}
+                    value={settings.contentGap}
+                    onChange={(e) => set({ contentGap: Number(e.target.value) })}
+                  />
                 </Row>
                 <Row label="Corner radius" hint={`${settings.cornerRadius}px`}>
-                  <input type="range" min={0} max={18} step={1} value={settings.cornerRadius} onChange={(e) => set({ cornerRadius: Number(e.target.value) })} />
+                  <input
+                    type="range"
+                    min={0}
+                    max={18}
+                    step={1}
+                    value={settings.cornerRadius}
+                    onChange={(e) => set({ cornerRadius: Number(e.target.value) })}
+                  />
                 </Row>
                 <Row label="Essentials glow" hint="Tint the active Essential with its icon’s colour.">
                   <Toggle checked={settings.essentialsGlow} onChange={(essentialsGlow) => set({ essentialsGlow })} />
@@ -229,6 +246,16 @@ export function SettingsPanel({ settings, widevine, onClose }: SettingsPanelProp
                 </Row>
                 <Row label="After closing a tab, go to the most recently used tab" hint="Otherwise the tab next to it.">
                   <Toggle checked={settings.closeSelectsRecent} onChange={(closeSelectsRecent) => set({ closeSelectsRecent })} />
+                </Row>
+                <Row
+                  label="Tidy button"
+                  hint={
+                    tidy.kind === 'ai'
+                      ? 'Groups related tabs into folders with Apple Intelligence, on this Mac.'
+                      : `Groups tabs from the same site into folders. ${tidy.reason}`
+                  }
+                >
+                  <Toggle checked={settings.showTidy} onChange={(showTidy) => set({ showTidy })} />
                 </Row>
                 <Row label="New windows open" hint="⌘N. On this space brings its Essentials and pinned tabs along.">
                   <Segmented
@@ -403,8 +430,13 @@ export function SettingsPanel({ settings, widevine, onClose }: SettingsPanelProp
                     ))}
                   </select>
                 </Row>
-                {settings.userAgent === 'custom' && <CustomUserAgent value={settings.customUserAgent} onChange={(customUserAgent) => set({ customUserAgent })} />}
-                <Row label="Google sign-in compatibility" hint="Lets Google’s sign-in page accept Zepper. Only affects accounts.google.com.">
+                {settings.userAgent === 'custom' && (
+                  <CustomUserAgent value={settings.customUserAgent} onChange={(customUserAgent) => set({ customUserAgent })} />
+                )}
+                <Row
+                  label="Google sign-in compatibility"
+                  hint="Lets Google’s sign-in page accept Zepper. Only affects accounts.google.com."
+                >
                   <Toggle checked={settings.googleSignInCompat} onChange={(googleSignInCompat) => set({ googleSignInCompat })} />
                 </Row>
               </>

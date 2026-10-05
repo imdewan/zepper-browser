@@ -24,18 +24,19 @@ The **main process owns all state**. Renderers never change it directly:
 
 ## Main process
 
-| File | Responsibility |
-|---|---|
-| `index.ts` | Startup: user agent, Widevine wait, opening the first window, quitting |
-| `hub.ts` | Services shared by all windows (history, settings, ad blocking, extensions, downloads, Widevine), IPC routing to the window that owns the sender, and setting up each browsing session |
-| `browser.ts` | One window: spaces, tabs (Essentials, pinned, normal), the pinned-area folder tree, split view, layout, menus, permissions, page dialogs, gestures, persistence |
-| `compat.ts` | Browser identity (user agent and client hints) and site-compatibility switches handed to pages |
-| `adblock.ts` | The Ghostery engine with uBlock Origin's lists: network blocking per session, cosmetic filters, per-site allowlist |
-| `extensions.ts` | Chrome extension APIs (`electron-chrome-extensions`) and the Chrome Web Store, plus enable/disable/remove |
-| `downloads.ts`, `history.ts`, `bangs.ts` | The download list, browsing history, and local DuckDuckGo bang resolution |
-| `site.ts` | Per-site permissions and captured certificate chains |
-| `persist.ts`, `settings-store.ts` | Atomic, debounced JSON files under the user data folder |
-| `devtools-server.ts` | Development-only debug endpoint (see below) |
+| File                                     | Responsibility                                                                                                                                                                         |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.ts`                               | Startup: user agent, Widevine wait, opening the first window, quitting                                                                                                                 |
+| `hub.ts`                                 | Services shared by all windows (history, settings, ad blocking, extensions, downloads, Widevine), IPC routing to the window that owns the sender, and setting up each browsing session |
+| `browser.ts`                             | One window: spaces, tabs (Essentials, pinned, normal), the pinned-area folder tree, split view, layout, menus, permissions, page dialogs, gestures, persistence                        |
+| `compat.ts`                              | Browser identity (user agent and client hints) and site-compatibility switches handed to pages                                                                                         |
+| `adblock.ts`                             | The Ghostery engine with uBlock Origin's lists: network blocking per session, cosmetic filters, per-site allowlist                                                                     |
+| `extensions.ts`                          | Chrome extension APIs (`electron-chrome-extensions`) and the Chrome Web Store, plus enable/disable/remove                                                                              |
+| `downloads.ts`, `history.ts`, `bangs.ts` | The download list, browsing history, and local DuckDuckGo bang resolution                                                                                                              |
+| `site.ts`                                | Per-site permissions and captured certificate chains                                                                                                                                   |
+| `tidy.ts`                                | Tidy Tabs: asks the `native/tidy` Swift helper (Apple's on-device Foundation Models) to group tabs, or groups them by site                                                             |
+| `persist.ts`, `settings-store.ts`        | Atomic, debounced JSON files under the user data folder                                                                                                                                |
+| `devtools-server.ts`                     | Development-only debug endpoint (see below)                                                                                                                                            |
 
 ### Windows
 
@@ -66,6 +67,10 @@ This runs in every frame of every page before the page's own scripts:
 - **Swipes.** Two-finger horizontal swipes are classified (vertical scroll, horizontal scroller, page-handled, or a swipe) and reported for back/forward.
 
 Code run in the page's main world goes through `contextBridge.executeInMainWorld` and must be self-contained.
+
+## Tidy Tabs
+
+`native/tidy/main.swift` is a command-line helper built with `npm run build:native` and bundled into the app as `Resources/bin/zepper-tidy`. `--check` reports whether Apple Intelligence is available. Otherwise it reads the tabs' titles and hosts as JSON on stdin and uses guided generation (`@Generable`) to return named groups of tab indexes. The model runs on the Mac. If the helper is missing, Apple Intelligence is off, or the model fails, `tidy.ts` groups tabs by site instead.
 
 ## Protected video
 

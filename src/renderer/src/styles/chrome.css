@@ -1044,7 +1044,8 @@ button.site-button:active {
   display: none;
 }
 
-.clear-button.can-clear svg {
+.clear-button.can-clear svg,
+.tidy-button svg {
   display: block;
 }
 
@@ -1107,7 +1108,6 @@ button.site-button:active {
 .space-switcher.fade-end {
   --fade-end: transparent;
 }
-
 
 .space-dot {
   width: 28px;

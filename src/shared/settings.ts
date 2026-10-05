@@ -35,6 +35,8 @@ export interface Settings {
   newTabPosition: 'top' | 'bottom'
   pinnedCloseBehavior: PinnedCloseBehavior
   closeSelectsRecent: boolean
+  /** Show the Tidy button beside Clear. */
+  showTidy: boolean
   // Media
   autoPictureInPicture: boolean
   /** Floating player width as a share of the screen. */
@@ -99,6 +101,7 @@ export const DEFAULT_SETTINGS: Settings = {
   newTabPosition: 'top',
   pinnedCloseBehavior: 'reset-unload-switch',
   closeSelectsRecent: true,
+  showTidy: true,
   autoPictureInPicture: true,
   pipSize: 'medium',
   showMediaCard: true,

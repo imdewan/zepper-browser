@@ -31,6 +31,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
   - add to (or reorder) Essentials;
   - move to another space by dropping on its dot.
 - **Split view:** up to four tabs side by side, stacked or in a grid, with resizable dividers.
+- **Tidy:** one click groups a space's tabs into named folders, with Undo. It uses Apple Intelligence on the Mac (macOS 26 and later), so nothing leaves your computer; elsewhere it groups tabs from the same site.
 - Reopen closed tabs, unload tabs, clear unpinned tabs.
 
 ## Command bar and search
