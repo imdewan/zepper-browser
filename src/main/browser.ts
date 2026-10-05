@@ -96,10 +96,15 @@ interface PersistedState {
 }
 
 const MAX_SPLIT_PANES = 4
+/** How long a click or key press lets a page open a tab or popup (Chrome's user activation). */
+const USER_ACTIVATION_MS = 5000
+const USER_INPUT = new Set(['mouseDown', 'mouseUp', 'keyDown', 'rawKeyDown', 'char', 'gestureTap', 'touchStart'])
 
 interface PendingPrompt extends PermissionPrompt {
   keys: string[]
   tabId: string | undefined
+  /** The page that asked; its prompts go when it does. */
+  webContentsId: number
   callback: (granted: boolean) => void
 }
 
@@ -287,6 +292,12 @@ export class Browser {
   private readonly mediaTipShown = new Set<string>()
   /** Folders in spaces' pinned areas (the tree itself is space.pinnedItems and folder.items). */
   private folders: Folder[] = []
+  /** Popup windows opened by this window's tabs, with the tab that opened each. */
+  private readonly popups = new Map<BrowserWindow, string>()
+  /** When each tab's page last had a click or key press (for pop-up blocking). */
+  private readonly lastInput = new Map<number, number>()
+  /** Error pages shown for failed loads, and the address each stands in for. */
+  private readonly errorPages = new Map<string, string>()
   private tidying = false
   private tidySeq = 0
   /** The last Tidy, so Undo can put things back. */
@@ -503,6 +514,12 @@ export class Browser {
         showingDialog: this.showingDialog,
         showingPrompt: this.showingPrompt,
         pendingDialogs: this.pendingDialogs.map((d) => ({ id: d.id, tabId: d.tabId, kind: d.popover.kind })),
+        lastInput: Object.fromEntries([...this.lastInput].map(([id, at]) => [id, Date.now() - at])),
+        popups: this.popups.size,
+        history: (() => {
+          const history = this.activeWebContents()?.navigationHistory
+          return history && { active: history.getActiveIndex(), entries: history.getAllEntries().map((e) => e.url.slice(0, 50)) }
+        })(),
         windows: BrowserWindow.getAllWindows().map((w) => ({
           title: w.getTitle(),
           url: w.webContents.getURL().slice(0, 80),
@@ -547,8 +564,11 @@ export class Browser {
     details: Electron.PermissionRequest | Electron.MediaAccessPermissionRequest | Electron.OpenExternalPermissionRequest
   ): void {
     if (this.permissions.isAlwaysAllowed(permission)) return callback(true)
+    // A prompt for a popup would show in the window behind it; popups don't get permissions.
+    if (this.popupWindow(wc.id)) return callback(false)
     const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes as string[] | undefined) : undefined
-    const keys = settingKeys(permission, mediaTypes)
+    const externalURL = 'externalURL' in details ? details.externalURL : undefined
+    const keys = settingKeys(permission, mediaTypes, externalURL)
     if (!keys) return callback(false)
     const origin = originOf(details.requestingUrl ?? wc.getURL())
     const states = keys.map((k) => this.permissions.get(origin, k))
@@ -558,12 +578,16 @@ export class Browser {
       id: ++this.promptSeq,
       origin,
       host: safeHost(origin) || origin,
-      label: promptLabel(permission, keys),
+      label: promptLabel(permission, keys, externalURL),
       keys,
       tabId: this.tabByWebContents.get(wc.id),
+      webContentsId: wc.id,
       callback
     })
-    wc.once('destroyed', () => this.dropPrompts((p) => p.tabId === this.tabByWebContents.get(wc.id)))
+    if (this.prompts.filter((p) => p.webContentsId === wc.id).length === 1) {
+      const id = wc.id
+      wc.once('destroyed', () => this.dropPrompts((p) => p.webContentsId === id))
+    }
     this.showNextPrompt()
   }
 
@@ -622,8 +646,21 @@ export class Browser {
       id === this.win.webContents.id ||
       id === this.overlay.webContents.id ||
       id === this.pip?.controlsWebContents()?.id ||
-      this.tabByWebContents.has(id)
+      this.tabByWebContents.has(id) ||
+      this.popupWindow(id) !== undefined
     )
+  }
+
+  /** A popup window (OAuth, payments) belongs to the window whose tab opened it, and closes with it. */
+  private adoptPopup(win: BrowserWindow, openerId: string): void {
+    if (this.tabByWebContents.has(win.webContents.id)) return
+    this.popups.set(win, openerId)
+    win.once('closed', () => this.popups.delete(win))
+  }
+
+  private popupWindow(webContentsId: number): BrowserWindow | undefined {
+    for (const win of this.popups.keys()) if (!win.isDestroyed() && win.webContents.id === webContentsId) return win
+    return undefined
   }
 
   publicSnapshot(): Snapshot {
@@ -637,9 +674,12 @@ export class Browser {
 
   /** Commands from this window's own UI (chrome, overlay, player controls) only, never from web pages. */
   handleFromUi(sender: WebContents, command: Command): void {
-    const ui = [this.win.webContents.id, this.overlay.webContents.id, this.pip.controlsWebContents()?.id]
-    if (!ui.includes(sender.id)) return
-    this.handle(command)
+    if (this.isUi(sender)) this.handle(command)
+  }
+
+  /** The window's own UI (sidebar, overlay, picture-in-picture controls), as opposed to web pages. */
+  isUi(wc: WebContents): boolean {
+    return [this.win.webContents.id, this.overlay.webContents.id, this.pip.controlsWebContents()?.id].includes(wc.id)
   }
 
   activateByWebContents(wc: WebContents): void {
@@ -686,6 +726,10 @@ export class Browser {
     }
     this.views.clear()
     this.tabByWebContents.clear()
+    for (const popup of this.popups.keys()) if (!popup.isDestroyed()) popup.destroy()
+    this.popups.clear()
+    // Child views' pages outlive their window unless closed.
+    if (!this.overlay.webContents.isDestroyed()) this.overlay.webContents.close()
     if (this.kind === 'private') void this.ses.clearStorageData().catch(() => {})
     this.hub.windowClosed(this)
   }
@@ -792,7 +836,7 @@ export class Browser {
       case 'nav.forward':
         return this.activeWebContents()?.navigationHistory.goForward()
       case 'nav.reload':
-        return this.activeWebContents()?.reload()
+        return this.reloadPage(this.activeWebContents())
       case 'space.switch':
         return this.switchSpace(command.spaceId)
       case 'space.switchRelative':
@@ -1050,13 +1094,14 @@ export class Browser {
       return
     }
     // Navigating a pinned tab or Essential away from its site opens a new tab instead.
-    const leavesPin = current?.pinned && new URL(url).host !== safeHost(current.pinned.url) && where === 'current'
+    const leavesPin = where === 'current' && !!current?.pinned && safeHost(url) !== safeHost(current.pinned.url)
     if (where === 'new' || !current || leavesPin) {
       this.openTab(url)
       return
     }
     const view = this.ensureView(current)
-    void view.webContents.loadURL(url)
+    // A failed or aborted load shows in the page itself.
+    view.webContents.loadURL(url).catch(() => {})
     this.activateTab(current.id)
   }
 
@@ -1885,9 +1930,16 @@ export class Browser {
   }
 
   reloadActive(hard: boolean): void {
-    const wc = this.activeWebContents()
-    if (hard) wc?.reloadIgnoringCache()
-    else wc?.reload()
+    this.reloadPage(this.activeWebContents(), hard)
+  }
+
+  /** Reloads a page; on Zepper's error page, tries the address that failed again. */
+  private reloadPage(wc: WebContents | null | undefined, hard = false): void {
+    if (!wc || wc.isDestroyed()) return
+    const failed = this.errorPages.get(wc.getURL())
+    if (failed) wc.loadURL(failed).catch(() => {})
+    else if (hard) wc.reloadIgnoringCache()
+    else wc.reload()
   }
 
   zoomActive(direction: 1 | -1 | 0): void {
@@ -1919,7 +1971,9 @@ export class Browser {
             nodeIntegration: false,
             session: this.sessionFor(tab),
             scrollBounce: true,
-            spellcheck: true
+            spellcheck: true,
+            // Frames Zepper's dialog shim doesn't reach (iframes) get a "stop dialogs" option.
+            safeDialogs: true
           }
         })
     view.setBorderRadius(this.settings.cornerRadius)
@@ -2038,6 +2092,18 @@ export class Browser {
     })
     wc.on('page-favicon-updated', (_event, favicons) => update({ favicon: favicons[0] ?? null }))
     wc.on('did-navigate', (_event, url) => {
+      const failed = this.errorPages.get(url)
+      if (failed) {
+        // Zepper's error page stands in for the address that failed: the tab keeps that address
+        // (for the URL bar, reload and restore), and Back skips the failed attempts before it.
+        const history = wc.navigationHistory
+        for (let i = history.getActiveIndex() - 1; i >= 0; i--) {
+          const entry = history.getEntryAtIndex(i)?.url
+          if (entry !== failed && this.errorPages.get(entry) !== failed) break
+          history.removeEntryAtIndex(i)
+        }
+        return update({ url: failed, blockedCount: 0, media: null, ...navState() })
+      }
       update({ url, blockedCount: 0, media: null, ...navState() })
       if (this.kind !== 'private') this.history.record(url, wc.getTitle())
     })
@@ -2065,7 +2131,10 @@ export class Browser {
     })
     wc.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
       if (!isMainFrame || code === -3) return
-      void wc.loadURL(errorPage(url, description)).catch(() => {})
+      const page = errorPage(url, description)
+      this.errorPages.set(page, url)
+      if (this.errorPages.size > 100) this.errorPages.delete(this.errorPages.keys().next().value!)
+      wc.loadURL(page).catch(() => {})
     })
     wc.on('found-in-page', (_event, result) => {
       if (tabId !== this.activeTabId) return
@@ -2073,9 +2142,30 @@ export class Browser {
     })
     wc.on('context-menu', (_event, params) => this.pageContextMenu(tabId, wc, params))
     wc.setWindowOpenHandler((details) => this.handleWindowOpen(tabId, details))
+    const wcId = wc.id
+    wc.on('input-event', (_event, input) => {
+      if (USER_INPUT.has(input.type)) this.lastInput.set(wcId, Date.now())
+    })
+    wc.on('did-create-window', (win) => this.adoptPopup(win, tabId))
+    wc.once('destroyed', () => this.lastInput.delete(wcId))
   }
 
   private handleWindowOpen(openerId: string, details: HandlerDetails): WindowOpenHandlerResponse {
+    const openerContents = this.views.get(openerId)?.webContents
+    // Pop-up blocking: pages open tabs and windows only shortly after a click or key press.
+    if (Date.now() - (this.lastInput.get(openerContents?.id ?? -1) ?? 0) > USER_ACTIVATION_MS) {
+      if (openerId === this.activeTabId || this.attached.has(openerId)) {
+        const real = /^https?:/.test(details.url)
+        this.toast({
+          id: 'popup-blocked',
+          message: 'Pop-up blocked',
+          description: safeHost(details.url) || undefined,
+          action: real ? { label: 'Open', command: { type: 'tab.open', input: details.url, where: 'new' } } : undefined,
+          timeout: 5000
+        })
+      }
+      return { action: 'deny' }
+    }
     // Real popups (OAuth, payment flows) keep their own window so window.opener keeps working.
     if (details.disposition === 'new-window' && details.features) {
       return {
@@ -2083,12 +2173,21 @@ export class Browser {
         overrideBrowserWindowOptions: {
           width: 520,
           height: 700,
-          webPreferences: { sandbox: true, contextIsolation: true }
+          webPreferences: { sandbox: true, contextIsolation: true, safeDialogs: true }
         }
       }
     }
     const opener = this.tab(openerId)
     const spaceId = opener?.kind === 'essential' || !opener?.spaceId ? this.activeSpaceId : opener.spaceId
+    const probe = makeTab({ kind: 'normal', url: details.url, spaceId })
+    if (openerContents && this.sessionFor(probe) !== openerContents.session) {
+      // A link from an Essential into a space with its own sign-ins: open it in that space's
+      // profile, where the tab lives, rather than carrying the Essential's session along.
+      this.insertNormalTab(probe, undefined)
+      if (details.disposition === 'background-tab') this.broadcast()
+      else this.activateTab(probe.id)
+      return { action: 'deny' }
+    }
     return {
       action: 'allow',
       createWindow: (options) => {
@@ -2308,6 +2407,12 @@ export class Browser {
         this.prompts = this.prompts.filter((p) => p.id !== id)
         prompt.callback(false)
       }
+    }
+    if (this.showingDialog !== null) {
+      // A page dialog was covered (command bar, settings…) before it was answered; the page is
+      // still waiting, so it comes back.
+      this.showingDialog = null
+      setTimeout(() => this.showNextDialog(), 150)
     }
     if (!refocus) return
     const wc = this.activeWebContents()
@@ -2614,7 +2719,7 @@ export class Browser {
   onWidevineReady(): void {
     const waiting = [...this.widevineTabs].filter((id) => this.views.has(id))
     this.widevineTabs.clear()
-    for (const id of waiting) this.views.get(id)?.webContents.reload()
+    for (const id of waiting) this.reloadPage(this.views.get(id)?.webContents)
     if (waiting.length > 0 || this.win.isFocused()) {
       this.toast({
         id: 'widevine',
@@ -2641,7 +2746,7 @@ export class Browser {
     this.settingsStore.update({ adblockAllowlist: enabled ? list : [...list, domain] })
     for (const tab of this.tabs) {
       if (!tab.loaded || (parseDomain(tab.url).domain || safeHost(tab.url)) !== domain) continue
-      this.views.get(tab.id)?.webContents.reload()
+      this.reloadPage(this.views.get(tab.id)?.webContents)
     }
   }
 
@@ -2665,7 +2770,7 @@ export class Browser {
     await ses.clearStorageData({ origin })
     await ses.clearCache()
     this.toast({ id: 'site-data-cleared', message: 'Site data cleared', description: safeHost(origin) })
-    this.activeWebContents()?.reload()
+    this.reloadPage(this.activeWebContents())
   }
 
   /** Shows the oldest pending permission prompt that belongs to the active tab. */
@@ -2676,7 +2781,7 @@ export class Browser {
     this.showingPrompt = prompt.id
     const bounds = this.contentBounds()
     const anchor = { x: bounds.x + 4, y: bounds.y, width: 0, height: 0 }
-    const { keys: _keys, tabId: _tabId, callback: _callback, ...view } = prompt
+    const { keys: _keys, tabId: _tabId, webContentsId: _webContentsId, callback: _callback, ...view } = prompt
     this.handle({ type: 'ui.openPopover', popover: { kind: 'permission', anchor, prompt: view } })
   }
 
@@ -2706,6 +2811,22 @@ export class Browser {
   onJsDialog(event: IpcMainEvent, kind: string, message: string, value: string): void {
     const type = kind === 'confirm' || kind === 'prompt' ? kind : 'alert'
     const cancelled = type === 'confirm' ? false : null
+    const popup = this.popupWindow(event.sender.id)
+    if (popup) {
+      // In a popup window, a sheet on that window (there's no text field for prompt()).
+      if (type === 'prompt') return void (event.returnValue = null)
+      void dialog
+        .showMessageBox(popup, {
+          message: `${safeHost(event.sender.getURL()) || 'This page'} says`,
+          detail: String(message).slice(0, 4000),
+          buttons: type === 'confirm' ? ['OK', 'Cancel'] : ['OK'],
+          defaultId: 0,
+          cancelId: type === 'confirm' ? 1 : 0
+        })
+        .then(({ response }) => (event.returnValue = type === 'confirm' ? response === 0 : null))
+        .catch(() => (event.returnValue = cancelled))
+      return
+    }
     const tabId = this.tabByWebContents.get(event.sender.id)
     if (!tabId) {
       event.returnValue = cancelled
@@ -2726,7 +2847,7 @@ export class Browser {
     } catch {
       // The frame went away.
     }
-    const dialog: JsDialogSpec = {
+    const spec: JsDialogSpec = {
       id: ++this.dialogSeq,
       kind: type,
       message: String(message).slice(0, 4000),
@@ -2736,7 +2857,7 @@ export class Browser {
       offerSuppress: guard.count > 1
     }
     let answered = false
-    this.queueDialog(dialog.id, tabId, { kind: 'jsDialog', anchor: this.contentBounds(), dialog }, (ok, text) => {
+    this.queueDialog(spec.id, tabId, { kind: 'jsDialog', anchor: this.contentBounds(), dialog: spec }, (ok, text) => {
       if (answered) return
       answered = true
       event.returnValue = type === 'confirm' ? ok : type === 'prompt' ? (ok ? text : null) : null
@@ -2808,7 +2929,8 @@ export class Browser {
   }
 
   openFind(): void {
-    if (!this.activeWebContents()) return
+    // Not over a page dialog or permission prompt, which need the whole overlay.
+    if (!this.activeWebContents() || this.showingDialog !== null || this.showingPrompt !== null) return
     this.emit({ type: 'find.open' }, 'overlay')
     this.setOverlayMode('corner')
     this.overlay.webContents.focus()
@@ -2850,7 +2972,7 @@ export class Browser {
     const otherSpaces = this.spaces.filter((s) => s.id !== tab.spaceId)
     const items: MenuItemConstructorOptions[] = []
 
-    if (tab.loaded) items.push({ label: 'Reload Tab', click: () => this.views.get(id)?.webContents.reload() })
+    if (tab.loaded) items.push({ label: 'Reload Tab', click: () => this.reloadPage(this.views.get(id)?.webContents) })
     items.push(
       { label: 'Duplicate Tab', click: () => this.openTab(tab.url, { afterTabId: tab.id }) },
       { label: 'Copy Link', click: () => clipboard.writeText(stripTracking(tab.url)) },
@@ -3037,7 +3159,8 @@ export class Browser {
     if (response !== 0) return
     await this.clearProfile(space.profile)
     for (const tab of this.tabs) {
-      if (tab.loaded && this.sessionFor(tab) === this.hub.profileSession(space.profile)) this.views.get(tab.id)?.webContents.reload()
+      if (tab.loaded && this.sessionFor(tab) === this.hub.profileSession(space.profile))
+        this.reloadPage(this.views.get(tab.id)?.webContents)
     }
     this.toast({ id: 'space-data-cleared', message: 'Space data cleared', description: space.name })
   }
@@ -3172,7 +3295,7 @@ export class Browser {
       items.push(
         { label: 'Back', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() },
         { label: 'Forward', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
-        { label: 'Reload', click: () => wc.reload() },
+        { label: 'Reload', click: () => this.reloadPage(wc) },
         { type: 'separator' }
       )
     }
@@ -3405,8 +3528,10 @@ export class Browser {
   }
 
   private emit(event: UiEvent, target: 'chrome' | 'overlay'): void {
+    // Downloads and other late events can arrive after the window has closed.
+    if (this.windowClosed) return
     const wc = target === 'chrome' ? this.win.webContents : this.overlay.webContents
-    wc.send(IPC.event, event)
+    if (!wc.isDestroyed()) wc.send(IPC.event, event)
   }
 
   private persistedState(): PersistedState {

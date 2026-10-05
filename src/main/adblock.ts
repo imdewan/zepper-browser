@@ -53,6 +53,9 @@ function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): str
  *   runs. That is what defeats YouTube's player ads; the stock Electron
  *   integration injects them asynchronously, after the page has started.
  */
+/** Most class names, ids or links looked up per request from a page. */
+const MAX_DOM_TOKENS = 2000
+
 export class AdBlock {
   private blocker: ElectronBlocker | null = null
   private readonly cachePath = join(app.getPath('userData'), 'adblock-engine.bin')
@@ -65,9 +68,14 @@ export class AdBlock {
     ipcMain.on(COSMETICS_CHANNEL, (event, url: string) => {
       event.returnValue = this.blocksOn(topUrlOf(event.senderFrame, url)) ? this.cosmetics(url) : { styles: '', scripts: [] }
     })
-    ipcMain.handle(COSMETICS_DOM_CHANNEL, (event, payload: { url: string; classes: string[]; ids: string[]; hrefs: string[] }) =>
-      this.blocksOn(topUrlOf(event.senderFrame, payload.url)) ? this.domCosmetics(payload) : { styles: '', scripts: [] }
-    )
+    ipcMain.handle(COSMETICS_DOM_CHANNEL, (event, payload: { url: string; classes: string[]; ids: string[]; hrefs: string[] }) => {
+      // Pages shape what the preload sends (class names, links), so it's bounded here too.
+      const list = (value: unknown): string[] =>
+        Array.isArray(value) ? value.slice(0, MAX_DOM_TOKENS).filter((v): v is string => typeof v === 'string' && v.length <= 512) : []
+      const url = String(payload?.url ?? '')
+      const tokens = { url, classes: list(payload?.classes), ids: list(payload?.ids), hrefs: list(payload?.hrefs) }
+      return this.blocksOn(topUrlOf(event.senderFrame, url)) ? this.domCosmetics(tokens) : { styles: '', scripts: [] }
+    })
   }
 
   async start(): Promise<void> {

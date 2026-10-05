@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { CertificateChain, PermissionPrompt, PermissionState, SiteInfo } from '@shared/types'
 import { zepper } from '../bridge'
@@ -390,7 +390,14 @@ export function WidevinePrompt({ host, restart, onDone }: { host: string; restar
 }
 
 export function PermissionPanel({ prompt, onDone }: { prompt: PermissionPrompt; onDone: () => void }): React.JSX.Element {
+  // A prompt can appear mid-click or mid-keystroke; it ignores input until it has been seen.
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setArmed(true), 500)
+    return () => clearTimeout(timer)
+  }, [])
   const respond = (allow: boolean): void => {
+    if (!armed) return
     zepper.send({ type: 'permission.respond', id: prompt.id, allow })
     onDone()
   }
@@ -404,7 +411,7 @@ export function PermissionPanel({ prompt, onDone }: { prompt: PermissionPrompt; 
         <button className="panel-button" onClick={() => respond(false)}>
           Block
         </button>
-        <button className="panel-button primary" onClick={() => respond(true)} autoFocus>
+        <button className="panel-button primary" onClick={() => respond(true)}>
           Allow
         </button>
       </div>

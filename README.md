@@ -30,6 +30,7 @@
 **Privacy.**
 
 - Ad and tracker blocking with uBlock Origin's filter lists, including YouTube ads. It can be turned off per site.
+- Pop-up blocking.
 - Private windows with a throwaway session.
 - Global Privacy Control.
 - A choice of browser identity: Chrome, Edge, Firefox, Safari or a custom string.

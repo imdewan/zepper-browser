@@ -58,13 +58,15 @@ export class Hub {
     this.services = { ...services, permissions: new SitePermissions(), certificates: new CertificateStore(), extensions: null }
     this.widevineInstallableNow = services.settings.get().widevine
 
-    ipcMain.handle(IPC.getSnapshot, (event) => this.owner(event.sender)?.publicSnapshot() ?? null)
-    ipcMain.handle(IPC.suggest, (event, text: string) => this.owner(event.sender)?.suggestions(text) ?? [])
-    ipcMain.handle(IPC.extensions, () => this.services.extensions?.list() ?? [])
+    // These answer only Zepper's own UI, never web pages.
+    ipcMain.handle(IPC.getSnapshot, (event) => this.uiOwner(event.sender)?.publicSnapshot() ?? null)
+    ipcMain.handle(IPC.suggest, (event, text: string) => this.uiOwner(event.sender)?.suggestions(String(text ?? '')) ?? [])
+    ipcMain.handle(IPC.extensions, (event) => (this.uiOwner(event.sender) ? (this.services.extensions?.list() ?? []) : []))
     // Private windows keep no history, so their history page is empty.
-    ipcMain.handle(IPC.history, (event, query: string) =>
-      this.owner(event.sender)?.kind === 'private' ? [] : services.history.list(String(query ?? ''), 2000)
-    )
+    ipcMain.handle(IPC.history, (event, query: string) => {
+      const browser = this.uiOwner(event.sender)
+      return !browser || browser.kind === 'private' ? [] : services.history.list(String(query ?? ''), 2000)
+    })
     ipcMain.on(IPC.command, (event, command: Command) => this.owner(event.sender)?.handleFromUi(event.sender, command))
     ipcMain.on(IPC.swipe, (event, phase: 'update' | 'end', dx: number, peak: number) =>
       this.owner(event.sender)?.onPageSwipe(event.sender.id, phase, Number(dx) || 0, Number(peak) || 0)
@@ -139,6 +141,12 @@ export class Hub {
   }
 
   /** The window that owns a WebContents: its chrome, overlay, player controls or one of its tabs. */
+  /** The window whose own UI `wc` is (not a page in it). */
+  private uiOwner(wc: WebContents): Browser | undefined {
+    const browser = this.owner(wc)
+    return browser?.isUi(wc) ? browser : undefined
+  }
+
   owner(wc: WebContents | null | undefined): Browser | undefined {
     if (!wc) return undefined
     for (const browser of this.browsers) if (browser.owns(wc)) return browser

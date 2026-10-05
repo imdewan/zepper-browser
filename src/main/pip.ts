@@ -175,7 +175,7 @@ export class PipPlayer {
   }
 
   private cleanup(closeWindow: boolean): void {
-    const { win, view, cssKey } = this
+    const { win, view, controls, cssKey } = this
     if (win && !win.isDestroyed()) this.lastBounds = { bounds: win.getBounds(), fraction: this.host.widthFraction() }
     if (view && !view.webContents.isDestroyed()) {
       if (cssKey) void view.webContents.removeInsertedCSS(cssKey).catch(() => {})
@@ -187,6 +187,8 @@ export class PipPlayer {
     this.view = null
     this.tabId = null
     this.cssKey = null
+    // The controls page would outlive the player window otherwise.
+    if (controls && !controls.webContents.isDestroyed()) controls.webContents.close()
     if (closeWindow && win && !win.isDestroyed()) win.destroy()
   }
 

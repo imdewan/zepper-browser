@@ -43,6 +43,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 ## Privacy and security
 
 - **Ad blocking:** built in, using uBlock Origin's filter lists (refreshed daily). Covers network requests, cosmetic filtering and scriptlets, including YouTube ads. It can be turned off per site.
+- **Pop-up blocking:** pages can open tabs and windows only right after a click or key press; blocked ones can be opened from a notice.
 - **Private windows** with an in-memory session.
 - **Global Privacy Control** and Do Not Track.
 - **Browser identity:** Chrome, Edge, Firefox, Safari or custom, with matching client hints.

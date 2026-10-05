@@ -21,7 +21,11 @@ interface PaletteProps {
 
 export function Palette({ mode, currentUrl, onClose, insetLeft = 0, insetRight = 0 }: PaletteProps): React.JSX.Element {
   const [text, setText] = useState(() => currentUrl ?? (Date.now() - lastTyped.at < KEEP_TYPED_MS ? lastTyped.text : ''))
-  const [results, setResults] = useState<Suggestion[]>([])
+  // Suggestions arrive a little after typing; `query` says which text they belong to.
+  const [{ query: resultsQuery, results }, setResults] = useState<{ query: string | null; results: Suggestion[] }>({
+    query: null,
+    results: []
+  })
   const [selected, setSelected] = useState(0)
   const input = useRef<HTMLInputElement>(null)
   const request = useRef(0)
@@ -39,7 +43,7 @@ export function Palette({ mode, currentUrl, onClose, insetLeft = 0, insetRight =
       async () => {
         const next = await zepper.suggest(query)
         if (id !== request.current) return
-        setResults(next)
+        setResults({ query, results: next })
         setSelected(0)
       },
       query ? 35 : 0
@@ -86,7 +90,9 @@ export function Palette({ mode, currentUrl, onClose, insetLeft = 0, insetRight =
       if (results.length) setSelected((s) => (s + (down ? 1 : -1) + results.length) % results.length)
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      choose(results[selected])
+      // Typed faster than suggestions came back: go with what was typed, unless a row was picked.
+      const stale = resultsQuery !== (text === currentUrl ? '' : text)
+      choose(stale && selected === 0 ? undefined : results[selected])
     } else if (e.key === 'Escape') {
       e.preventDefault()
       close()

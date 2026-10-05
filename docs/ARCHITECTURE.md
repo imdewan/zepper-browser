@@ -79,7 +79,7 @@ Zepper uses castLabs' Electron build. Widevine is opt-in: while it's off, `compo
 ## Development
 
 - `npm run dev` runs Zepper with hot reload for the UI. Main-process changes need a restart.
-- In development, a debug server listens on `127.0.0.1:9876`:
+- In development, a debug server listens on `127.0.0.1:9876`. It answers local tools only (requests from web pages are refused):
   - `/snapshot` and `/state`: what the window holds.
   - `/command`: send a command.
   - `/capture`: screenshots of each layer.

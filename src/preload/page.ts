@@ -213,10 +213,13 @@ function watchDomForGenericRules(): void {
 
   const collect = (root: ParentNode): { classes: string[]; ids: string[]; hrefs: string[] } => {
     const fresh = { classes: [] as string[], ids: [] as string[], hrefs: [] as string[] }
+    // A page churning out new names can't make this unbounded: a cap per flush and per page.
+    if (seen.classes.size + seen.ids.size + seen.hrefs.size > 50_000) return fresh
     const elements = root.querySelectorAll('[class],[id],a[href]')
-    for (let i = 0; i < elements.length && i < 4000; i++) {
+    for (let i = 0; i < elements.length && i < 4000 && fresh.classes.length + fresh.ids.length + fresh.hrefs.length < 2000; i++) {
       const el = elements[i]
       for (const name of el.classList) {
+        if (fresh.classes.length >= 2000) break
         if (!seen.classes.has(name)) {
           seen.classes.add(name)
           fresh.classes.push(name)

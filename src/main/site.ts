@@ -1,4 +1,4 @@
-import type { Certificate, Session } from 'electron'
+import { app, type Certificate, type Session } from 'electron'
 import { X509Certificate } from 'node:crypto'
 import type { CertificateChain, CertificateEntry, CertificateInfo, NameField, PermissionState } from '@shared/types'
 import { JsonFile } from './persist'
@@ -40,7 +40,12 @@ const PROMPT_LABELS: Record<string, string> = {
 }
 
 /** Maps an Electron permission request to the site-setting keys it needs. */
-export function settingKeys(permission: string, mediaTypes?: string[]): string[] | null {
+export function settingKeys(permission: string, mediaTypes?: string[], externalURL?: string): string[] | null {
+  if (permission === 'openExternal') {
+    // Allowing one app (say, Zoom) doesn't allow every other app.
+    const scheme = schemeOf(externalURL)
+    return scheme ? [`openExternal:${scheme}`] : null
+  }
   if (permission === 'media') {
     const types = mediaTypes?.length ? mediaTypes : ['audio', 'video']
     return types.map((t) => (t === 'video' ? 'camera' : 'microphone'))
@@ -48,13 +53,25 @@ export function settingKeys(permission: string, mediaTypes?: string[]): string[]
   return PROMPT_LABELS[permission] ? [permission] : null
 }
 
-export function promptLabel(permission: string, keys: string[]): string {
+export function promptLabel(permission: string, keys: string[], externalURL?: string): string {
+  if (permission === 'openExternal' && externalURL) {
+    const name = app.getApplicationNameForProtocol(externalURL).replace(/\.app$/, '')
+    return name ? `Open ${name}` : `Open “${schemeOf(externalURL)}:” links in another app`
+  }
   if (permission === 'media') {
     const camera = keys.includes('camera')
     const mic = keys.includes('microphone')
     return camera && mic ? 'Use your camera and microphone' : camera ? 'Use your camera' : 'Use your microphone'
   }
   return PROMPT_LABELS[permission] ?? `Use “${permission}”`
+}
+
+function schemeOf(url: string | undefined): string {
+  try {
+    return url ? new URL(url).protocol.slice(0, -1).toLowerCase() : ''
+  } catch {
+    return ''
+  }
 }
 
 export function originOf(url: string): string {
