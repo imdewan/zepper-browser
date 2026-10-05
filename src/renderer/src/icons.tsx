@@ -43,6 +43,16 @@ export const IconSidebar = (p: IconProps): React.JSX.Element => (
     <path d="M9 4v16" />
   </Icon>
 )
+/** Hat and glasses: private browsing. */
+export const IconPrivate = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <path d="M3 11h18" />
+    <path d="M5.5 11l1.6-5.2a1.5 1.5 0 0 1 2-.9L12 6l2.9-1.1a1.5 1.5 0 0 1 2 .9l1.6 5.2" />
+    <circle cx="7.5" cy="16.5" r="2.5" />
+    <circle cx="16.5" cy="16.5" r="2.5" />
+    <path d="M10 16.5c1.3-.8 2.7-.8 4 0" />
+  </Icon>
+)
 export const IconLock = (p: IconProps): React.JSX.Element => (
   <Icon {...p}>
     <rect x="5" y="11" width="14" height="9" rx="2.5" />
@@ -159,5 +169,12 @@ export const IconCookie = (p: IconProps): React.JSX.Element => (
   <Icon {...p}>
     <path d="M12 3a9 9 0 1 0 9 9 4 4 0 0 1-4-4 4 4 0 0 1-5-5z" />
     <path d="M8.5 11.5h.01M12 16h.01M15.5 13.5h.01M9 15.5h.01" />
+  </Icon>
+)
+
+export const IconPopIn = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="3" />
+    <path d="M14 10l-4 4M10 10v4h4" />
   </Icon>
 )

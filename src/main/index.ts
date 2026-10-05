@@ -1,8 +1,8 @@
-import { Menu, app, session } from 'electron'
+import { Menu, app } from 'electron'
 import { join } from 'node:path'
 import { AdBlock } from './adblock'
-import { Browser } from './browser'
 import { History } from './history'
+import { Hub } from './hub'
 import { buildMenu } from './menu'
 import { SettingsStore } from './settings-store'
 
@@ -17,7 +17,7 @@ app.userAgentFallback = app.userAgentFallback
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  let browser: Browser | null = null
+  let hub: Hub | null = null
   const history = new History()
 
   void app.whenReady().then(async () => {
@@ -28,22 +28,29 @@ if (!app.requestSingleInstanceLock()) {
       copyright: '© 2026 Dewan Shakil',
       iconPath: icon
     })
-    const adblock = new AdBlock(session.defaultSession, (id) => browser?.onAdBlocked(id))
-    browser = new Browser(history, adblock, new SettingsStore())
-    Menu.setApplicationMenu(buildMenu(browser))
-    browser.start(process.env['ELECTRON_RENDERER_URL'], join(__dirname, '../renderer'))
+    const adblock = new AdBlock((id) => hub?.ownerOfWebContentsId(id)?.onAdBlocked(id))
+    hub = new Hub({
+      history,
+      adblock,
+      settings: new SettingsStore(),
+      rendererUrl: process.env['ELECTRON_RENDERER_URL'],
+      rendererDir: join(__dirname, '../renderer')
+    })
+    hub.openWindow('main')
+    hub.startExtensions()
+    Menu.setApplicationMenu(buildMenu(hub))
     await adblock.start()
   })
 
   app.on('second-instance', () => {
-    const win = browser?.window()
+    const win = hub?.focusedNormal().window()
     if (!win) return
     if (win.isMinimized()) win.restore()
     win.focus()
   })
 
   app.on('before-quit', () => {
-    browser?.persistNow()
+    hub?.persist()
     history.flush()
   })
 

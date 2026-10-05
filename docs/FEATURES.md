@@ -109,10 +109,13 @@ Opens with ⌥-click on a link or "Open Link in Glance". The overlay is 80% of t
 | Loading pill: a small pulsing bar at the top-center of the page instead of tab spinners | P1 |
 | Session restore for normal tabs, which reload only when you open them | P1 |
 | Site panel: permissions, ad-block toggle, share, bookmark, screenshot | P2 |
-| Media controls in the sidebar: now-playing cards for background tabs | P2 |
+| Media controls in the sidebar: a now-playing card that follows the most recently played media (play/pause, mute, hide), a "N playing · Pause others" strip, and an offer (or setting to auto-pause) when a new tab starts playing over another | P2 |
+| Picture-in-picture: leaving a playing video floats it in a rounded, resizable, always-on-top player sized relative to the screen (small/medium/large), with back-to-tab, play/pause, mute and close | P2 |
+| Windows: `⌘N` new window, `⌘⇧N` private window (separate in-memory session, no history, wiped on close) | P2 |
+| Google sign-in compatibility: on accounts.google.com only, the page sees a complete `window.chrome` and no passkeys, so Google offers the password step | P1 |
 | Downloads with a fly-to-button arc animation | P2 |
 | Settings page; keyboard shortcut editor | P2 |
-| Library panel (history, downloads, spaces overview), Boosts (per-site colors, fonts, CSS and hiding page elements), onboarding, bookmarks, private windows, Chrome extensions, DRM | P3 |
+| Library panel (history, downloads, spaces overview), Boosts (per-site colors, fonts, CSS and hiding page elements), onboarding, bookmarks, DRM | P3 |
 
 ## 13. Keyboard shortcuts (P1 set)
 | Area | Shortcuts |

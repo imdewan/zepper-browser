@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 import { prefersDarkUi, themeAccent, themeBackground } from '@shared/theme'
 import type { Settings } from '@shared/settings'
-import type { Snapshot, SpaceTheme, Tab, UiEvent } from '@shared/types'
+import type { Rect, Snapshot, SpaceTheme, Tab, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconBack, IconForward } from '../icons'
+import { IconBack, IconForward, IconPrivate } from '../icons'
 import { useSnapshot, useSystemDark, useUiEvents } from '../useSnapshot'
 import logo from '../assets/logo.png'
 import { Sidebar } from './Sidebar'
@@ -101,7 +101,11 @@ export function App(): React.JSX.Element | null {
       {snapshot.compact && !snapshot.fullscreen && snapshot.settings.compactRevealOnHover && (
         <div className="edge-hotzone" onMouseEnter={() => zepper.send({ type: 'ui.peekSidebar', show: true })} />
       )}
-      <ContentCard tab={activeTab} />
+      {snapshot.panes.length > 1 ? (
+        <SplitPanes snapshot={snapshot} />
+      ) : (
+        <ContentCard tab={activeTab} isPrivate={snapshot.kind === 'private'} />
+      )}
       <SwipeIndicator />
     </div>
     </MotionConfig>
@@ -138,11 +142,27 @@ export function Background({ theme, spaceKey, transparency = 1 }: BackgroundProp
 }
 
 /** Placeholder card under the web view: provides the shadow, and the empty state when no tab is open. */
-function ContentCard({ tab }: { tab: Tab | null }): React.JSX.Element {
+function ContentCard({ tab, isPrivate }: { tab: Tab | null; isPrivate: boolean }): React.JSX.Element {
   return (
     <>
       <div className="content-card">
-        {!tab && (
+        {!tab && isPrivate && (
+          <div className="empty-state private">
+            <div className="private-mark">
+              <IconPrivate size={34} />
+            </div>
+            <div className="private-title">You're browsing privately</div>
+            <p className="private-text">
+              Zepper won't save your history, and this window's cookies, site data and permissions are erased when you close it.
+              Files you download stay on your Mac, and ads and trackers are still blocked.
+            </p>
+            <div className="empty-hint">
+              Press <kbd>⌘</kbd>
+              <kbd>T</kbd> to search or enter an address
+            </div>
+          </div>
+        )}
+        {!tab && !isPrivate && (
           <div className="empty-state">
             <img className="empty-logo" src={logo} alt="Zepper" draggable={false} />
             <div className="empty-hint">
@@ -160,6 +180,103 @@ function ContentCard({ tab }: { tab: Tab | null }): React.JSX.Element {
             animate={{ opacity: 0.8 }}
             exit={{ opacity: 0, scaleX: 0.8, transition: { duration: 0.3 } }}
             transition={{ duration: 0.4 }}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  )
+}
+
+/** Split view: a card (shadow + focus ring) under each pane, and draggable dividers in the gaps. */
+function SplitPanes({ snapshot }: { snapshot: Snapshot }): React.JSX.Element | null {
+  const split = snapshot.splits.find((s) => snapshot.activeTabId && s.tabIds.includes(snapshot.activeTabId))
+  const frame = useRef(0)
+  if (!split) return null
+  const panes = snapshot.panes
+  const activeTab = snapshot.tabs.find((t) => t.id === snapshot.activeTabId)
+
+  const sendSizes = (sizes: number[]): void => {
+    cancelAnimationFrame(frame.current)
+    frame.current = requestAnimationFrame(() => zepper.send({ type: 'split.resize', splitId: split.id, sizes }))
+  }
+
+  const dividers: { key: string; rect: Rect; axis: 'x' | 'y'; onMove: (pointer: number) => void }[] = []
+  if (split.layout === 'grid' && panes.length >= 3) {
+    const left = panes[0].rect
+    const right = panes[2].rect
+    const top = Math.min(left.y, right.y)
+    const bottom = Math.max(panes[1].rect.y + panes[1].rect.height, right.y + right.height)
+    const span = right.x + right.width - left.x - (right.x - left.x - left.width)
+    dividers.push({
+      key: 'grid',
+      axis: 'x',
+      rect: { x: left.x + left.width, y: top, width: right.x - left.x - left.width, height: bottom - top },
+      onMove: (pointer) => sendSizes([Math.min(0.8, Math.max(0.2, (pointer - left.x) / span))])
+    })
+  } else {
+    const vertical = split.layout === 'vertical'
+    const first = panes[0].rect
+    const last = panes[panes.length - 1].rect
+    const gap = vertical ? panes[1].rect.y - first.y - first.height : panes[1].rect.x - first.x - first.width
+    const start = vertical ? first.y : first.x
+    const total = (vertical ? last.y + last.height : last.x + last.width) - start - gap * (panes.length - 1)
+    const sum = split.sizes.reduce((a, c) => a + c, 0) || 1
+    const sizes = split.sizes.length === panes.length ? split.sizes.map((v) => v / sum) : panes.map(() => 1 / panes.length)
+    for (let i = 0; i < panes.length - 1; i++) {
+      const a = panes[i].rect
+      dividers.push({
+        key: `d${i}`,
+        axis: vertical ? 'y' : 'x',
+        rect: vertical
+          ? { x: a.x, y: a.y + a.height, width: a.width, height: gap }
+          : { x: a.x + a.width, y: a.y, width: gap, height: a.height },
+        onMove: (pointer) => {
+          const before = sizes.slice(0, i).reduce((acc, v) => acc + v, 0)
+          const pair = sizes[i] + sizes[i + 1]
+          const position = (pointer - start - gap * i) / total - before
+          const next = [...sizes]
+          next[i] = Math.min(pair - 0.1, Math.max(0.1, position))
+          next[i + 1] = pair - next[i]
+          sendSizes(next)
+        }
+      })
+    }
+  }
+
+  return (
+    <>
+      {panes.map((pane) => (
+        <div
+          key={pane.tabId}
+          className={`content-card pane${pane.tabId === snapshot.activeTabId ? ' focused' : ''}`}
+          style={{ left: pane.rect.x, top: pane.rect.y, width: pane.rect.width, height: pane.rect.height, right: 'auto', bottom: 'auto' }}
+        />
+      ))}
+      {dividers.map((d) => (
+        <div
+          key={d.key}
+          className={`split-divider-handle ${d.axis}`}
+          style={{ left: d.rect.x, top: d.rect.y, width: d.rect.width, height: d.rect.height }}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId)
+            e.currentTarget.dataset.dragging = 'true'
+          }}
+          onPointerMove={(e) => {
+            if (e.currentTarget.hasPointerCapture(e.pointerId)) d.onMove(d.axis === 'x' ? e.clientX : e.clientY)
+          }}
+          onPointerUp={(e) => {
+            e.currentTarget.releasePointerCapture(e.pointerId)
+            delete e.currentTarget.dataset.dragging
+          }}
+        />
+      ))}
+      <AnimatePresence>
+        {activeTab?.loading && (
+          <motion.div
+            className="loading-pill"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.8 }}
+            exit={{ opacity: 0, transition: { duration: 0.3 } }}
           />
         )}
       </AnimatePresence>

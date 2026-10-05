@@ -117,6 +117,51 @@
   font-size: 13px;
 }
 
+.empty-state.private {
+  max-width: 380px;
+  padding: 0 24px;
+}
+
+.private-mark {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  background: var(--element);
+  box-shadow: 0 0 0 0.5px var(--separator);
+}
+
+.private-title {
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.private-text {
+  margin: 8px 0 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.private-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px 0 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--element);
+  box-shadow: 0 0 0 0.5px var(--separator);
+  -webkit-app-region: no-drag;
+}
+
 .window[data-animating='true'] .content-card {
   transition:
     left 0.26s cubic-bezier(0.25, 1, 0.5, 1),
@@ -1028,16 +1073,17 @@ button.site-button:active {
 .media-card {
   flex: none;
   margin: 6px 0 2px;
-  padding: 7px;
+  padding: 6px 4px 6px 6px;
   border-radius: 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: var(--element);
   box-shadow:
     0 0 0 0.5px var(--separator),
     0 2px 10px rgba(0, 0, 0, 0.12);
   cursor: default;
+  container-type: inline-size;
   transition: background-color 0.12s ease;
 }
 
@@ -1047,8 +1093,8 @@ button.site-button:active {
 
 .media-art {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   flex: none;
   border-radius: 8px;
   overflow: hidden;
@@ -1065,9 +1111,9 @@ button.site-button:active {
 
 .media-art-eq {
   position: absolute;
-  inset: auto 3px 3px auto;
-  width: 16px;
-  height: 14px;
+  inset: auto 2px 2px auto;
+  width: 15px;
+  height: 13px;
   border-radius: 4px;
   display: grid;
   place-items: center;
@@ -1091,7 +1137,7 @@ button.site-button:active {
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
-  mask-image: linear-gradient(to right, black calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to right, black calc(100% - 12px), transparent);
 }
 
 .media-artist {
@@ -1106,11 +1152,11 @@ button.site-button:active {
 .media-controls {
   display: flex;
   align-items: center;
-  gap: 1px;
+  flex: none;
 }
 
 .media-button {
-  width: 26px;
+  width: 24px;
   height: 26px;
   border-radius: 7px;
   display: grid;
@@ -1133,14 +1179,70 @@ button.site-button:active {
 
 .media-button.dismiss {
   width: 20px;
-  opacity: 0;
-  transition: opacity 0.12s ease;
+  color: var(--text-3);
 }
 
-.media-card:hover .media-button.dismiss {
-  opacity: 1;
+/* Narrow sidebars: tighten the buttons rather than hiding any of them. */
+@container (max-width: 200px) {
+  .media-button {
+    width: 21px;
+  }
+  .media-button.dismiss {
+    width: 18px;
+  }
 }
 
+.media-others {
+  flex: none;
+  margin-top: 6px;
+  padding: 0 2px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.media-others-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.media-others-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-others-label .equalizer {
+  width: 9px;
+  height: 8px;
+  gap: 1px;
+  color: var(--accent);
+}
+
+.media-others-button {
+  flex: none;
+  height: 20px;
+  padding: 0 7px;
+  white-space: nowrap;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--element);
+  transition: background-color 0.1s ease;
+}
+
+.media-others-button:hover {
+  background: var(--element-hover);
+}
 
 /* Extension buttons (Chrome Web Store extensions) inside the URL pill. */
 .url-pill-extensions {
@@ -1178,4 +1280,122 @@ browser-action-list::part(badge) {
   inset: 0;
   background: var(--window-base);
   transition: opacity 0.2s ease;
+}
+
+/* ---- Split view --------------------------------------------------------------- */
+
+.content-card.pane.focused::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: calc(var(--radius) + 3px);
+  border: 2px solid color-mix(in srgb, var(--accent) 85%, transparent);
+  pointer-events: none;
+}
+
+.content-card.pane {
+  overflow: visible;
+}
+
+.split-divider-handle {
+  position: absolute;
+  z-index: 2;
+  -webkit-app-region: no-drag;
+}
+
+.split-divider-handle.x {
+  cursor: col-resize;
+}
+
+.split-divider-handle.y {
+  cursor: row-resize;
+}
+
+.split-divider-handle::after {
+  content: '';
+  position: absolute;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.split-divider-handle.x::after {
+  top: calc(50% - 20px);
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 40px;
+}
+
+.split-divider-handle.y::after {
+  left: calc(50% - 20px);
+  top: calc(50% - 2px);
+  height: 4px;
+  width: 40px;
+}
+
+.split-divider-handle:hover::after,
+.split-divider-handle[data-dragging]::after {
+  opacity: 0.85;
+}
+
+.split-row {
+  height: 36px;
+  margin: 1px 0;
+  padding: 0 4px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--separator);
+  transition: background-color 0.1s ease;
+}
+
+.split-row:hover {
+  background: var(--hover);
+}
+
+.split-row.active {
+  background: var(--selected);
+  box-shadow: var(--selected-shadow);
+}
+
+.split-cell {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.1s ease;
+}
+
+.split-cell:hover {
+  background: var(--hover);
+}
+
+.split-row.active .split-cell.focused {
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+}
+
+.split-title {
+  min-width: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, black calc(100% - 10px), transparent);
+}
+
+.split-divider {
+  width: 1px;
+  height: 16px;
+  flex: none;
+  background: var(--separator);
+}
+
+[data-density='compact'] .split-row {
+  height: 30px;
 }

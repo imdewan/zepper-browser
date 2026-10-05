@@ -67,11 +67,13 @@ export function originOf(url: string): string {
 
 /** Remembered per-origin permission decisions. */
 export class SitePermissions {
-  private readonly file = new JsonFile<Record<string, Record<string, 'allow' | 'block'>>>('site-settings.json', 500)
+  private readonly file: JsonFile<Record<string, Record<string, 'allow' | 'block'>>> | null
   private readonly data: Record<string, Record<string, 'allow' | 'block'>>
 
-  constructor() {
-    this.data = this.file.read() ?? {}
+  /** `persist: false` keeps decisions in memory only (private windows). */
+  constructor(persist = true) {
+    this.file = persist ? new JsonFile('site-settings.json', 500) : null
+    this.data = this.file?.read() ?? {}
   }
 
   get(origin: string, key: string): PermissionState {
@@ -83,7 +85,7 @@ export class SitePermissions {
     if (state === 'ask') delete site[key]
     else site[key] = state
     if (Object.keys(site).length === 0) delete this.data[origin]
-    this.file.schedule(this.data)
+    this.file?.schedule(this.data)
   }
 
   list(origin: string): { permission: string; label: string; state: PermissionState }[] {
@@ -95,7 +97,7 @@ export class SitePermissions {
   }
 
   flush(): void {
-    this.file.flush()
+    this.file?.flush()
   }
 }
 

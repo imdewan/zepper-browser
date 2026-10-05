@@ -21,7 +21,7 @@ import { Toasts } from './Toasts'
 export function Overlay(): React.JSX.Element | null {
   const snapshot = useSnapshot()
   const systemDark = useSystemDark()
-  const [palette, setPalette] = useState<{ mode: 'new' | 'current'; currentUrl: string | null; key: number } | null>(null)
+  const [palette, setPalette] = useState<{ mode: 'new' | 'current' | 'split'; currentUrl: string | null; key: number } | null>(null)
   const [popover, setPopover] = useState<PopoverSpec | null>(null)
   const [toasts, setToasts] = useState<ToastSpec[]>([])
   const [find, setFind] = useState<{ key: number; result: FindResult } | null>(null)

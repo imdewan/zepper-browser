@@ -1,0 +1,128 @@
+/* Floating video player controls (drawn over the video, transparent elsewhere). */
+
+.pip {
+  position: fixed;
+  inset: 0;
+  color: #fff;
+  cursor: default;
+}
+
+.pip > :not(.pip-drag) {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.pip.show > :not(.pip-drag) {
+  opacity: 1;
+}
+
+/* Grab the top edge to move the player. */
+.pip-drag {
+  position: absolute;
+  top: 0;
+  left: 44px;
+  right: 44px;
+  height: 34px;
+  -webkit-app-region: drag;
+}
+
+.pip-shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 64px;
+  pointer-events: none;
+}
+
+.pip-shade.top {
+  top: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
+}
+
+.pip-shade.bottom {
+  bottom: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+}
+
+.pip-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+  transition:
+    background-color 0.12s ease,
+    transform 0.12s ease;
+}
+
+.pip-button:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.pip-button:active {
+  transform: scale(0.92);
+}
+
+.pip-button.back {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
+.pip-button.close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.pip-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 54px;
+  height: 54px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 0.15s ease,
+    background-color 0.12s ease;
+}
+
+.pip-play:hover {
+  background: rgba(0, 0, 0, 0.5);
+  transform: scale(1.06);
+}
+
+.pip-play:active {
+  transform: scale(0.94);
+}
+
+.pip-bottom {
+  position: absolute;
+  left: 12px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pip-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}

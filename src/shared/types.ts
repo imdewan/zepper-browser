@@ -31,6 +31,8 @@ export interface Tab {
   blockedCount: number
   /** Media this tab has played since its last navigation; drives the now-playing card. */
   media: MediaInfo | null
+  /** When the tab last started or stopped making sound; the most recent media gets the now-playing card. */
+  audibleAt: number
 }
 
 export interface MediaInfo {
@@ -64,6 +66,22 @@ export interface Space {
   lastTabId: string | null
 }
 
+export type SplitLayout = 'horizontal' | 'vertical' | 'grid'
+
+/** Tabs shown side by side in the content area. */
+export interface Split {
+  id: string
+  tabIds: string[]
+  layout: SplitLayout
+  /** Fractions along the main axis (horizontal/vertical) or the left column width (grid). */
+  sizes: number[]
+}
+
+export interface Pane {
+  tabId: string
+  rect: Rect
+}
+
 export interface Snapshot {
   spaces: Space[]
   tabs: Tab[]
@@ -75,6 +93,11 @@ export interface Snapshot {
   fullscreen: boolean
   adblockEnabled: boolean
   settings: Settings
+  /** Window type: the main window, a temporary window, or a private window. */
+  kind: 'main' | 'blank' | 'private'
+  splits: Split[]
+  /** Where each visible web view sits in the window; more than one while a split is shown. */
+  panes: Pane[]
 }
 
 export interface Rect {
@@ -182,7 +205,7 @@ export type Command =
   | { type: 'tab.activate'; tabId: string }
   | { type: 'tab.close'; tabId: string }
   | { type: 'tab.middleClick'; tabId: string }
-  | { type: 'tab.open'; input: string; where: 'new' | 'current' }
+  | { type: 'tab.open'; input: string; where: 'new' | 'current' | 'split' }
   | { type: 'tab.pin'; tabId: string }
   | { type: 'tab.unpin'; tabId: string }
   | { type: 'tab.addEssential'; tabId: string }
@@ -206,7 +229,7 @@ export type Command =
   | { type: 'space.contextMenu'; spaceId: string; anchor: Rect }
   | { type: 'space.clearTabs'; spaceId: string }
   | { type: 'ui.setSidebarWidth'; width: number }
-  | { type: 'ui.openPalette'; mode: 'new' | 'current' }
+  | { type: 'ui.openPalette'; mode: 'new' | 'current' | 'split' }
   | { type: 'ui.closePalette'; refocus: boolean }
   | { type: 'ui.overlayMode'; mode: OverlayMode }
   | { type: 'ui.openPopover'; popover: PopoverSpec }
@@ -219,6 +242,7 @@ export type Command =
   | { type: 'clipboard.write'; text: string }
   | { type: 'media.toggle'; tabId: string }
   | { type: 'media.dismiss'; tabId: string }
+  | { type: 'media.pauseOthers'; keepTabId: string }
   | { type: 'site.setPermission'; origin: string; permission: string; state: PermissionState }
   | { type: 'site.clearData'; origin: string }
   | { type: 'site.clearDomain'; domain: string }
@@ -231,10 +255,17 @@ export type Command =
   | { type: 'ui.peekSidebar'; show: boolean }
   | { type: 'ui.dismissOverlay' }
   | { type: 'ui.createSpace' }
+  | { type: 'pip.back' }
+  | { type: 'pip.close' }
+  | { type: 'split.add'; tabId: string }
+  | { type: 'split.remove'; tabId: string }
+  | { type: 'split.dissolve'; splitId: string }
+  | { type: 'split.layout'; splitId: string; layout: SplitLayout }
+  | { type: 'split.resize'; splitId: string; sizes: number[] }
 
 /** Events pushed from the main process to renderers. */
 export type UiEvent =
-  | { type: 'palette.open'; mode: 'new' | 'current'; currentUrl: string | null }
+  | { type: 'palette.open'; mode: 'new' | 'current' | 'split'; currentUrl: string | null }
   | { type: 'toast'; toast: ToastSpec }
   | { type: 'space.startRename'; spaceId: string }
   | { type: 'space.startCreate' }

@@ -29,11 +29,9 @@ export class AdBlock {
   private blocker: ElectronBlocker | null = null
   private readonly cachePath = join(app.getPath('userData'), 'adblock-engine.bin')
   private enabled = true
+  private readonly sessions = new Set<Session>()
 
-  constructor(
-    private readonly session: Session,
-    private readonly onBlocked: (webContentsId: number) => void
-  ) {
+  constructor(private readonly onBlocked: (webContentsId: number) => void) {
     ipcMain.on(COSMETICS_CHANNEL, (event, url: string) => {
       event.returnValue = this.cosmetics(url)
     })
@@ -66,14 +64,22 @@ export class AdBlock {
     this.applyNetworkBlocking()
   }
 
+  /** Blocks in another session too (e.g. a private window's). */
+  attachSession(session: Session): void {
+    this.sessions.add(session)
+    this.applyNetworkBlocking()
+  }
+
   private applyNetworkBlocking(): void {
     const blocker = this.blocker
-    if (blocker && this.enabled) {
-      this.session.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, blocker.onBeforeRequest)
-      this.session.webRequest.onHeadersReceived({ urls: ['<all_urls>'] }, blocker.onHeadersReceived)
-    } else {
-      this.session.webRequest.onBeforeRequest(null)
-      this.session.webRequest.onHeadersReceived(null)
+    for (const session of this.sessions) {
+      if (blocker && this.enabled) {
+        session.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, blocker.onBeforeRequest)
+        session.webRequest.onHeadersReceived({ urls: ['<all_urls>'] }, blocker.onHeadersReceived)
+      } else {
+        session.webRequest.onBeforeRequest(null)
+        session.webRequest.onHeadersReceived(null)
+      }
     }
   }
 

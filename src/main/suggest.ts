@@ -27,7 +27,13 @@ async function fetchSearchSuggestions(text: string): Promise<string[]> {
  * Builds URL bar results: the direct action first (go to URL or search),
  * then open tabs, history, and search-engine suggestions.
  */
-export async function suggest(text: string, tabs: Tab[], history: History, useProvider = true): Promise<Suggestion[]> {
+export async function suggest(
+  text: string,
+  tabs: Tab[],
+  history: History,
+  useProvider = true,
+  skipHistory = false
+): Promise<Suggestion[]> {
   const query = text.trim()
   if (!query) {
     return tabs
@@ -54,7 +60,7 @@ export async function suggest(text: string, tabs: Tab[], history: History, usePr
   }
 
   const openUrls = new Set(tabs.map((t) => t.url))
-  for (const visit of history.search(query, 6)) {
+  for (const visit of skipHistory ? [] : history.search(query, 6)) {
     if (openUrls.has(visit.url)) continue
     results.push({ kind: 'history', url: visit.url, title: visit.title || visit.url })
     if (results.length >= 7) break

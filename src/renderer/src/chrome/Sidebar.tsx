@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { Snapshot, Tab, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconBack, IconForward, IconGlobe, IconLock, IconPlus, IconReload, IconSearch, IconSettings, IconSidebar } from '../icons'
+import { IconBack, IconForward, IconGlobe, IconLock, IconPlus, IconPrivate, IconReload, IconSearch, IconSettings, IconSidebar } from '../icons'
 import { useUiEvents } from '../useSnapshot'
 import { cx, hostOf, rectOf } from '../util'
 import { Essentials } from './Essentials'
@@ -29,7 +29,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
 
   return (
     <aside className="sidebar" style={{ width }}>
-      <TopRow tab={activeTab} />
+      <TopRow tab={activeTab} isPrivate={snapshot.kind === 'private'} />
       <UrlPill tab={activeTab} />
       <Essentials tabs={essentials} activeTabId={snapshot.activeTabId} />
       <div className="sidebar-body">
@@ -40,20 +40,26 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
           onStartRename={setRenamingId}
         />
       </div>
-      <MediaCard snapshot={snapshot} />
+      {snapshot.settings.showMediaCard && <MediaCard snapshot={snapshot} />}
       <BottomBar snapshot={snapshot} />
       {!floating && <ResizeHandle width={width} side={snapshot.settings.sidebarPosition} onResize={onResize} />}
     </aside>
   )
 }
 
-function TopRow({ tab }: { tab: Tab | null }): React.JSX.Element {
+function TopRow({ tab, isPrivate }: { tab: Tab | null; isPrivate: boolean }): React.JSX.Element {
   return (
     <div className="top-row drag">
       <div className="traffic-light-space" />
       <button className="icon-button compact-toggle" title="Toggle compact mode (⌘S)" onClick={() => zepper.send({ type: 'ui.toggleCompact' })}>
         <IconSidebar size={16} />
       </button>
+      {isPrivate && (
+        <span className="private-badge" title="Private window: history, cookies and site data are discarded when it closes">
+          <IconPrivate size={13} />
+          Private
+        </span>
+      )}
       <div className="top-row-spacer" />
       <button className="icon-button" title="Back (⌘[)" disabled={!tab?.canGoBack} onClick={() => zepper.send({ type: 'nav.back' })}>
         <IconBack size={17} />

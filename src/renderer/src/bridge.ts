@@ -29,6 +29,7 @@ function createMock(): ZepperApi {
     lastActiveAt: now,
     blockedCount: 12,
     media: null,
+    audibleAt: 0,
     ...fields
   })
   const spaces: Space[] = [
@@ -66,7 +67,10 @@ function createMock(): ZepperApi {
     focused: true,
     fullscreen: false,
     adblockEnabled: true,
-    settings: DEFAULT_SETTINGS
+    settings: DEFAULT_SETTINGS,
+    kind: 'main',
+    splits: [],
+    panes: []
   }
   const snapshotListeners = new Set<(s: Snapshot) => void>()
   const eventListeners = new Set<(e: UiEvent) => void>()

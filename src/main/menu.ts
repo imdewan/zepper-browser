@@ -1,25 +1,36 @@
 import { Menu, app, type MenuItemConstructorOptions } from 'electron'
 import type { Browser } from './browser'
+import type { Hub } from './hub'
 
 /**
  * The application menu doubles as the keyboard shortcut table: menu
  * accelerators fire even when a web page has focus.
  */
-export function buildMenu(browser: Browser): Menu {
-  const run = (fn: () => void) => () => fn()
+export function buildMenu(hub: Hub): Menu {
+  /** Shortcuts act on whichever window is focused. */
+  const run = (fn: (browser: Browser) => void) => () => {
+    const browser = hub.focused()
+    if (browser) fn(browser)
+  }
   const isDev = !app.isPackaged
 
   const tabItems: MenuItemConstructorOptions[] = Array.from({ length: 8 }, (_, i) => ({
     label: `Select Tab ${i + 1}`,
     accelerator: `CmdOrCtrl+${i + 1}`,
     visible: false,
-    click: run(() => browser.selectTabIndex(i + 1))
+    click: run((browser) => browser.selectTabIndex(i + 1))
+  }))
+  const essentialItems: MenuItemConstructorOptions[] = Array.from({ length: 9 }, (_, i) => ({
+    label: `Essential ${i + 1}`,
+    accelerator: `Alt+${i + 1}`,
+    visible: false,
+    click: run((browser) => browser.selectEssential(i + 1))
   }))
   const spaceItems: MenuItemConstructorOptions[] = Array.from({ length: 9 }, (_, i) => ({
     label: `Switch to Space ${i + 1}`,
     accelerator: `Control+${i + 1}`,
     visible: false,
-    click: run(() => browser.switchSpaceIndex(i + 1))
+    click: run((browser) => browser.switchSpaceIndex(i + 1))
   }))
 
   const template: MenuItemConstructorOptions[] = [
@@ -28,7 +39,7 @@ export function buildMenu(browser: Browser): Menu {
       submenu: [
         { role: 'about' },
         { type: 'separator' },
-        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: run(() => browser.handle({ type: 'ui.openSettings' })) },
+        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: run((browser) => browser.handle({ type: 'ui.openSettings' })) },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -42,14 +53,18 @@ export function buildMenu(browser: Browser): Menu {
     {
       label: 'File',
       submenu: [
-        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: run(() => browser.handle({ type: 'ui.openPalette', mode: 'new' })) },
-        { label: 'Open Location…', accelerator: 'CmdOrCtrl+L', click: run(() => browser.handle({ type: 'ui.openPalette', mode: 'current' })) },
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: run((browser) => browser.handle({ type: 'ui.openPalette', mode: 'new' })) },
+        { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => void hub.openWindow('blank') },
+        { label: 'New Private Window', accelerator: 'CmdOrCtrl+Shift+N', click: () => void hub.openWindow('private') },
+        { label: 'Open Location…', accelerator: 'CmdOrCtrl+L', click: run((browser) => browser.handle({ type: 'ui.openPalette', mode: 'current' })) },
         { type: 'separator' },
-        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: run(() => browser.closeActive()) },
-        { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', click: run(() => browser.handle({ type: 'tab.reopenClosed' })) },
+        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: run((browser) => browser.closeActive()) },
+        { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', click: run((browser) => browser.handle({ type: 'tab.reopenClosed' })) },
         { type: 'separator' },
-        { label: 'Copy Current URL', accelerator: 'CmdOrCtrl+Shift+C', click: run(() => browser.handle({ type: 'ui.copyUrl' })) },
-        { label: 'Copy URL as Markdown', accelerator: 'CmdOrCtrl+Alt+Shift+C', click: run(() => browser.handle({ type: 'ui.copyUrl', markdown: true })) }
+        { label: 'Take Screenshot', accelerator: 'CmdOrCtrl+Shift+2', click: run((browser) => void browser.screenshot()) },
+        { type: 'separator' },
+        { label: 'Copy Current URL', accelerator: 'CmdOrCtrl+Shift+C', click: run((browser) => browser.handle({ type: 'ui.copyUrl' })) },
+        { label: 'Copy URL as Markdown', accelerator: 'CmdOrCtrl+Alt+Shift+C', click: run((browser) => browser.handle({ type: 'ui.copyUrl', markdown: true })) }
       ]
     },
     {
@@ -64,27 +79,27 @@ export function buildMenu(browser: Browser): Menu {
         { role: 'pasteAndMatchStyle' },
         { role: 'selectAll' },
         { type: 'separator' },
-        { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: run(() => browser.openFind()) },
-        { label: 'Find Next', accelerator: 'CmdOrCtrl+G', click: run(() => browser.findAgain(true)) },
-        { label: 'Find Previous', accelerator: 'CmdOrCtrl+Shift+G', click: run(() => browser.findAgain(false)) }
+        { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: run((browser) => browser.openFind()) },
+        { label: 'Find Next', accelerator: 'CmdOrCtrl+G', click: run((browser) => browser.findAgain(true)) },
+        { label: 'Find Previous', accelerator: 'CmdOrCtrl+Shift+G', click: run((browser) => browser.findAgain(false)) }
       ]
     },
     {
       label: 'View',
       submenu: [
-        { label: 'Reload Page', accelerator: 'CmdOrCtrl+R', click: run(() => browser.reloadActive(false)) },
-        { label: 'Reload Ignoring Cache', accelerator: 'CmdOrCtrl+Shift+R', click: run(() => browser.reloadActive(true)) },
+        { label: 'Reload Page', accelerator: 'CmdOrCtrl+R', click: run((browser) => browser.reloadActive(false)) },
+        { label: 'Reload Ignoring Cache', accelerator: 'CmdOrCtrl+Shift+R', click: run((browser) => browser.reloadActive(true)) },
         { type: 'separator' },
-        { label: 'Toggle Compact Mode', accelerator: 'CmdOrCtrl+S', click: run(() => browser.handle({ type: 'ui.toggleCompact' })) },
+        { label: 'Toggle Compact Mode', accelerator: 'CmdOrCtrl+S', click: run((browser) => browser.handle({ type: 'ui.toggleCompact' })) },
         { type: 'separator' },
-        { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: run(() => browser.zoomActive(1)) },
-        { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', visible: false, click: run(() => browser.zoomActive(1)) },
-        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: run(() => browser.zoomActive(-1)) },
-        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: run(() => browser.zoomActive(0)) },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: run((browser) => browser.zoomActive(1)) },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', visible: false, click: run((browser) => browser.zoomActive(1)) },
+        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: run((browser) => browser.zoomActive(-1)) },
+        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: run((browser) => browser.zoomActive(0)) },
         { type: 'separator' },
-        { label: 'Developer Tools', accelerator: 'CmdOrCtrl+Alt+I', click: run(() => browser.toggleDevTools()) },
+        { label: 'Developer Tools', accelerator: 'CmdOrCtrl+Alt+I', click: run((browser) => browser.toggleDevTools()) },
         ...(isDev
-          ? [{ label: 'Browser UI DevTools', accelerator: 'CmdOrCtrl+Alt+Shift+I', click: run(() => browser.toggleChromeDevTools()) }]
+          ? [{ label: 'Browser UI DevTools', accelerator: 'CmdOrCtrl+Alt+Shift+I', click: run((browser) => browser.toggleChromeDevTools()) }]
           : []),
         { type: 'separator' },
         { role: 'togglefullscreen' }
@@ -93,28 +108,45 @@ export function buildMenu(browser: Browser): Menu {
     {
       label: 'History',
       submenu: [
-        { label: 'Back', accelerator: 'CmdOrCtrl+[', click: run(() => browser.handle({ type: 'nav.back' })) },
-        { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: run(() => browser.handle({ type: 'nav.forward' })) }
+        { label: 'Back', accelerator: 'CmdOrCtrl+[', click: run((browser) => browser.handle({ type: 'nav.back' })) },
+        { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: run((browser) => browser.handle({ type: 'nav.forward' })) }
       ]
     },
     {
       label: 'Tabs',
       submenu: [
-        { label: 'Next Tab', accelerator: 'Control+Tab', click: run(() => browser.cycleTab(1)) },
-        { label: 'Previous Tab', accelerator: 'Control+Shift+Tab', click: run(() => browser.cycleTab(-1)) },
+        { label: 'Switch to Recent Tab', accelerator: 'Control+Tab', click: run((browser) => browser.cycleRecent(1)) },
+        { label: 'Switch to Recent Tab (Back)', accelerator: 'Control+Shift+Tab', click: run((browser) => browser.cycleRecent(-1)) },
+        { label: 'Next Tab', accelerator: 'CmdOrCtrl+Alt+Down', click: run((browser) => browser.cycleTab(1)) },
+        { label: 'Previous Tab', accelerator: 'CmdOrCtrl+Alt+Up', click: run((browser) => browser.cycleTab(-1)) },
         { type: 'separator' },
-        { label: 'Pin / Unpin Tab', accelerator: 'CmdOrCtrl+Shift+D', click: run(() => browser.togglePinActive()) },
-        { label: 'Clear Unpinned Tabs', accelerator: 'CmdOrCtrl+Shift+K', click: run(() => browser.clearActiveSpace()) },
+        { label: 'Pin / Unpin Tab', accelerator: 'CmdOrCtrl+D', click: run((browser) => browser.togglePinActive()) },
+        { label: 'Pin / Unpin Tab', accelerator: 'CmdOrCtrl+Shift+D', visible: false, click: run((browser) => browser.togglePinActive()) },
+        { label: 'Clear Unpinned Tabs', accelerator: 'CmdOrCtrl+Shift+K', click: run((browser) => browser.clearActiveSpace()) },
         { type: 'separator' },
         ...tabItems,
-        { label: 'Select Last Tab', accelerator: 'CmdOrCtrl+9', visible: false, click: run(() => browser.selectTabIndex(9)) }
+        { label: 'Select Last Tab', accelerator: 'CmdOrCtrl+9', visible: false, click: run((browser) => browser.selectTabIndex(9)) },
+        ...essentialItems
+      ]
+    },
+    {
+      label: 'Split View',
+      submenu: [
+        { label: 'Add Split Pane', accelerator: 'Control+Shift+=', click: run((browser) => browser.addSplitPane()) },
+        { label: 'Remove Split Pane', accelerator: 'Control+Shift+-', click: run((browser) => browser.removeSplitPane()) },
+        { type: 'separator' },
+        { label: 'Side by Side', accelerator: 'CmdOrCtrl+Alt+V', click: run((browser) => browser.splitWithLayout('horizontal')) },
+        { label: 'Stacked', accelerator: 'CmdOrCtrl+Alt+H', click: run((browser) => browser.splitWithLayout('vertical')) },
+        { label: 'Grid', accelerator: 'CmdOrCtrl+Alt+G', click: run((browser) => browser.splitWithLayout('grid')) },
+        { type: 'separator' },
+        { label: 'Unsplit All', accelerator: 'CmdOrCtrl+Alt+U', click: run((browser) => browser.dissolveActiveSplit()) }
       ]
     },
     {
       label: 'Spaces',
       submenu: [
-        { label: 'Next Space', accelerator: 'CmdOrCtrl+Alt+Right', click: run(() => browser.switchSpaceRelative(1)) },
-        { label: 'Previous Space', accelerator: 'CmdOrCtrl+Alt+Left', click: run(() => browser.switchSpaceRelative(-1)) },
+        { label: 'Next Space', accelerator: 'CmdOrCtrl+Alt+Right', click: run((browser) => browser.switchSpaceRelative(1)) },
+        { label: 'Previous Space', accelerator: 'CmdOrCtrl+Alt+Left', click: run((browser) => browser.switchSpaceRelative(-1)) },
         ...spaceItems
       ]
     },

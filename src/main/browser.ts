@@ -1,15 +1,17 @@
 import {
   BrowserWindow,
+  ClipboardItem,
   Menu,
   WebContentsView,
   app,
   clipboard,
   dialog,
-  ipcMain,
   nativeTheme,
-  session,
   shell,
   type ContextMenuParams,
+  type DownloadItem,
+  type PermissionCheckHandlerHandlerDetails,
+  type Session,
   type HandlerDetails,
   type MenuItemConstructorOptions,
   type Rectangle,
@@ -20,7 +22,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
-import type { Settings } from '@shared/settings'
+import { PIP_WIDTH, type Settings } from '@shared/settings'
 import { DEFAULT_THEME } from '@shared/theme'
 import {
   IPC,
@@ -29,23 +31,25 @@ import {
   type PermissionPrompt,
   type PermissionState,
   type Rect,
+  type Pane,
   type SiteInfo,
   type Snapshot,
   type Space,
   type SpaceTheme,
+  type Split,
+  type SplitLayout,
+  type Suggestion,
   type Tab,
   type TabKind,
   type ToastSpec,
   type UiEvent
 } from '@shared/types'
-import type { AdBlock } from './adblock'
-import { Extensions } from './extensions'
+import type { Hub } from './hub'
+import { PipPlayer } from './pip'
 import { startDebugServer } from './devtools-server'
-import type { History } from './history'
 import { JsonFile } from './persist'
-import type { SettingsStore } from './settings-store'
 import { parse as parseDomain } from 'tldts-experimental'
-import { CertificateStore, SitePermissions, originOf, promptLabel, settingKeys } from './site'
+import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
 import { suggest } from './suggest'
 import { resolveInput, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
 
@@ -72,7 +76,10 @@ interface PersistedState {
   sidebarWidth: number
   compact: boolean
   adblockEnabled: boolean
+  splits?: Split[]
 }
+
+const MAX_SPLIT_PANES = 4
 
 interface PendingPrompt extends PermissionPrompt {
   keys: string[]
@@ -104,6 +111,7 @@ function makeTab(fields: Partial<Tab> & Pick<Tab, 'kind' | 'url'>): Tab {
     lastActiveAt: Date.now(),
     blockedCount: 0,
     media: null,
+    audibleAt: 0,
     ...fields
   }
 }
@@ -136,6 +144,11 @@ const EXIT_AUTO_PIP_SCRIPT = `(() => {
   return true
 })()`
 
+/** Pauses every playing video and audio element. */
+const MEDIA_PAUSE_SCRIPT = `(() => {
+  document.querySelectorAll('video, audio').forEach((el) => { if (!el.paused) el.pause() })
+})()`
+
 /** Pauses whatever is playing, or resumes what we paused last time. */
 const MEDIA_TOGGLE_SCRIPT = `(() => {
   const media = Array.from(document.querySelectorAll('video, audio'))
@@ -160,13 +173,16 @@ function makeSpace(name: string, icon: string, theme: SpaceTheme = DEFAULT_THEME
  * palette, toasts and popovers. Renderers only display snapshots of this
  * state and send commands back.
  */
+/** main: the persistent window; blank: temporary tabs, shared sign-ins; private: throwaway session. */
+export type BrowserKind = 'main' | 'blank' | 'private'
+
 export class Browser {
   private win!: BrowserWindow
   private overlay!: WebContentsView
   private readonly views = new Map<string, WebContentsView>()
   private readonly tabByWebContents = new Map<number, string>()
   private readonly openers = new Map<string, string>()
-  private readonly stateFile = new JsonFile<PersistedState>('zepper-state.json', 800)
+  private readonly stateFile: JsonFile<PersistedState> | null
 
   private spaces: Space[]
   private tabs: Tab[]
@@ -182,8 +198,7 @@ export class Browser {
   private broadcastTimer: NodeJS.Timeout | null = null
   private blockedTimer: NodeJS.Timeout | null = null
   private restoreTabId: string | null = null
-  private readonly permissions = new SitePermissions()
-  private readonly certificates = new CertificateStore()
+  private readonly permissions: SitePermissions
   private prompts: PendingPrompt[] = []
   private promptSeq = 0
   private showingPrompt: number | null = null
@@ -192,14 +207,26 @@ export class Browser {
   /** Horizontal offset applied to the active view while a swipe gesture is in progress. */
   private swipeOffset = 0
   private layoutAnimation: NodeJS.Timeout | null = null
-  private extensions: Extensions | null = null
+  private pip!: PipPlayer
+  private readonly disposers: (() => void)[] = []
+  /** Tabs we already offered to pause other media for, so the tip never nags. */
+  private readonly mediaTipShown = new Set<string>()
+  /** Set once the window has closed; late events from dying pages are ignored. */
+  private windowClosed = false
+  private splits: Split[] = []
+  /** Tabs whose views are currently attached to the window (one, or a split's panes). */
+  private readonly attached = new Set<string>()
+  /** Ctrl+Tab most-recently-used cycling: the order captured when cycling began. */
+  private recentCycle: { order: string[]; index: number; timer: NodeJS.Timeout | null } | null = null
 
   constructor(
-    private readonly history: History,
-    private readonly adblock: AdBlock,
-    private readonly settingsStore: SettingsStore
+    private readonly hub: Hub,
+    readonly kind: BrowserKind,
+    private readonly ses: Session
   ) {
-    const saved = this.stateFile.read()
+    this.stateFile = kind === 'main' ? new JsonFile<PersistedState>('zepper-state.json', 800) : null
+    this.permissions = kind === 'private' ? new SitePermissions(false) : hub.services.permissions
+    const saved = this.stateFile?.read()
     if (saved?.version === 1 && saved.spaces.length > 0) {
       this.spaces = saved.spaces
       this.tabs = saved.tabs.map((t) => makeTab(t))
@@ -207,8 +234,26 @@ export class Browser {
         ? saved.activeSpaceId
         : saved.spaces[0].id
       this.restoreTabId = saved.activeTabId
+      const ids = new Set(this.tabs.map((t) => t.id))
+      this.splits = (saved.splits ?? [])
+        .map((split) => ({ ...split, tabIds: split.tabIds.filter((id) => ids.has(id)) }))
+        .filter((split) => split.tabIds.length >= 2)
       this.sidebarWidth = Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, saved.sidebarWidth ?? DEFAULT_SIDEBAR))
       this.compact = saved.compact ?? false
+    } else if (kind === 'private') {
+      const space = makeSpace('Private', '🕶️', { colors: ['#3b2a6b', '#1b1934'], opacity: 0.7, texture: 0.15, scheme: 'dark' })
+      this.spaces = [space]
+      this.tabs = []
+      this.activeSpaceId = space.id
+      this.sidebarWidth = DEFAULT_SIDEBAR
+      this.compact = false
+    } else if (kind === 'blank') {
+      const space = makeSpace('New Window', '🪟')
+      this.spaces = [space]
+      this.tabs = []
+      this.activeSpaceId = space.id
+      this.sidebarWidth = DEFAULT_SIDEBAR
+      this.compact = false
     } else {
       const space = makeSpace('Personal', '😀')
       this.spaces = [space]
@@ -219,16 +264,40 @@ export class Browser {
     }
   }
 
+  private get history() {
+    return this.hub.services.history
+  }
+
+  private get adblock() {
+    return this.hub.services.adblock
+  }
+
+  private get settingsStore() {
+    return this.hub.services.settings
+  }
+
+  private get certificates() {
+    return this.hub.services.certificates
+  }
+
+  /** Chrome extensions only run in the shared session, never in private windows. */
+  private get extensions() {
+    return this.kind === 'private' ? null : this.hub.services.extensions
+  }
+
   // ---------------------------------------------------------------------------
   // Window lifecycle
 
-  start(rendererUrl: string | undefined, rendererDir: string): void {
+  start(): void {
+    const { rendererUrl, rendererDir } = this.hub.services
     const preload = join(__dirname, '../preload/index.js')
     const uiPrefs = { preload, contextIsolation: true, sandbox: true, partition: 'zepper-ui' }
 
+    const offset = this.kind === 'main' ? {} : { x: undefined, y: undefined }
     this.win = new BrowserWindow({
-      width: 1440,
-      height: 900,
+      ...offset,
+      width: this.kind === 'main' ? 1440 : 1280,
+      height: this.kind === 'main' ? 900 : 820,
       minWidth: 640,
       minHeight: 495,
       show: false,
@@ -248,6 +317,7 @@ export class Browser {
     this.win.contentView.addChildView(this.overlay)
 
     for (const wc of [this.win.webContents, this.overlay.webContents]) {
+      this.watchControlKey(wc)
       wc.on('will-navigate', (event) => event.preventDefault())
       wc.setWindowOpenHandler(() => ({ action: 'deny' }))
     }
@@ -263,10 +333,17 @@ export class Browser {
     this.win.on('resize', () => this.layout())
     this.win.on('focus', () => this.broadcast())
     this.win.on('blur', () => this.broadcast())
-    this.win.on('closed', () => this.persistNow())
-    nativeTheme.on('updated', () => {
-      this.applyAppIcon()
-      this.broadcast()
+    this.win.on('closed', () => this.destroy())
+    const onTheme = (): void => this.broadcast()
+    nativeTheme.on('updated', onTheme)
+    this.disposers.push(() => nativeTheme.off('updated', onTheme))
+
+    this.pip = new PipPlayer({
+      preload,
+      load,
+      widthFraction: () => PIP_WIDTH[this.settings.pipSize] ?? PIP_WIDTH.medium,
+      onBack: (tabId) => this.pipBack(tabId),
+      onClosed: (tabId) => this.pauseTab(tabId)
     })
 
     this.overlay.webContents.once('did-finish-load', () => {
@@ -275,58 +352,19 @@ export class Browser {
       else this.openPalette('new')
     })
 
-    ipcMain.handle(IPC.getSnapshot, () => this.snapshot())
-    ipcMain.handle(IPC.suggest, (_event, text: string) =>
-      suggest(text, this.tabs, this.history, this.settings.searchSuggestions)
-    )
-    ipcMain.on(IPC.command, (event, command: Command) => {
-      const sender = event.sender.id
-      if (sender !== this.win.webContents.id && sender !== this.overlay.webContents.id) return
-      this.handle(command)
-    })
-
-    ipcMain.on(IPC.swipe, (event, phase: 'update' | 'end', dx: number) => this.onPageSwipe(event.sender.id, phase, dx))
-    // "Back to tab" from the picture-in-picture window.
-    ipcMain.on(IPC.pipBack, (event) => {
-      const id = this.tabByWebContents.get(event.sender.id)
-      if (id && id !== this.activeTabId) {
-        this.activateTab(id)
-        this.win.show()
-        this.win.focus()
-      }
-    })
-
-    this.attachSession(session.defaultSession)
-    this.extensions = new Extensions(
-      {
-        window: () => this.win,
-        createTab: (url, active) => {
-          const tab = this.openTab(url, { background: !active })
-          return this.ensureView(tab).webContents
-        },
-        selectTab: (wc) => {
-          const id = this.tabByWebContents.get(wc.id)
-          if (id) this.activateTab(id)
-        },
-        removeTab: (wc) => {
-          const id = this.tabByWebContents.get(wc.id)
-          const tab = this.tab(id)
-          if (tab) this.removeTab(tab)
-        }
-      },
-      session.fromPartition('zepper-ui')
-    )
-    void this.extensions.start()
     this.applySettings(this.settings, null)
-    this.settingsStore.onChange((next, prev) => this.applySettings(next, prev))
+    this.disposers.push(this.settingsStore.onChange((next, prev) => this.applySettings(next, prev)))
     this.win.setWindowButtonVisibility(!this.compact)
     this.layout()
 
+    if (this.kind !== 'main') return
     startDebugServer({
       layers: () => {
         const layers = [{ name: 'chrome', webContents: this.win.webContents, bounds: this.windowBounds() }]
-        const view = this.activeTabId ? this.views.get(this.activeTabId) : undefined
-        if (view) layers.push({ name: 'tab', webContents: view.webContents, bounds: view.getBounds() })
+        for (const id of this.attached) {
+          const view = this.views.get(id)
+          if (view) layers.push({ name: `tab-${layers.length}`, webContents: view.webContents, bounds: view.getBounds() })
+        }
         if (this.overlayMode !== 'hidden') {
           layers.push({ name: 'overlay', webContents: this.overlay.webContents, bounds: this.overlay.getBounds() })
         }
@@ -364,70 +402,147 @@ export class Browser {
     })
   }
 
-  /** Permission prompts, certificate capture and downloads for the browsing session. */
-  private attachSession(ses: Electron.Session): void {
-    this.certificates.attach(ses)
-    ses.registerPreloadScript({ type: 'frame', filePath: join(__dirname, '../preload/page.js') })
-    ses.webRequest.onBeforeSendHeaders((details, callback) => {
-      if (!this.settings.globalPrivacyControl) return callback({ requestHeaders: details.requestHeaders })
-      callback({ requestHeaders: { ...details.requestHeaders, 'Sec-GPC': '1', DNT: '1' } })
+  /** A page asked for a permission (routed here by the hub): allow, block, or ask. */
+  requestPermission(
+    wc: WebContents,
+    permission: string,
+    callback: (granted: boolean) => void,
+    details: Electron.PermissionRequest | Electron.MediaAccessPermissionRequest | Electron.OpenExternalPermissionRequest
+  ): void {
+    if (this.permissions.isAlwaysAllowed(permission)) return callback(true)
+    const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes as string[] | undefined) : undefined
+    const keys = settingKeys(permission, mediaTypes)
+    if (!keys) return callback(false)
+    const origin = originOf(details.requestingUrl ?? wc.getURL())
+    const states = keys.map((k) => this.permissions.get(origin, k))
+    if (states.includes('block')) return callback(false)
+    if (states.every((s) => s === 'allow')) return callback(true)
+    this.prompts.push({
+      id: ++this.promptSeq,
+      origin,
+      host: safeHost(origin) || origin,
+      label: promptLabel(permission, keys),
+      keys,
+      tabId: this.tabByWebContents.get(wc.id),
+      callback
     })
+    wc.once('destroyed', () => this.dropPrompts((p) => p.tabId === this.tabByWebContents.get(wc.id)))
+    this.showNextPrompt()
+  }
 
-    ses.setPermissionRequestHandler((wc, permission, callback, details) => {
-      if (this.permissions.isAlwaysAllowed(permission)) return callback(true)
-      const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes as string[] | undefined) : undefined
-      const keys = settingKeys(permission, mediaTypes)
-      if (!keys) return callback(false)
-      const origin = originOf(details.requestingUrl ?? wc.getURL())
-      const states = keys.map((k) => this.permissions.get(origin, k))
-      if (states.includes('block')) return callback(false)
-      if (states.every((s) => s === 'allow')) return callback(true)
-      this.prompts.push({
-        id: ++this.promptSeq,
-        origin,
-        host: safeHost(origin) || origin,
-        label: promptLabel(permission, keys),
-        keys,
-        tabId: this.tabByWebContents.get(wc.id),
-        callback
-      })
-      wc.once('destroyed', () => this.dropPrompts((p) => p.tabId === this.tabByWebContents.get(wc.id)))
-      this.showNextPrompt()
-    })
+  checkPermission(permission: string, requestingOrigin: string, details: PermissionCheckHandlerHandlerDetails): boolean {
+    if (this.permissions.isAlwaysAllowed(permission)) return true
+    const mediaType = 'mediaType' in details ? (details.mediaType as string | undefined) : undefined
+    const keys = settingKeys(permission, mediaType && mediaType !== 'unknown' ? [mediaType] : undefined)
+    if (!keys) return true
+    return keys.every((k) => this.permissions.get(originOf(requestingOrigin), k) === 'allow')
+  }
 
-    ses.setPermissionCheckHandler((_wc, permission, requestingOrigin, details) => {
-      if (this.permissions.isAlwaysAllowed(permission)) return true
-      const mediaType = 'mediaType' in details ? (details.mediaType as string | undefined) : undefined
-      const keys = settingKeys(permission, mediaType && mediaType !== 'unknown' ? [mediaType] : undefined)
-      if (!keys) return true
-      return keys.every((k) => this.permissions.get(originOf(requestingOrigin), k) === 'allow')
+  handleDownload(item: DownloadItem): void {
+    const path = uniquePath(join(app.getPath('downloads'), item.getFilename()))
+    item.setSavePath(path)
+    const name = basename(path)
+    this.toast({ id: `download-${name}`, message: 'Downloading…', description: name, timeout: 2500 })
+    item.on('updated', () => {
+      const total = item.getTotalBytes()
+      if (total > 0 && !this.win.isDestroyed()) this.win.setProgressBar(item.getReceivedBytes() / total)
     })
+    item.once('done', (_e, state) => {
+      if (!this.win.isDestroyed()) this.win.setProgressBar(-1)
+      if (state === 'completed') {
+        app.dock?.downloadFinished(path)
+        this.toast({
+          id: `download-${name}`,
+          message: 'Download complete',
+          description: name,
+          action: { label: 'Show', command: { type: 'download.show', path } },
+          timeout: 5000
+        })
+      } else if (state === 'interrupted') {
+        this.toast({ id: `download-${name}`, message: 'Download failed', description: name, timeout: 4000 })
+      }
+    })
+  }
 
-    ses.on('will-download', (_event, item) => {
-      const path = uniquePath(join(app.getPath('downloads'), item.getFilename()))
-      item.setSavePath(path)
-      const name = basename(path)
-      this.toast({ id: `download-${name}`, message: 'Downloading…', description: name, timeout: 2500 })
-      item.on('updated', () => {
-        const total = item.getTotalBytes()
-        if (total > 0) this.win.setProgressBar(item.getReceivedBytes() / total)
-      })
-      item.once('done', (_e, state) => {
-        this.win.setProgressBar(-1)
-        if (state === 'completed') {
-          app.dock?.downloadFinished(path)
-          this.toast({
-            id: `download-${name}`,
-            message: 'Download complete',
-            description: name,
-            action: { label: 'Show', command: { type: 'download.show', path } },
-            timeout: 5000
-          })
-        } else if (state === 'interrupted') {
-          this.toast({ id: `download-${name}`, message: 'Download failed', description: name, timeout: 4000 })
-        }
-      })
-    })
+  // ---------------------------------------------------------------------------
+  // Hub routing
+
+  owns(wc: WebContents): boolean {
+    return this.ownsWebContentsId(wc.id)
+  }
+
+  ownsWebContentsId(id: number): boolean {
+    if (!this.win || this.win.isDestroyed()) return false
+    return (
+      id === this.win.webContents.id ||
+      id === this.overlay.webContents.id ||
+      id === this.pip?.controlsWebContents()?.id ||
+      this.tabByWebContents.has(id)
+    )
+  }
+
+  publicSnapshot(): Snapshot {
+    return this.snapshot()
+  }
+
+  suggestions(text: string): Promise<Suggestion[]> {
+    // Private windows don't draw on (or show) browsing history.
+    return suggest(text, this.tabs, this.history, this.settings.searchSuggestions, this.kind === 'private')
+  }
+
+  /** Commands from this window's own UI (chrome, overlay, player controls) only, never from web pages. */
+  handleFromUi(sender: WebContents, command: Command): void {
+    const ui = [this.win.webContents.id, this.overlay.webContents.id, this.pip.controlsWebContents()?.id]
+    if (!ui.includes(sender.id)) return
+    this.handle(command)
+  }
+
+  activateByWebContents(wc: WebContents): void {
+    const id = this.tabByWebContents.get(wc.id)
+    if (id) this.activateTab(id)
+  }
+
+  /**
+   * The extensions layer reports every tab page that goes away, including the
+   * ones torn down because this window is closing; those must not touch the
+   * saved tabs (or the destroyed window).
+   */
+  removeByWebContents(wc: WebContents): void {
+    if (this.windowClosed || this.win.isDestroyed()) return
+    const tab = this.tab(this.tabByWebContents.get(wc.id))
+    if (tab) this.removeTab(tab)
+  }
+
+  openTabForExtension(url: string, active: boolean): WebContents {
+    const tab = this.openTab(url, { background: !active })
+    return this.ensureView(tab).webContents
+  }
+
+  /** "Back to tab" from Chromium's own picture-in-picture window (iframe videos). */
+  onNativePipBack(webContentsId: number): void {
+    const id = this.tabByWebContents.get(webContentsId)
+    if (id && id !== this.activeTabId) this.pipBack(id)
+  }
+
+  focusWindow(): void {
+    if (this.win.isMinimized()) this.win.restore()
+    this.win.show()
+    this.win.focus()
+  }
+
+  /** Window closed: release every page, and for private windows wipe the session. */
+  private destroy(): void {
+    this.windowClosed = true
+    this.persistNow()
+    this.pip?.exit()
+    for (const dispose of this.disposers) dispose()
+    for (const view of this.views.values()) {
+      if (!view.webContents.isDestroyed()) view.webContents.close()
+    }
+    this.views.clear()
+    this.tabByWebContents.clear()
+    if (this.kind === 'private') void this.ses.clearStorageData().catch(() => {})
+    this.hub.windowClosed(this)
   }
 
   window(): BrowserWindow {
@@ -435,10 +550,9 @@ export class Browser {
   }
 
   persistNow(): void {
+    if (!this.stateFile) return
     this.stateFile.schedule(this.persistedState())
     this.stateFile.flush()
-    this.permissions.flush()
-    this.settingsStore.flush()
   }
 
   // ---------------------------------------------------------------------------
@@ -522,6 +636,20 @@ export class Browser {
         return void clipboard.writeText(command.text)
       case 'media.toggle':
         return void this.views.get(command.tabId)?.webContents.executeJavaScript(MEDIA_TOGGLE_SCRIPT, true).catch(() => {})
+      case 'media.pauseOthers':
+        return this.pauseOthers(command.keepTabId)
+      case 'pip.back': {
+        const id = this.pip.activeTabId
+        if (id) this.pipBack(id)
+        return
+      }
+      case 'pip.close': {
+        const id = this.pip.activeTabId
+        if (!id) return
+        this.pauseTab(id)
+        this.pip.exit()
+        return
+      }
       case 'media.dismiss': {
         const tab = this.tab(command.tabId)
         if (tab) tab.media = null
@@ -551,18 +679,32 @@ export class Browser {
         return this.setPeek(command.show)
       case 'ui.dismissOverlay':
         return this.emit({ type: 'overlay.dismiss' }, 'overlay')
+      case 'split.add':
+        return this.addToSplit(command.tabId)
+      case 'split.remove':
+        return this.removeFromSplit(command.tabId)
+      case 'split.dissolve':
+        return this.dissolveSplit(command.splitId)
+      case 'split.layout': {
+        const split = this.splits.find((x) => x.id === command.splitId)
+        if (split) {
+          split.layout = command.layout
+          split.sizes = evenSizes(command.layout === 'grid' ? 1 : split.tabIds.length)
+        }
+        this.layout()
+        return this.broadcast()
+      }
+      case 'split.resize': {
+        const split = this.splits.find((x) => x.id === command.splitId)
+        if (split) split.sizes = command.sizes
+        this.layout()
+        return this.broadcast()
+      }
       case 'ui.createSpace':
         this.setOverlayMode('full')
         this.overlay.webContents.focus()
         return this.emit({ type: 'space.startCreate' }, 'overlay')
     }
-  }
-
-  /** Dock icon: light or dark artwork, or following the system appearance. */
-  private applyAppIcon(): void {
-    const choice = this.settings.appIcon
-    const dark = choice === 'dark' || (choice === 'auto' && nativeTheme.shouldUseDarkColors)
-    app.dock?.setIcon(join(__dirname, `../../resources/${dark ? 'icon-dark' : 'icon'}.png`))
   }
 
   private get settings(): Settings {
@@ -571,7 +713,6 @@ export class Browser {
 
   private applySettings(next: Settings, prev: Settings | null): void {
     nativeTheme.themeSource = next.colorScheme
-    this.applyAppIcon()
     setSearchEngine(next.searchEngine)
     this.adblock.setEnabled(next.adblock)
     const layoutChanged =
@@ -632,9 +773,16 @@ export class Browser {
     }
   }
 
-  private openInput(input: string, where: 'new' | 'current'): void {
+  private openInput(input: string, where: 'new' | 'current' | 'split'): void {
     const url = resolveInput(input)
     const current = this.tab(this.activeTabId)
+    if (where === 'split') {
+      const tab = makeTab({ kind: 'normal', url, spaceId: this.activeSpaceId })
+      this.insertNormalTab(tab, current?.kind === 'normal' ? current.id : undefined)
+      if (current) this.addToSplit(tab.id)
+      else this.activateTab(tab.id)
+      return
+    }
     // Like Zen, navigating a pinned tab or Essential away from its site opens a new tab instead.
     const leavesPin =
       current?.pinned && new URL(url).host !== safeHost(current.pinned.url) && where === 'current'
@@ -647,22 +795,21 @@ export class Browser {
     this.activateTab(current.id)
   }
 
-  activateTab(id: string): void {
+  activateTab(id: string, options: { keepRecency?: boolean } = {}): void {
     const tab = this.tab(id)
     if (!tab) return
     const previousId = this.activeTabId
-    if (previousId && previousId !== id) void this.autoPictureInPicture(previousId)
+    const sameSplit = !!previousId && this.splitOf(previousId) !== undefined && this.splitOf(previousId) === this.splitOf(id)
+    if (previousId && previousId !== id && !sameSplit) void this.autoPictureInPicture(previousId)
     if (tab.kind !== 'essential' && tab.spaceId && tab.spaceId !== this.activeSpaceId) {
       this.activeSpaceId = tab.spaceId
     }
-    const previous = this.activeTabId ? this.views.get(this.activeTabId) : undefined
-    const view = this.ensureView(tab)
-    if (previous && previous !== view) this.win.contentView.removeChildView(previous)
-    this.win.contentView.addChildView(view)
-    this.win.contentView.addChildView(this.overlay)
-
+    if (this.pip.activeTabId === id) this.pip.exit()
     this.activeTabId = id
-    tab.lastActiveAt = Date.now()
+    const view = this.ensureView(tab)
+    this.syncAttachedViews()
+
+    if (!options.keepRecency) tab.lastActiveAt = Date.now()
     const space = this.space(this.activeSpaceId)
     if (space) space.lastTabId = id
     this.layout()
@@ -678,9 +825,59 @@ export class Browser {
     if (!this.settings.autoPictureInPicture) return
     const tab = this.tab(tabId)
     const wc = this.views.get(tabId)?.webContents
-    if (!tab?.audible || tab.muted || !wc) return
-    const entered = await this.runInFrames(wc, AUTO_PIP_SCRIPT, true, 'pip')
-    if (!app.isPackaged) console.info(`[pip] auto picture-in-picture for ${tab.title}: ${entered ? 'entered' : 'no playing video'}`)
+    const view = this.views.get(tabId)
+    if (!tab?.audible || tab.muted || !wc || !view) return
+    if (this.attached.has(tabId)) return
+    // Our floating player handles videos in the page itself; iframe videos fall back to Chromium's.
+    let entered = await this.pip.enter(tabId, view)
+    if (entered && (this.activeTabId === tabId || this.attached.has(tabId))) {
+      this.pip.exit()
+      this.syncAttachedViews()
+      return
+    }
+    if (!entered) entered = await this.runInFrames(wc, AUTO_PIP_SCRIPT, true, 'pip')
+    if (!app.isPackaged) console.info(`[pip] picture-in-picture for ${tab.title}: ${entered ? 'entered' : 'no playing video'}`)
+  }
+
+  /** "Back to tab" from the floating player: show the tab and bring the window forward. */
+  private pipBack(tabId: string): void {
+    this.activateTab(tabId)
+    this.focusWindow()
+  }
+
+  private pauseTab(tabId: string): void {
+    const wc = this.views.get(tabId)?.webContents
+    if (wc) void this.runInFrames(wc, MEDIA_PAUSE_SCRIPT, false)
+  }
+
+  private pauseOthers(keepTabId: string): void {
+    for (const tab of this.tabs) if (tab.audible && !tab.muted && tab.id !== keepTabId) this.pauseTab(tab.id)
+  }
+
+  /**
+   * Started something while another tab is still playing? Offer to pause the
+   * rest, once per tab, so old videos don't keep talking over the new one.
+   */
+  private offerToPauseOthers(tabId: string): void {
+    const behavior = this.settings.otherMedia
+    if (this.tab(tabId)?.muted) return
+    const others = this.tabs.filter((t) => t.audible && t.id !== tabId && !t.muted)
+    if (behavior === 'nothing' || others.length === 0) return
+    const names = others.map((t) => t.media?.title || t.title).slice(0, 2).join(', ')
+    if (behavior === 'pause') {
+      this.pauseOthers(tabId)
+      this.toast({ id: 'media-others', message: others.length === 1 ? 'Paused the other tab' : `Paused ${others.length} other tabs`, description: names, timeout: 3000 })
+      return
+    }
+    if (this.mediaTipShown.has(tabId)) return
+    this.mediaTipShown.add(tabId)
+    this.toast({
+      id: 'media-others',
+      message: others.length === 1 ? 'Another tab is still playing' : `${others.length} other tabs are playing`,
+      description: names,
+      action: { label: others.length === 1 ? 'Pause it' : 'Pause others', command: { type: 'media.pauseOthers', keepTabId: tabId } },
+      timeout: 6000
+    })
   }
 
   /** Whether any frame of a tab currently shows picture-in-picture (dev checks). */
@@ -713,9 +910,8 @@ export class Browser {
 
   private clearActiveTab(): void {
     if (this.activeTabId) void this.autoPictureInPicture(this.activeTabId)
-    const previous = this.activeTabId ? this.views.get(this.activeTabId) : undefined
-    if (previous) this.win.contentView.removeChildView(previous)
     this.activeTabId = null
+    this.syncAttachedViews()
     const space = this.space(this.activeSpaceId)
     if (space) space.lastTabId = null
     this.broadcast()
@@ -779,7 +975,10 @@ export class Browser {
 
   private removeTab(tab: Tab): void {
     const wasActive = this.activeTabId === tab.id
-    const next = wasActive ? this.pickNextTab(tab) : undefined
+    // Closing a pane keeps the rest of its split on screen.
+    const splitSibling = this.splitOf(tab.id)?.tabIds.find((id) => id !== tab.id)
+    this.leaveSplit(tab.id)
+    const next = wasActive ? (this.tab(splitSibling) ?? this.pickNextTab(tab)) : undefined
     this.destroyView(tab)
     this.tabs = this.tabs.filter((t) => t !== tab)
     this.openers.delete(tab.id)
@@ -936,6 +1135,66 @@ export class Browser {
     if (tab) this.activateTab(tab.id)
   }
 
+  /**
+   * ⌃Tab like Arc: jump to the most recently used tab; pressing Tab again
+   * while Control is held walks further back. Releasing Control commits.
+   */
+  cycleRecent(direction: 1 | -1): void {
+    if (!this.recentCycle) {
+      const order = this.visibleTabs()
+        .filter((t) => t.kind === 'normal' || t.loaded)
+        .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+        .map((t) => t.id)
+      if (order.length < 2) return
+      this.recentCycle = { order, index: 0, timer: null }
+    }
+    const cycle = this.recentCycle
+    cycle.index = (cycle.index + direction + cycle.order.length) % cycle.order.length
+    this.activateTab(cycle.order[cycle.index], { keepRecency: true })
+    if (cycle.timer) clearTimeout(cycle.timer)
+    cycle.timer = setTimeout(() => this.endRecentCycle(), 1500)
+  }
+
+  private endRecentCycle(): void {
+    const cycle = this.recentCycle
+    if (!cycle) return
+    if (cycle.timer) clearTimeout(cycle.timer)
+    this.recentCycle = null
+    const tab = this.tab(this.activeTabId)
+    if (tab) tab.lastActiveAt = Date.now()
+  }
+
+  /** Releasing Control ends a ⌃Tab cycle, wherever focus is. */
+  private watchControlKey(wc: WebContents): void {
+    wc.on('before-input-event', (_event, input) => {
+      if (input.type === 'keyUp' && input.key === 'Control' && this.recentCycle) this.endRecentCycle()
+    })
+  }
+
+  /** ⌥1–9: the Nth Essential. */
+  selectEssential(n: number): void {
+    const tab = this.tabs.filter((t) => t.kind === 'essential')[n - 1]
+    if (tab) this.activateTab(tab.id)
+  }
+
+  /** ⌘⇧2: screenshot of the visible page, saved to Downloads and copied to the clipboard. */
+  async screenshot(): Promise<void> {
+    const wc = this.activeWebContents()
+    if (!wc) return
+    const image = await wc.capturePage()
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19)
+    const path = uniquePath(join(app.getPath('downloads'), `Zepper Screenshot ${stamp}.png`))
+    await writeFile(path, image.toPNG())
+    await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' }) })])
+    this.toast({
+      id: 'screenshot',
+      message: 'Screenshot saved',
+      description: 'Copied to clipboard',
+      action: { label: 'Show', command: { type: 'download.show', path } },
+      timeout: 4000
+    })
+  }
+
   cycleTab(delta: number): void {
     const visible = this.visibleTabs()
     if (visible.length === 0) return
@@ -992,7 +1251,7 @@ export class Browser {
             sandbox: true,
             contextIsolation: true,
             nodeIntegration: false,
-            session: session.defaultSession,
+            session: this.ses,
             scrollBounce: true,
             spellcheck: true
           }
@@ -1009,14 +1268,16 @@ export class Browser {
   }
 
   private destroyView(tab: Tab): void {
+    if (this.pip?.activeTabId === tab.id) this.pip.exit()
     const view = this.views.get(tab.id)
     tab.loaded = false
     tab.loading = false
     tab.audible = false
     if (!view) return
-    this.win.contentView.removeChildView(view)
+    if (!this.win.isDestroyed()) this.win.contentView.removeChildView(view)
+    this.attached.delete(tab.id)
     this.views.delete(tab.id)
-    this.tabByWebContents.delete(view.webContents.id)
+    for (const [wcId, id] of this.tabByWebContents) if (id === tab.id) this.tabByWebContents.delete(wcId)
     if (!view.webContents.isDestroyed()) view.webContents.close()
   }
 
@@ -1032,26 +1293,56 @@ export class Browser {
       canGoForward: wc.navigationHistory.canGoForward()
     })
 
+    this.watchControlKey(wc)
+    // Clicking into a split pane makes it the focused (active) tab.
+    wc.on('focus', () => {
+      if (tabId === this.activeTabId) return
+      const split = this.splitOf(tabId)
+      if (!split || split !== this.activeSplit()) return
+      this.activeTabId = tabId
+      const tab = this.tab(tabId)
+      if (tab) tab.lastActiveAt = Date.now()
+      const space = this.space(this.activeSpaceId)
+      if (space) space.lastTabId = tabId
+      this.extensions?.api.selectTab(wc)
+      this.broadcast()
+    })
+    // A page with unsaved changes asks before it's left, as in Chrome (Electron would otherwise cancel silently).
+    wc.on('will-prevent-unload', (event) => {
+      if (this.win.isDestroyed()) return event.preventDefault()
+      const choice = dialog.showMessageBoxSync(this.win, {
+        type: 'question',
+        buttons: ['Leave', 'Stay'],
+        defaultId: 0,
+        cancelId: 1,
+        message: 'Leave site?',
+        detail: 'Changes you made may not be saved.'
+      })
+      if (choice === 0) event.preventDefault()
+    })
     wc.on('did-start-loading', () => update({ loading: true }))
     wc.on('did-stop-loading', () => update({ loading: false, ...navState() }))
     wc.on('page-title-updated', (_event, title) => {
       update({ title })
       if (this.tab(tabId)?.media) void this.refreshMedia(tabId, wc)
-      this.history.updateTitle(wc.getURL(), title)
+      if (this.kind !== 'private') this.history.updateTitle(wc.getURL(), title)
     })
     wc.on('page-favicon-updated', (_event, favicons) => update({ favicon: favicons[0] ?? null }))
     wc.on('did-navigate', (_event, url) => {
       update({ url, blockedCount: 0, media: null, ...navState() })
-      this.history.record(url, wc.getTitle())
+      if (this.kind !== 'private') this.history.record(url, wc.getTitle())
     })
     wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
       if (!isMainFrame) return
       update({ url, ...navState() })
-      this.history.record(url, wc.getTitle())
+      if (this.kind !== 'private') this.history.record(url, wc.getTitle())
     })
     wc.on('audio-state-changed', (event) => {
-      update({ audible: event.audible })
-      if (event.audible) void this.refreshMedia(tabId, wc)
+      update({ audible: event.audible, audibleAt: Date.now() })
+      if (event.audible) {
+        void this.refreshMedia(tabId, wc)
+        this.offerToPauseOthers(tabId)
+      }
     })
     wc.on('enter-html-full-screen', () => {
       this.htmlFullscreen = true
@@ -1218,7 +1509,7 @@ export class Browser {
   // ---------------------------------------------------------------------------
   // Overlay: command palette, toasts, popovers
 
-  private openPalette(mode: 'new' | 'current'): void {
+  private openPalette(mode: 'new' | 'current' | 'split'): void {
     this.paletteOpen = true
     this.setOverlayMode('full')
     this.overlay.webContents.focus()
@@ -1302,7 +1593,7 @@ export class Browser {
    * with the fingers to reveal a back/forward arrow, and navigates once the
    * swipe passes the threshold.
    */
-  private onPageSwipe(webContentsId: number, phase: 'update' | 'end', dx: number): void {
+  onPageSwipe(webContentsId: number, phase: 'update' | 'end', dx: number): void {
     const tabId = this.tabByWebContents.get(webContentsId)
     if (!this.settings.swipeToNavigate || tabId !== this.activeTabId || this.htmlFullscreen) return
     const wc = this.activeWebContents()
@@ -1345,7 +1636,7 @@ export class Browser {
    */
   private animateLayout(): void {
     const view = this.activeTabId ? this.views.get(this.activeTabId) : undefined
-    if (!view || this.settings.reduceMotion) return this.layout()
+    if (!view || this.settings.reduceMotion || this.attached.size > 1) return this.layout()
     const from = view.getBounds()
     const to = this.contentBounds()
     const start = Date.now()
@@ -1376,7 +1667,7 @@ export class Browser {
     const site = parseDomain(url).domain
     if (!site) return []
     const counts = new Map<string, number>()
-    for (const cookie of await session.defaultSession.cookies.get({})) {
+    for (const cookie of await this.ses.cookies.get({})) {
       const domain = (cookie.domain ?? '').replace(/^\./, '')
       if (domain === site || domain.endsWith(`.${site}`)) counts.set(domain, (counts.get(domain) ?? 0) + 1)
     }
@@ -1384,7 +1675,7 @@ export class Browser {
   }
 
   private async clearDomain(domain: string): Promise<void> {
-    const ses = session.defaultSession
+    const ses = this.ses
     const cookies = (await ses.cookies.get({})).filter((c) => (c.domain ?? '').replace(/^\./, '') === domain)
     await Promise.all(
       cookies.map((c) => ses.cookies.remove(`http${c.secure ? 's' : ''}://${domain}${c.path ?? '/'}`, c.name).catch(() => {}))
@@ -1449,8 +1740,8 @@ export class Browser {
   }
 
   private async clearSiteData(origin: string): Promise<void> {
-    await session.defaultSession.clearStorageData({ origin })
-    await session.defaultSession.clearCache()
+    await this.ses.clearStorageData({ origin })
+    await this.ses.clearCache()
     this.toast({ id: 'site-data-cleared', message: 'Site data cleared', description: safeHost(origin) })
     this.activeWebContents()?.reload()
   }
@@ -1559,6 +1850,32 @@ export class Browser {
         }
       )
     }
+    const split = this.splitOf(id)
+    const active = this.tab(this.activeTabId)
+    if (split) {
+      items.push(
+        { type: 'separator' },
+        {
+          label: 'Split Layout',
+          submenu: (
+            [
+              ['horizontal', 'Side by Side'],
+              ['vertical', 'Stacked'],
+              ['grid', 'Grid']
+            ] as [SplitLayout, string][]
+          ).map(([layout, label]) => ({
+            label,
+            type: 'radio' as const,
+            checked: split.layout === layout,
+            click: () => this.handle({ type: 'split.layout', splitId: split.id, layout })
+          }))
+        },
+        { label: 'Remove from Split View', click: () => this.removeFromSplit(id) },
+        { label: 'Unsplit All', click: () => this.dissolveSplit(split.id) }
+      )
+    } else if (tab.kind !== 'essential' && active && active.id !== id && active.kind !== 'essential') {
+      items.push({ type: 'separator' }, { label: 'Split View with Current Tab', click: () => this.addToSplit(id) })
+    }
     if (tab.kind !== 'essential' && otherSpaces.length > 0) {
       items.push({
         label: 'Move to Space',
@@ -1633,6 +1950,13 @@ export class Browser {
           label: 'Open Link in New Tab',
           click: () => this.openTab(params.linkURL, { background: true, spaceId: tab?.spaceId ?? undefined, afterTabId: tabId })
         },
+        {
+          label: 'Open Link in Split View',
+          click: () => {
+            this.activateTab(tabId)
+            this.openInput(params.linkURL, 'split')
+          }
+        },
         { label: 'Copy Link', click: () => clipboard.writeText(params.linkURL) },
         { type: 'separator' }
       )
@@ -1701,13 +2025,135 @@ export class Browser {
 
   private layout(): void {
     if (!this.win || this.win.isDestroyed()) return
-    const view = this.activeTabId ? this.views.get(this.activeTabId) : undefined
-    if (view && !this.layoutAnimation) {
-      const bounds = this.contentBounds()
-      view.setBounds({ ...bounds, x: bounds.x + Math.round(this.swipeOffset) })
-      view.setBorderRadius(this.htmlFullscreen ? 0 : this.settings.cornerRadius)
+    if (!this.layoutAnimation) {
+      for (const pane of this.panes()) {
+        const view = this.views.get(pane.tabId)
+        if (!view) continue
+        const hidden = this.htmlFullscreen && pane.tabId !== this.activeTabId
+        view.setVisible(!hidden)
+        if (hidden) continue
+        const single = this.attached.size <= 1
+        view.setBounds({ ...pane.rect, x: pane.rect.x + (single ? Math.round(this.swipeOffset) : 0) })
+        view.setBorderRadius(this.htmlFullscreen ? 0 : this.settings.cornerRadius)
+      }
     }
     this.layoutOverlay()
+  }
+
+  // ---------------------------------------------------------------------------
+  // Split view
+
+  private splitOf(tabId: string | null | undefined): Split | undefined {
+    return tabId ? this.splits.find((split) => split.tabIds.includes(tabId)) : undefined
+  }
+
+  private activeSplit(): Split | undefined {
+    return this.splitOf(this.activeTabId)
+  }
+
+  /** Where each visible view goes: the whole content area, or one pane per split tab. */
+  private panes(): Pane[] {
+    const bounds = this.contentBounds()
+    const split = this.activeSplit()
+    if (!split || this.htmlFullscreen) {
+      return this.activeTabId ? [{ tabId: this.activeTabId, rect: bounds }] : []
+    }
+    const rects = splitRects(split, bounds, Math.max(6, this.settings.contentGap))
+    return split.tabIds.map((tabId, i) => ({ tabId, rect: rects[i] }))
+  }
+
+  /** Attaches exactly the views that should be on screen, keeping the overlay on top. */
+  private syncAttachedViews(): void {
+    const wanted = new Set(this.activeSplit()?.tabIds ?? (this.activeTabId ? [this.activeTabId] : []))
+    for (const id of [...this.attached]) {
+      if (wanted.has(id)) continue
+      const view = this.views.get(id)
+      if (view) this.win.contentView.removeChildView(view)
+      this.attached.delete(id)
+    }
+    if (this.pip?.activeTabId && wanted.has(this.pip.activeTabId)) this.pip.exit()
+    for (const id of wanted) {
+      const tab = this.tab(id)
+      if (!tab) continue
+      this.win.contentView.addChildView(this.ensureView(tab))
+      this.attached.add(id)
+    }
+    this.win.contentView.addChildView(this.overlay)
+    this.layout()
+  }
+
+  /** Adds a tab to the active tab's split, or starts a split with the active tab. */
+  private addToSplit(tabId: string): void {
+    const active = this.tab(this.activeTabId)
+    const tab = this.tab(tabId)
+    if (!active || !tab || tab.id === active.id || tab.kind === 'essential' || active.kind === 'essential') {
+      if (tab) this.activateTab(tab.id)
+      return
+    }
+    this.leaveSplit(tab.id)
+    let split = this.activeSplit()
+    if (split && split.tabIds.length >= MAX_SPLIT_PANES) {
+      this.toast({ id: 'split-full', message: 'Split view is full', description: `Up to ${MAX_SPLIT_PANES} tabs can be split.` })
+      return
+    }
+    if (!split) {
+      split = { id: randomUUID(), tabIds: [active.id], layout: 'horizontal', sizes: [1] }
+      this.splits.push(split)
+    }
+    split.tabIds.push(tab.id)
+    split.sizes = evenSizes(split.layout === 'grid' ? 1 : split.tabIds.length)
+    if (tab.spaceId !== active.spaceId && active.spaceId) tab.spaceId = active.spaceId
+    this.activateTab(tab.id)
+  }
+
+  private leaveSplit(tabId: string): void {
+    const split = this.splitOf(tabId)
+    if (!split) return
+    split.tabIds = split.tabIds.filter((id) => id !== tabId)
+    if (split.tabIds.length < 2) this.splits = this.splits.filter((x) => x !== split)
+    else split.sizes = evenSizes(split.layout === 'grid' ? 1 : split.tabIds.length)
+  }
+
+  private removeFromSplit(tabId: string): void {
+    this.leaveSplit(tabId)
+    this.activateTab(tabId)
+  }
+
+  private dissolveSplit(splitId: string): void {
+    this.splits = this.splits.filter((x) => x.id !== splitId)
+    if (this.activeTabId) this.activateTab(this.activeTabId)
+  }
+
+  /** ⌥⌘V / ⌥⌘H / ⌥⌘G: change the split layout, or split the current tab with the next one. */
+  splitWithLayout(layout: SplitLayout): void {
+    const split = this.activeSplit()
+    if (split) return this.handle({ type: 'split.layout', splitId: split.id, layout })
+    const visible = this.visibleTabs().filter((t) => t.kind !== 'essential')
+    const index = visible.findIndex((t) => t.id === this.activeTabId)
+    const partner = visible[index + 1] ?? visible[index - 1]
+    if (!partner) {
+      this.toast({ id: 'split-none', message: 'Open another tab to split with' })
+      return
+    }
+    this.addToSplit(partner.id)
+    const created = this.activeSplit()
+    if (created) this.handle({ type: 'split.layout', splitId: created.id, layout })
+  }
+
+  /** ⌃⇧=: open the command bar to pick a page for a new split pane. */
+  addSplitPane(): void {
+    if (!this.activeTabId) return this.openPalette('new')
+    this.openPalette('split')
+  }
+
+  /** ⌃⇧−: take the focused tab out of its split. */
+  removeSplitPane(): void {
+    if (this.activeTabId && this.activeSplit()) this.removeFromSplit(this.activeTabId)
+  }
+
+  dissolveActiveSplit(): void {
+    const split = this.activeSplit()
+    if (split) this.dissolveSplit(split.id)
   }
 
   private layoutOverlay(): void {
@@ -1745,7 +2191,10 @@ export class Browser {
       focused: this.win?.isFocused() ?? true,
       fullscreen: this.htmlFullscreen,
       adblockEnabled: this.adblock.isEnabled(),
-      settings: this.settings
+      settings: this.settings,
+      kind: this.kind,
+      splits: this.splits,
+      panes: this.win && !this.win.isDestroyed() ? this.panes() : []
     }
   }
 
@@ -1754,11 +2203,12 @@ export class Browser {
     if (this.broadcastTimer) return
     this.broadcastTimer = setTimeout(() => {
       this.broadcastTimer = null
-      if (this.win.isDestroyed()) return
+      if (this.windowClosed || this.win.isDestroyed()) return
       const snapshot = this.snapshot()
       this.win.webContents.send(IPC.snapshot, snapshot)
       this.overlay.webContents.send(IPC.snapshot, snapshot)
-      this.stateFile.schedule(this.persistedState())
+      this.pip?.controlsWebContents()?.send(IPC.snapshot, snapshot)
+      this.stateFile?.schedule(this.persistedState())
     }, 16)
   }
 
@@ -1785,9 +2235,50 @@ export class Browser {
       activeTabId: this.activeTabId,
       sidebarWidth: this.sidebarWidth,
       compact: this.compact,
-      adblockEnabled: this.settings.adblock
+      adblockEnabled: this.settings.adblock,
+      splits: this.splits
     }
   }
+}
+
+function evenSizes(n: number): number[] {
+  return n <= 1 ? [0.5] : Array.from({ length: n }, () => 1 / n)
+}
+
+/**
+ * Pane rectangles for a split. Horizontal = side by side, vertical = stacked,
+ * grid = Zen's 3 (A over B | C) and 4 (2×2) layouts.
+ */
+function splitRects(split: Split, b: Rectangle, gap: number): Rectangle[] {
+  const n = split.tabIds.length
+  if (split.layout === 'grid' && n >= 3) {
+    const leftW = Math.round((b.width - gap) * Math.min(0.8, Math.max(0.2, split.sizes[0] ?? 0.5)))
+    const rightX = b.x + leftW + gap
+    const rightW = b.width - leftW - gap
+    const topH = Math.round((b.height - gap) / 2)
+    const bottomY = b.y + topH + gap
+    const bottomH = b.height - topH - gap
+    const rects = [
+      { x: b.x, y: b.y, width: leftW, height: topH },
+      { x: b.x, y: bottomY, width: leftW, height: bottomH }
+    ]
+    if (n === 3) rects.push({ x: rightX, y: b.y, width: rightW, height: b.height })
+    else rects.push({ x: rightX, y: b.y, width: rightW, height: topH }, { x: rightX, y: bottomY, width: rightW, height: bottomH })
+    return rects
+  }
+  const vertical = split.layout === 'vertical'
+  const total = (vertical ? b.height : b.width) - gap * (n - 1)
+  const raw = split.sizes.length === n ? split.sizes : evenSizes(n)
+  const sum = raw.reduce((a, c) => a + c, 0) || 1
+  const rects: Rectangle[] = []
+  let offset = 0
+  raw.forEach((fraction, i) => {
+    const length = i === n - 1 ? total - offset : Math.round((total * fraction) / sum)
+    const start = offset + i * gap
+    rects.push(vertical ? { x: b.x, y: b.y + start, width: b.width, height: length } : { x: b.x + start, y: b.y, width: length, height: b.height })
+    offset += length
+  })
+  return rects
 }
 
 /** Appends " (1)", " (2)"… so downloads never overwrite an existing file. */

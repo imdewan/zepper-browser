@@ -11,11 +11,12 @@ import { zepper } from '../bridge'
 import { IconClose } from '../icons'
 import { cx, isMac } from '../util'
 
-type Section = 'appearance' | 'tabs' | 'search' | 'gestures' | 'privacy' | 'shortcuts'
+type Section = 'appearance' | 'tabs' | 'media' | 'search' | 'gestures' | 'privacy' | 'shortcuts'
 
 const SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: 'appearance', label: 'Appearance', icon: '🎨' },
   { id: 'tabs', label: 'Tabs', icon: '🗂️' },
+  { id: 'media', label: 'Media', icon: '🎵' },
   { id: 'search', label: 'Search', icon: '🔎' },
   { id: 'gestures', label: 'Spaces & Gestures', icon: '👆' },
   { id: 'privacy', label: 'Privacy', icon: '🛡️' },
@@ -23,19 +24,26 @@ const SECTIONS: { id: Section; label: string; icon: string }[] = [
 ]
 
 const SHORTCUTS: [string, string][] = [
-  ['New tab / command bar', '⌘T'],
+  ['Command bar / new tab', '⌘T'],
   ['Open location', '⌘L'],
+  ['Toggle sidebar (compact mode)', '⌘S'],
   ['Close tab', '⌘W'],
   ['Reopen closed tab', '⇧⌘T'],
+  ['Switch to recent tab', '⌃⇥'],
+  ['Next / previous tab in sidebar', '⌥⌘↓ / ⌥⌘↑'],
+  ['Pin / unpin tab', '⌘D'],
   ['Copy current URL', '⇧⌘C'],
   ['Copy URL as Markdown', '⌥⇧⌘C'],
-  ['Pin / unpin tab', '⇧⌘D'],
   ['Clear unpinned tabs', '⇧⌘K'],
-  ['Next / previous space', '⌥⌘→ / ⌥⌘←'],
+  ['New window / private window', '⌘N / ⇧⌘N'],
   ['Go to space 1–9', '⌃1 … ⌃9'],
+  ['Go to Essential 1–9', '⌥1 … ⌥9'],
+  ['Next / previous space', '⌥⌘→ / ⌥⌘←'],
   ['Go to tab 1–8 / last', '⌘1 … ⌘8 / ⌘9'],
-  ['Next / previous tab', '⌃⇥ / ⌃⇧⇥'],
-  ['Toggle compact mode', '⌘S'],
+  ['Add / remove split pane', '⌃⇧= / ⌃⇧−'],
+  ['Split side by side / stacked / grid', '⌥⌘V / ⌥⌘H / ⌥⌘G'],
+  ['Unsplit all', '⌥⌘U'],
+  ['Screenshot', '⇧⌘2'],
   ['Find in page', '⌘F'],
   ['Back / forward', '⌘[ / ⌘]'],
   ['Zoom in / out / reset', '⌘+ / ⌘− / ⌘0'],
@@ -193,11 +201,42 @@ export function SettingsPanel({ settings, onClose }: SettingsPanelProps): React.
                     ))}
                   </select>
                 </Row>
+                <Row label="After closing a tab, go to the most recently used tab" hint="Otherwise the tab next to it.">
+                  <Toggle checked={settings.closeSelectsRecent} onChange={(closeSelectsRecent) => set({ closeSelectsRecent })} />
+                </Row>
+              </>
+            )}
+
+            {section === 'media' && (
+              <>
+                <h2>Media</h2>
+                <Row label="Now playing in the sidebar" hint="Controls for media playing in a tab you’re not looking at.">
+                  <Toggle checked={settings.showMediaCard} onChange={(showMediaCard) => set({ showMediaCard })} />
+                </Row>
+                <Row label="When another tab starts playing" hint="What to do with media that’s already playing elsewhere.">
+                  <Segmented
+                    value={settings.otherMedia}
+                    options={[
+                      ['nothing', 'Keep playing'],
+                      ['offer', 'Offer to pause'],
+                      ['pause', 'Pause others']
+                    ]}
+                    onChange={(otherMedia) => set({ otherMedia })}
+                  />
+                </Row>
                 <Row label="Picture-in-picture when you leave a video" hint="A playing video floats in a mini player until you come back.">
                   <Toggle checked={settings.autoPictureInPicture} onChange={(autoPictureInPicture) => set({ autoPictureInPicture })} />
                 </Row>
-                <Row label="After closing a tab, go to the most recently used tab" hint="Otherwise the tab next to it.">
-                  <Toggle checked={settings.closeSelectsRecent} onChange={(closeSelectsRecent) => set({ closeSelectsRecent })} />
+                <Row label="Picture-in-picture size" hint="Relative to your screen. Resize the player to fine-tune it.">
+                  <Segmented
+                    value={settings.pipSize}
+                    options={[
+                      ['small', 'Small'],
+                      ['medium', 'Medium'],
+                      ['large', 'Large']
+                    ]}
+                    onChange={(pipSize) => set({ pipSize })}
+                  />
                 </Row>
               </>
             )}
@@ -246,6 +285,9 @@ export function SettingsPanel({ settings, onClose }: SettingsPanelProps): React.
                 </Row>
                 <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
                   <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
+                </Row>
+                <Row label="Google sign-in compatibility" hint="Lets Google’s sign-in page accept Zepper. Only affects accounts.google.com.">
+                  <Toggle checked={settings.googleSignInCompat} onChange={(googleSignInCompat) => set({ googleSignInCompat })} />
                 </Row>
               </>
             )}

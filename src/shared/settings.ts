@@ -1,5 +1,10 @@
 export type PinnedCloseBehavior = 'reset-unload-switch' | 'unload-switch' | 'reset-switch' | 'switch' | 'reset' | 'close'
 
+export type PipSize = 'small' | 'medium' | 'large'
+
+/** Share of the screen's width the floating player starts at. */
+export const PIP_WIDTH: Record<PipSize, number> = { small: 0.18, medium: 0.25, large: 0.33 }
+
 export type SearchEngineId = 'google' | 'duckduckgo' | 'bing' | 'brave' | 'kagi' | 'ecosia' | 'perplexity'
 
 export interface Settings {
@@ -20,7 +25,13 @@ export interface Settings {
   newTabPosition: 'top' | 'bottom'
   pinnedCloseBehavior: PinnedCloseBehavior
   closeSelectsRecent: boolean
+  // Media
   autoPictureInPicture: boolean
+  /** Floating player width as a share of the screen. */
+  pipSize: PipSize
+  showMediaCard: boolean
+  /** When a tab starts playing while others already are. */
+  otherMedia: 'nothing' | 'offer' | 'pause'
   // Search
   searchEngine: SearchEngineId
   searchSuggestions: boolean
@@ -32,6 +43,8 @@ export interface Settings {
   // Privacy
   adblock: boolean
   globalPrivacyControl: boolean
+  /** Make Google's sign-in page accept Zepper (see main/compat.ts). */
+  googleSignInCompat: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -48,6 +61,9 @@ export const DEFAULT_SETTINGS: Settings = {
   pinnedCloseBehavior: 'reset-unload-switch',
   closeSelectsRecent: true,
   autoPictureInPicture: true,
+  pipSize: 'medium',
+  showMediaCard: true,
+  otherMedia: 'offer',
   searchEngine: 'google',
   searchSuggestions: true,
   swipeBetweenSpaces: true,
@@ -55,7 +71,8 @@ export const DEFAULT_SETTINGS: Settings = {
   wrapSpaces: true,
   compactRevealOnHover: true,
   adblock: true,
-  globalPrivacyControl: true
+  globalPrivacyControl: true,
+  googleSignInCompat: true
 }
 
 export const SEARCH_ENGINES: Record<SearchEngineId, { name: string; search: string; suggest: string | null }> = {

@@ -1,10 +1,29 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useMotionValue } from 'motion/react'
-import type { Snapshot, Space, Tab } from '@shared/types'
+import type { Snapshot, Space, Split, Tab } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconArrowDown, IconChevronDown, IconDots, IconPlus } from '../icons'
 import { cx, rectOf } from '../util'
+import { SplitRow } from './SplitRow'
 import { TabRow } from './TabRow'
+
+/** Tab rows for a section, with each split collapsed into one grouped row at its first member. */
+function renderRows(tabs: Tab[], all: Tab[], splits: Split[], activeTabId: string | null): React.JSX.Element[] {
+  const rendered = new Set<string>()
+  const rows: React.JSX.Element[] = []
+  for (const tab of tabs) {
+    const split = splits.find((s) => s.tabIds.includes(tab.id))
+    if (!split) {
+      rows.push(<TabRow key={tab.id} tab={tab} active={tab.id === activeTabId} />)
+      continue
+    }
+    if (rendered.has(split.id)) continue
+    rendered.add(split.id)
+    const members = split.tabIds.map((id) => all.find((t) => t.id === id)).filter((t): t is Tab => !!t)
+    rows.push(<SplitRow key={`split-${split.id}`} split={split} tabs={members} activeTabId={activeTabId} />)
+  }
+  return rows
+}
 
 const SWITCH_SPRING = { type: 'spring', bounce: 0, duration: 0.25 } as const
 
@@ -123,6 +142,7 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
             space={space}
             tabs={snapshot.tabs}
             activeTabId={snapshot.activeTabId}
+            splits={snapshot.splits}
             newTabAtBottom={snapshot.settings.newTabPosition === 'bottom'}
             renaming={renamingId === space.id}
             onRenameDone={onRenameDone}
@@ -138,13 +158,14 @@ interface SpaceViewProps {
   space: Space
   tabs: Tab[]
   activeTabId: string | null
+  splits: Split[]
   newTabAtBottom: boolean
   renaming: boolean
   onRenameDone: () => void
   onStartRename: () => void
 }
 
-function SpaceView({ space, tabs, activeTabId, newTabAtBottom, renaming, onRenameDone, onStartRename }: SpaceViewProps): React.JSX.Element {
+function SpaceView({ space, tabs, activeTabId, splits, newTabAtBottom, renaming, onRenameDone, onStartRename }: SpaceViewProps): React.JSX.Element {
   const pinned = tabs.filter((t) => t.kind === 'pinned' && t.spaceId === space.id)
   const normal = tabs.filter((t) => t.kind === 'normal' && t.spaceId === space.id)
   const shownPinned = space.collapsedPins ? pinned.filter((t) => t.id === activeTabId) : pinned
@@ -160,11 +181,7 @@ function SpaceView({ space, tabs, activeTabId, newTabAtBottom, renaming, onRenam
         onStartRename={onStartRename}
       />
       <div className="space-scroll">
-        <AnimatePresence initial={false}>
-          {shownPinned.map((tab) => (
-            <TabRow key={tab.id} tab={tab} active={tab.id === activeTabId} />
-          ))}
-        </AnimatePresence>
+        <AnimatePresence initial={false}>{renderRows(shownPinned, tabs, splits, activeTabId)}</AnimatePresence>
 
         <div className={cx('pinned-separator', normal.length === 0 && 'hidden')}>
           <span className="separator-line" />
@@ -179,11 +196,7 @@ function SpaceView({ space, tabs, activeTabId, newTabAtBottom, renaming, onRenam
         </div>
 
         {!newTabAtBottom && <NewTabRow />}
-        <AnimatePresence initial={false}>
-          {normal.map((tab) => (
-            <TabRow key={tab.id} tab={tab} active={tab.id === activeTabId} />
-          ))}
-        </AnimatePresence>
+        <AnimatePresence initial={false}>{renderRows(normal, tabs, splits, activeTabId)}</AnimatePresence>
         {newTabAtBottom && <NewTabRow />}
         <div className="space-fill" onDoubleClick={() => zepper.send({ type: 'ui.openPalette', mode: 'new' })} />
       </div>

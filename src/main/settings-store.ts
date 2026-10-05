@@ -22,8 +22,9 @@ export class SettingsStore {
     for (const listener of this.listeners) listener(this.value, prev)
   }
 
-  onChange(listener: (next: Settings, prev: Settings) => void): void {
+  onChange(listener: (next: Settings, prev: Settings) => void): () => void {
     this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
   }
 
   flush(): void {

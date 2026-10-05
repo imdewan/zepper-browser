@@ -11,15 +11,67 @@ import { contextBridge, ipcRenderer, webFrame } from 'electron'
  *    for what the page actually renders.
  * 2. Gestures (top frame only): reports two-finger horizontal swipes the page
  *    can't scroll itself, so the browser can slide back/forward.
+ * 3. Google sign-in compatibility (accounts.google.com only), see main/compat.ts.
  */
 
 const COSMETICS_CHANNEL = 'zepper:cosmetics'
 const COSMETICS_DOM_CHANNEL = 'zepper:cosmetics-dom'
 const SWIPE_CHANNEL = 'zepper:swipe'
+const SIGN_IN_COMPAT_CHANNEL = 'zepper:sign-in-compat'
 
 interface CosmeticsResponse {
   styles: string
   scripts: string[]
+}
+
+// ---- Google sign-in compatibility ----------------------------------------------
+
+/** Runs in the page's main world: makes `window.chrome` look like real Chrome's and hides passkeys. */
+function signInPageShim(): void {
+  const native = <T extends (...args: never[]) => unknown>(name: string, fn: T): T => {
+    const source = `function ${name}() { [native code] }`
+    Object.defineProperty(fn, 'name', { value: name })
+    Object.defineProperty(fn, 'toString', { value: () => source })
+    return fn
+  }
+  const origin = performance.timeOrigin / 1000
+  const w = window as unknown as { chrome?: Record<string, unknown>; PublicKeyCredential?: unknown }
+  const chrome = w.chrome ?? {}
+  chrome.app ??= {
+    isInstalled: false,
+    InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+    RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' },
+    getDetails: native('getDetails', () => null),
+    getIsInstalled: native('getIsInstalled', () => false),
+    runningState: native('runningState', () => 'cannot_run')
+  }
+  chrome.csi ??= native('csi', () => ({ startE: origin * 1000, onloadT: origin * 1000 + 300, pageT: performance.now(), tran: 15 }))
+  chrome.loadTimes ??= native('loadTimes', () => ({
+    requestTime: origin,
+    startLoadTime: origin,
+    commitLoadTime: origin + 0.1,
+    finishDocumentLoadTime: origin + 0.3,
+    finishLoadTime: origin + 0.4,
+    firstPaintTime: origin + 0.2,
+    firstPaintAfterLoadTime: 0,
+    navigationType: 'Other',
+    wasFetchedViaSpdy: true,
+    wasNpnNegotiated: true,
+    npnNegotiatedProtocol: 'h2',
+    wasAlternateProtocolAvailable: false,
+    connectionInfo: 'h2'
+  }))
+  if (!w.chrome) Object.defineProperty(window, 'chrome', { value: chrome, configurable: true, writable: true })
+  delete w.PublicKeyCredential
+}
+
+function applySignInCompat(): void {
+  if (location.hostname !== 'accounts.google.com') return
+  try {
+    if (ipcRenderer.sendSync(SIGN_IN_COMPAT_CHANNEL) === true) contextBridge.executeInMainWorld({ func: signInPageShim })
+  } catch {
+    // Never break the sign-in page over this.
+  }
 }
 
 // ---- Ad blocking: document-start cosmetics ----------------------------------
@@ -98,6 +150,7 @@ function watchDomForGenericRules(): void {
   })
 }
 
+applySignInCompat()
 applyCosmetics()
 
 // ---- Picture-in-picture: "back to tab" -------------------------------------

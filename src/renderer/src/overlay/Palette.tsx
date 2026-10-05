@@ -11,7 +11,7 @@ const KEEP_TYPED_MS = 45_000
 let lastTyped = { text: '', at: 0 }
 
 interface PaletteProps {
-  mode: 'new' | 'current'
+  mode: 'new' | 'current' | 'split'
   currentUrl: string | null
   onClose: () => void
 }
@@ -56,7 +56,7 @@ export function Palette({ mode, currentUrl, onClose }: PaletteProps): React.JSX.
       if (!text.trim()) return
       zepper.send({ type: 'tab.open', input: text, where: mode })
     } else if (suggestion.kind === 'tab') {
-      zepper.send({ type: 'tab.activate', tabId: suggestion.tabId })
+      zepper.send(mode === 'split' ? { type: 'split.add', tabId: suggestion.tabId } : { type: 'tab.activate', tabId: suggestion.tabId })
     } else {
       const target = suggestion.url || (suggestion.kind === 'search' ? suggestion.query : '')
       zepper.send({ type: 'tab.open', input: target, where: mode })
@@ -100,7 +100,7 @@ export function Palette({ mode, currentUrl, onClose }: PaletteProps): React.JSX.
             ref={input}
             value={text}
             spellCheck={false}
-            placeholder={mode === 'new' ? 'Search or enter address…' : 'Search or enter address'}
+            placeholder={mode === 'split' ? 'Open in split view…' : mode === 'new' ? 'Search or enter address…' : 'Search or enter address'}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
           />
@@ -110,6 +110,7 @@ export function Palette({ mode, currentUrl, onClose }: PaletteProps): React.JSX.
             {results.map((suggestion, i) => (
               <SuggestionRow
                 key={`${suggestion.kind}-${i}`}
+                mode={mode}
                 suggestion={suggestion}
                 selected={i === selected}
                 onHover={() => setSelected(i)}
@@ -124,13 +125,14 @@ export function Palette({ mode, currentUrl, onClose }: PaletteProps): React.JSX.
 }
 
 interface SuggestionRowProps {
+  mode: 'new' | 'current' | 'split'
   suggestion: Suggestion
   selected: boolean
   onHover: () => void
   onChoose: () => void
 }
 
-function SuggestionRow({ suggestion, selected, onHover, onChoose }: SuggestionRowProps): React.JSX.Element {
+function SuggestionRow({ mode, suggestion, selected, onHover, onChoose }: SuggestionRowProps): React.JSX.Element {
   let icon: React.JSX.Element
   let title: string
   let detail: string | null = null
@@ -141,7 +143,7 @@ function SuggestionRow({ suggestion, selected, onHover, onChoose }: SuggestionRo
       icon = <Favicon src={suggestion.favicon} size={16} />
       title = suggestion.title || suggestion.url
       detail = hostOf(suggestion.url)
-      chip = 'Switch to Tab'
+      chip = mode === 'split' ? 'Split with Tab' : 'Switch to Tab'
       break
     case 'history':
       icon = <IconClock size={16} />
