@@ -1,0 +1,42 @@
+name: Bug report
+description: Something in Zepper doesn't work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report this. Please check the existing issues first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: input
+    id: site
+    attributes:
+      label: Website (if it's about a page)
+      placeholder: https://example.com
+  - type: input
+    id: version
+    attributes:
+      label: Zepper version and macOS version
+      description: Zepper › About Zepper shows both.
+      placeholder: Zepper 0.1.0, macOS 27.0
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Screenshots or logs
+      description: For crashes or error dialogs, the terminal output of `npm run dev` helps a lot.

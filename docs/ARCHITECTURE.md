@@ -92,6 +92,6 @@ Zepper uses castLabs' Electron build. Widevine is opt-in: while it's off, `compo
 
 `npm run dist` builds the app with electron-builder. Its `afterPack` hook (`scripts/after-pack.cjs`) flips Electron's fuses (no running as Node, no Node debugging flags, app code only from the integrity-checked asar, cookies encrypted on disk) and then VMP-signs, in that order, because the signature covers the framework binary the fuses change. Hardened-runtime entitlements (`build/entitlements.mac.plist`) allow JIT, the Widevine library, and the camera, microphone and location for sites you allow. The app registers for `http`/`https` links and web page files, so it can be the default browser.
 
-## Licensing note
+## License
 
-`electron-chrome-extensions` is licensed under GPL-3.0 unless a commercial license is bought. `src/main/extensions.ts` uses it under GPL-3.0, which means Zepper's own source must be GPL-3.0-compatible if it's distributed.
+Zepper is licensed under the GPL-3.0 (only). That matches `electron-chrome-extensions`, which `src/main/extensions.ts` uses under its GPL-3.0 option. Other dependencies are under permissive or GPL-compatible licenses (MIT, BSD, MPL-2.0).

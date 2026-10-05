@@ -3,7 +3,16 @@
   "productName": "Zepper",
   "version": "0.1.0",
   "private": true,
-  "description": "A calm, beautiful browser with Spaces and built-in ad blocking.",
+  "description": "A calm macOS browser with Spaces, a vertical sidebar and built-in privacy protections. Built on Electron, so you can make it your own without compiling Chromium.",
+  "license": "GPL-3.0-only",
+  "homepage": "https://github.com/imdewan/zepper-browser",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/imdewan/zepper-browser.git"
+  },
+  "bugs": {
+    "url": "https://github.com/imdewan/zepper-browser/issues"
+  },
   "author": "Dewan Shakil",
   "main": "out/main/index.js",
   "scripts": {

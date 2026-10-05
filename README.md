@@ -1,117 +1,207 @@
-<p align="center">
-  <img src="resources/icon.png" width="128" height="128" alt="Zepper icon">
-</p>
+<div align="center">
 
-<h1 align="center">Zepper</h1>
+<img src="resources/icon.png" width="112" height="112" alt="Zepper icon">
 
-<p align="center">
-  A calm browser for macOS with Spaces, a vertical sidebar and built-in ad blocking, on Chromium.
-</p>
+# Zepper
 
-<p align="center">
-  <img src="docs/screenshot.png" width="900" alt="Zepper with the sidebar, Essentials, pinned tabs and a page">
-</p>
+**A calm, private browser for macOS that you can make your own.**
+
+Spaces, a vertical sidebar and Brave-grade privacy, built with TypeScript and React on Electron.<br>
+Fork it, change anything, and see it in a second. No Chromium to compile.
+
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-2f6fd6?style=flat-square)](LICENSE)
+[![Platform: macOS](https://img.shields.io/badge/platform-macOS-1d1d1f?style=flat-square&logo=apple&logoColor=white)](#getting-started)
+[![Electron](https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![CI](https://github.com/imdewan/zepper-browser/actions/workflows/ci.yml/badge.svg)](https://github.com/imdewan/zepper-browser/actions/workflows/ci.yml)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-34a853?style=flat-square)](CONTRIBUTING.md)
+
+[Features](#features) · [Make it yours](#make-it-yours) · [Getting started](#getting-started) · [Docs](#documentation) · [Contributing](#contributing)
+
+<br>
+
+<img src="docs/screenshot.png" width="900" alt="Zepper with its sidebar, Essentials, pinned tabs and folders, and a page open">
+
+</div>
+
+<br>
+
+## Why Zepper
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🗂️ Built around tabs
+
+Spaces for each part of your life, a vertical sidebar with Essentials, pinned tabs and nested folders, and split view for up to four pages.
+
+</td>
+<td width="33%" valign="top">
+
+### 🛡️ Private by default
+
+Ads, trackers and cookie banners blocked. Fingerprinting noise, cross-site cookie blocking, HTTPS upgrades and clean links, all on out of the box.
+
+</td>
+<td width="33%" valign="top">
+
+### 🛠️ Yours to change
+
+The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload shows changes instantly; Chromium comes prebuilt.
+
+</td>
+</tr>
+</table>
 
 ## Features
 
-**Spaces.** Group tabs into spaces, each with its own gradient theme and, optionally, its own sign-ins (cookies, logins and site data). Swipe between spaces on the trackpad, or pick one from the chevron next to the space name.
+**Spaces.** Group tabs into spaces, each with its own gradient theme (subtle or vivid) and, optionally, its own sign-ins: cookies, logins and site data kept apart like separate profiles. Swipe between spaces on the trackpad or pick one from the sidebar.
 
 **A sidebar built for tabs.**
 
-- Essentials, a grid of sites shared by every space.
-- Pinned tabs per space that survive restarts, with nestable folders.
-- Drag and drop for tabs and folders: reorder, pin or unpin, add to Essentials, or move to another space.
-- Split view, up to four tabs side by side, stacked or in a grid.
-- Tidy: groups related tabs into folders using Apple Intelligence, on the Mac (macOS 26 and later). Elsewhere it groups tabs by site.
-- Compact mode hides the sidebar until you reach for the window edge.
+- **Essentials:** a grid of your most-used sites, shared by every space.
+- **Pinned tabs** per space that survive restarts, organised in nestable **folders**.
+- **Drag and drop** for everything: reorder, pin, add to Essentials, move to another space.
+- **Split view:** up to four tabs side by side, stacked or in a grid.
+- **Compact mode** hides the sidebar until you reach for the window edge.
+- **Tidy Tabs** sorts a messy space into named folders with Apple Intelligence, on your Mac.
 
-**Command bar.** ⌘T to search, enter an address or switch to an open tab. DuckDuckGo bangs (`!yt cats`, `!gh electron`) resolve locally, so they go straight to the site.
+**Command bar.** ⌘T to search, enter an address or jump to an open tab. DuckDuckGo bangs (`!yt cats`, `!gh electron`) resolve locally, so they go straight to the site.
 
-**Privacy.**
+**Privacy, the way it should be.** Every protection is on by default and can be switched off for one site from the lock icon.
 
-- Ad and tracker blocking with uBlock Origin's filter lists, including YouTube ads. It can be turned off per site.
-- Pop-up blocking, HTTPS first for typed addresses, and Secure DNS (DNS over HTTPS).
-- Clear browsing data across every space.
-- Private windows with a throwaway session.
-- Global Privacy Control.
-- A choice of browser identity: Chrome, Edge, Firefox, Safari or a custom string.
+| Protection                 | What it does                                                                           |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| Ad and tracker blocking    | uBlock Origin's filter lists, including YouTube ads                                    |
+| Cookie banners hidden      | uBlock Origin's annoyance lists                                                        |
+| Fingerprinting protection  | Per-site noise on canvas, WebGL and audio; limited hardware details; no local IP leaks |
+| Cross-site cookies blocked | Embedded third parties can't set or read cookies                                       |
+| HTTPS upgrades             | Plain-HTTP pages load over HTTPS when the site supports it                             |
+| Clean links                | Click identifiers (fbclid, gclid…) and Google AMP wrappers removed                     |
+| Secure DNS                 | DNS over HTTPS, automatic or through Cloudflare, Quad9 or Google                       |
+| Global Privacy Control     | Asks sites not to sell or share your data                                              |
+| Private windows            | A throwaway session that leaves nothing behind                                         |
 
-**Media.**
+**Media.** A now-playing card for audio in other tabs, automatic picture-in-picture when you leave a playing video, and optional Google Widevine for Netflix and other streaming services.
 
-- A now-playing card for audio in other tabs, with a nudge to pause what's already playing.
-- Automatic picture-in-picture when you leave a playing video, with ±10s controls.
-- Optional Google Widevine for protected video (see [Protected video](#protected-video-widevine)).
+**Everything you expect from a browser.** Default browser support, Chrome Web Store extensions, downloads and history, Print, Save Page As and Export as PDF, a built-in PDF viewer, per-site zoom, find in page, certificate details and site permissions, and trackpad swipes to go back and forward.
 
-**Also:**
+See the [full feature list](docs/FEATURES.md).
 
-- Works as your default browser: links and files from other apps open in Zepper.
-- Print, Save Page As, Export as PDF, Open File, View Source, and a built-in PDF viewer.
-- Per-site zoom that's remembered, and pinch to zoom.
-- Chrome Web Store extensions, managed from Settings.
-- A downloads window and a searchable history page.
-- Page dialogs that say which site is asking.
-- Certificate details and per-site permissions behind the lock icon.
-- Trackpad swipes to go back and forward.
+## Make it yours
+
+Most browsers you'd want to customise are Chromium forks. Changing them means downloading tens of gigabytes of source, compiling for hours, and rebasing your patches every few weeks.
+
+Zepper is different. Chromium comes prebuilt with Electron, and everything you see (the sidebar, command bar, settings, themes) is TypeScript, React and CSS. A fresh fork runs in a couple of minutes, and UI changes appear as soon as you save.
+
+```bash
+# Fork on GitHub, then:
+git clone https://github.com/<you>/zepper-browser.git
+cd zepper-browser
+npm install
+npm run dev
+```
+
+Some ideas for your fork:
+
+- **Rebrand it** with your own name, icon and colours.
+- **Change the defaults:** search engine, theme presets, first space, settings.
+- **Reshape the sidebar** or add buttons, panels and shortcuts.
+- **Bring your own filter lists** or tune the privacy protections.
+
+[docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) maps out where everything lives, and how to add a command or a setting.
 
 ## Getting started
 
-Requires macOS, Node.js 22+ and npm 11.
+**Requirements:** macOS, [Node.js](https://nodejs.org/) 22 or later, npm 11. Tidy Tabs needs Xcode 26 to build its helper (optional).
 
 ```bash
 npm install
 npm run dev
 ```
 
-| Command                | What it does                                                             |
-| ---------------------- | ------------------------------------------------------------------------ |
-| `npm run dev`          | Runs Zepper with hot reload for the UI                                   |
-| `npm run check`        | Type-checks, lints and checks formatting                                 |
-| `npm run build`        | Bundles main, preload and UI into `out/`                                 |
-| `npm run dist`         | Builds the macOS app into `dist/`                                        |
-| `npm run build:native` | Builds the Tidy helper (`native/tidy`) into `build/bin/`. Needs Xcode 26 |
-| `npm run brand:dev`    | Shows the development runtime as "Zepper" in the menu bar and Dock       |
+| Command                | What it does                                                       |
+| ---------------------- | ------------------------------------------------------------------ |
+| `npm run dev`          | Runs Zepper with hot reload for the UI                             |
+| `npm run check`        | Type-checks, lints and checks formatting                           |
+| `npm run build`        | Bundles main, preload and UI into `out/`                           |
+| `npm run dist`         | Builds the macOS app (`.dmg` and `.zip`) into `dist/`              |
+| `npm run build:native` | Builds the Tidy Tabs helper into `build/bin/`                      |
+| `npm run brand:dev`    | Shows the development runtime as "Zepper" in the menu bar and Dock |
 
-## Protected video (Widevine)
+### Protected video (Widevine)
 
-Zepper runs on [castLabs' Electron for Content Security](https://github.com/castlabs/electron-releases), which adds Google Widevine. It's off until you turn it on in Settings → Media, or accept the prompt a site like Netflix triggers. Installing it restarts Zepper once.
+Zepper runs on [castLabs' Electron for Content Security](https://github.com/castlabs/electron-releases), which adds Google Widevine. It stays off until you turn it on in Settings → Media, or accept the prompt a site like Netflix shows. Installing it restarts Zepper once.
 
-Streaming services also require the app to be **VMP-signed** with a production certificate from castLabs' free EVS service; the castLabs build carries only a development one. One-time setup:
+Streaming services also require the app to be **VMP-signed** with a production certificate from castLabs' free EVS service. One-time setup:
 
 ```bash
 python3 -m venv .evs && .evs/bin/pip install castlabs-evs
-npm run vmp:signup     # create your EVS account (asks for email, name, password; emails a code)
-npm run vmp:sign       # sign the development runtime in node_modules/electron/dist
+npm run vmp:signup     # create your EVS account (it emails you a code)
+npm run vmp:sign       # sign the development runtime
 ```
 
-Re-run `npm run vmp:sign` after reinstalling Electron, and `npm run vmp:login` when the login expires. `npm run dist` signs the packaged app automatically, before Apple code signing (`scripts/after-pack.cjs`, which first flips Electron's security fuses, including cookie encryption). `npm run vmp:verify` shows which certificate the runtime has.
+Run `npm run vmp:sign` again after reinstalling Electron, and `npm run vmp:login` when the login expires. `npm run dist` signs packaged builds for you.
 
-## Keyboard shortcuts
+<details>
+<summary><b>Keyboard shortcuts</b></summary>
+<br>
 
 | Action                                        | Keys                  |
 | --------------------------------------------- | --------------------- |
 | Command bar / new tab · open location         | ⌘T · ⌘L               |
-| Close tab · reopen closed tab                 | ⌘W · ⇧⌘T              |
-| Recent tab · next/previous tab                | ⌃⇥ · ⌥⌘↓ / ⌥⌘↑        |
-| Space 1–9 · next/previous space               | ⌃1…⌃9 · ⌥⌘→ / ⌥⌘←     |
+| Close tab · close window · reopen closed tab  | ⌘W · ⇧⌘W · ⇧⌘T        |
+| Recent tab · next / previous tab              | ⌃⇥ · ⌥⌘↓ / ⌥⌘↑        |
+| Space 1–9 · next / previous space             | ⌃1…⌃9 · ⌥⌘→ / ⌥⌘←     |
 | Essential 1–9 · tab 1–8 / last                | ⌥1…⌥9 · ⌘1…⌘8 / ⌘9    |
 | Pin / unpin · clear unpinned tabs             | ⌘D · ⇧⌘K              |
 | Compact mode · find in page                   | ⌘S · ⌘F               |
 | Split side by side / stacked / grid · unsplit | ⌥⌘V / ⌥⌘H / ⌥⌘G · ⌥⌘U |
+| Print · save page · open file · view source   | ⌘P · ⇧⌘S · ⌘O · ⌥⌘U   |
 | History · downloads                           | ⌘Y · ⌥⌘L              |
 | New window · new private window               | ⌘N · ⇧⌘N              |
 | Copy URL · copy as Markdown                   | ⇧⌘C · ⌥⇧⌘C            |
 
-## Project layout
+</details>
 
-| Path                        | What it is                                                                                                                                         |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main/`                 | Main process: windows, tabs and spaces, sessions and profiles, ad blocking, extensions, downloads, persistence                                     |
-| `src/preload/`              | `index.ts` bridges the browser UI to the main process; `page.ts` runs in every web page (cosmetic filtering, compatibility shims, dialogs, swipes) |
-| `src/renderer/src/chrome/`  | The sidebar and content card, drawn under the web pages                                                                                            |
-| `src/renderer/src/overlay/` | A transparent layer above the pages: command bar, popovers, settings, dialogs, history, downloads                                                  |
-| `src/renderer/src/pip/`     | Controls for the floating picture-in-picture player                                                                                                |
-| `src/shared/`               | Types, settings and theme helpers shared by every process                                                                                          |
-| `native/tidy/`              | A small Swift helper that asks Apple Intelligence to group tabs                                                                                    |
-| `docs/`                     | [Architecture](docs/ARCHITECTURE.md) and the [feature list](docs/FEATURES.md)                                                                      |
+## Documentation
 
-How the pieces fit together is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+|                                      |                                                      |
+| ------------------------------------ | ---------------------------------------------------- |
+| [Features](docs/FEATURES.md)         | Everything Zepper does, by area                      |
+| [Architecture](docs/ARCHITECTURE.md) | How it's built: processes, layers, state, sessions   |
+| [Customizing](docs/CUSTOMIZING.md)   | Where things live in your fork, and how to extend it |
+| [Contributing](CONTRIBUTING.md)      | Setting up, making changes, pull requests            |
+| [Security](SECURITY.md)              | Reporting vulnerabilities privately                  |
+
+<details>
+<summary><b>Project layout</b></summary>
+<br>
+
+| Path                        | What it is                                                                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/main/`                 | Main process: windows, spaces and tabs, sessions and profiles, privacy protections, extensions, downloads, persistence               |
+| `src/preload/`              | `index.ts` bridges the UI to the main process; `page.ts` runs in every web page (cosmetic filtering, privacy shims, dialogs, swipes) |
+| `src/renderer/src/chrome/`  | The sidebar, drawn under the web pages                                                                                               |
+| `src/renderer/src/overlay/` | A transparent layer above the pages: command bar, popovers, settings, dialogs, history, downloads                                    |
+| `src/renderer/src/pip/`     | Controls for the floating picture-in-picture player                                                                                  |
+| `src/shared/`               | Types, settings and theme helpers shared by every process                                                                            |
+| `native/tidy/`              | A small Swift helper that asks Apple Intelligence to group tabs                                                                      |
+| `scripts/`                  | Packaging hooks, icon and screenshot generators                                                                                      |
+
+</details>
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) to get set up, and please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Found a security problem? Report it privately, as described in [SECURITY.md](SECURITY.md).
+
+## Acknowledgements
+
+Zepper stands on the shoulders of [Electron](https://www.electronjs.org/) and [Chromium](https://www.chromium.org/), [castLabs' Electron for Content Security](https://github.com/castlabs/electron-releases), [Ghostery's adblocker](https://github.com/ghostery/adblocker) with [uBlock Origin](https://github.com/uBlockOrigin/uAssets) and [EasyList](https://easylist.to/) filter lists, [electron-chrome-extensions](https://github.com/samuelmaddock/electron-browser-shell), [tldts](https://github.com/remusao/tldts), [React](https://react.dev/), [Motion](https://motion.dev/) and [DuckDuckGo's bangs](https://duckduckgo.com/bangs).
+
+## License
+
+Zepper is free software, licensed under the [GNU General Public License v3.0 only](LICENSE). You can use, study, change and share it; if you distribute a modified version, it has to stay under the same license, with its source available.
+
+Copyright © 2026 Dewan Shakil. Third-party components keep their own licenses: Electron and Chromium (MIT and BSD-style), electron-chrome-extensions (GPL-3.0), Ghostery's adblocker (MPL-2.0), and the filter lists, which are downloaded at runtime under their own terms. Google Widevine is downloaded from Google only if you turn it on, under Google's terms.

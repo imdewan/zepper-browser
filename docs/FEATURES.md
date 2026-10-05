@@ -31,6 +31,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 - **Essentials:** a grid shared by every space.
 - **Pinned tabs** per space, saved across restarts; ⌘W resets and unloads them.
+- **Restored on restart:** open tabs and Essentials come back (both can be turned off in Settings → Tabs).
 - **Folders** in the pinned area, nestable: collapse, rename, ungroup or delete with their tabs.
 - **Drag and drop:**
   - reorder tabs and folders, and drop into folders;
@@ -49,7 +50,13 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 ## Privacy and security
 
-- **Ad blocking:** built in, using uBlock Origin's filter lists (refreshed daily). Covers network requests, cosmetic filtering and scriptlets, including YouTube ads. It can be turned off per site.
+- **Ad blocking:** built in, using uBlock Origin's filter lists (refreshed daily). Covers network requests, cosmetic filtering and scriptlets, including YouTube ads.
+- **Protections, on by default.** Each can be turned off in Settings → Privacy, and all of them for one site from the lock icon:
+  - **Cookie banners hidden**, with uBlock Origin's annoyance lists.
+  - **Fingerprinting protection:** tiny per-site, per-session noise on canvas, WebGL and audio readouts, a limited CPU core count, and WebRTC kept to the public network interface.
+  - **Cross-site cookies blocked:** third-party requests can't set or send cookies (sign-in frames from Google, Microsoft and Apple still work).
+  - **HTTPS upgrades** for plain-HTTP pages, falling back for sites without HTTPS.
+  - **Clean links:** click identifiers (fbclid, gclid, msclkid…) are removed and Google AMP pages open on the real site.
 - **HTTPS first:** typed addresses go to HTTPS, falling back to HTTP only when a site has no HTTPS; plain-HTTP pages say "Not secure".
 - **Secure DNS:** DNS over HTTPS, automatic or through Cloudflare, Quad9 or Google.
 - **Certificate errors** get their own page, and sites asking for a client certificate let you choose (or send none).
