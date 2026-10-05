@@ -104,6 +104,17 @@
 .empty-state {
   text-align: center;
   color: var(--text-3);
+  transition:
+    opacity 0.2s ease,
+    transform 0.25s ease,
+    filter 0.25s ease;
+}
+
+/* While the command bar is open over an empty page, the logo and hint step back. */
+.content-card.quiet .empty-state {
+  opacity: 0;
+  transform: scale(0.97);
+  filter: blur(4px);
 }
 
 .empty-logo {
@@ -226,7 +237,16 @@
 }
 
 .extensions-button {
-  margin-left: 4px;
+  margin-left: 12px;
+}
+
+/* Optional row of pinned extensions under the address bar. */
+.extensions-row {
+  flex: none;
+  margin: 2px 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
 }
 
 /* Pinned extensions beside the puzzle; they step aside when the row gets tight. */
@@ -244,16 +264,16 @@
 }
 
 /* Narrow sidebars: every control stays; the buttons shrink to share the row instead
-   (measured: they all fit at full size from 196px of row). */
-@container (max-width: 195.5px) {
+   (they all fit at full size from 202px of row). */
+@container (max-width: 201.5px) {
   .top-row {
     gap: 0;
   }
   .top-row .extensions-button {
-    margin-left: 0;
+    margin-left: 8px;
   }
   .top-row .icon-button {
-    width: clamp(20px, calc((100cqw - 70px) / 4), 28px);
+    width: clamp(20px, calc((100cqw - 78px) / 4), 28px);
   }
   .top-row .private-badge {
     display: none;

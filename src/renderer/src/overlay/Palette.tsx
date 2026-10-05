@@ -14,9 +14,12 @@ interface PaletteProps {
   mode: 'new' | 'current' | 'split'
   currentUrl: string | null
   onClose: () => void
+  /** Sidebar width on either side, so the bar centres on the page. */
+  insetLeft?: number
+  insetRight?: number
 }
 
-export function Palette({ mode, currentUrl, onClose }: PaletteProps): React.JSX.Element {
+export function Palette({ mode, currentUrl, onClose, insetLeft = 0, insetRight = 0 }: PaletteProps): React.JSX.Element {
   const initial = currentUrl ?? (Date.now() - lastTyped.at < KEEP_TYPED_MS ? lastTyped.text : '')
   const [text, setText] = useState(initial)
   const [results, setResults] = useState<Suggestion[]>([])
@@ -91,6 +94,7 @@ export function Palette({ mode, currentUrl, onClose }: PaletteProps): React.JSX.
   return (
     <motion.div
       className="palette-backdrop"
+      style={{ paddingLeft: insetLeft, paddingRight: insetRight }}
       initial={{ opacity: 1 }}
       exit={{ opacity: 1 }}
       onMouseDown={(e) => e.target === e.currentTarget && close()}

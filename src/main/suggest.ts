@@ -1,7 +1,7 @@
 import type { Suggestion, Tab } from '@shared/types'
 import type { History } from './history'
 import { bangs } from './bangs'
-import { looksLikeUrl, resolveInput, searchUrl, suggestUrl } from './url'
+import { hostOf, looksLikeUrl, resolveInput, searchUrl, suggestUrl } from './url'
 
 const PROVIDER_TIMEOUT_MS = 700
 
@@ -37,11 +37,20 @@ export async function suggest(
 ): Promise<Suggestion[]> {
   const query = text.trim()
   if (!query) {
-    return tabs
+    // Nothing typed: your recent tabs, topped up with recently visited sites (so a fresh window isn't empty).
+    const recent: Suggestion[] = tabs
       .filter((t) => t.loaded)
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
       .slice(0, 6)
       .map((t) => ({ kind: 'tab', tabId: t.id, url: t.url, title: t.title, favicon: t.favicon }))
+    if (skipHistory || recent.length >= 6) return recent
+    const open = new Set(tabs.map((t) => t.url))
+    for (const visit of history.list('', 40)) {
+      if (recent.length >= 6) break
+      if (open.has(visit.url) || recent.some((r) => r.kind === 'history' && hostOf(r.url) === hostOf(visit.url))) continue
+      recent.push({ kind: 'history', url: visit.url, title: visit.title || visit.url })
+    }
+    return recent
   }
 
   const results: Suggestion[] = []

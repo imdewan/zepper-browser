@@ -75,7 +75,7 @@ export function activateExtension(
     eventType,
     extensionId: id,
     tabId: tabId ?? -1,
-    alignment: 'top right',
+    alignment: 'bottom right',
     anchorRect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
   })
 }
@@ -93,7 +93,7 @@ export function ExtensionButton({ id, tabId, version }: { id: string; tabId: num
     const el = document.createElement('button', { is: 'browser-action' })
     el.className = 'extension-button'
     el.setAttribute('partition', EXTENSIONS_PARTITION)
-    el.setAttribute('alignment', 'top right')
+    el.setAttribute('alignment', 'bottom right')
     el.id = id
     button.current = el
     host.current?.appendChild(el)

@@ -44,8 +44,9 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
 
   return (
     <aside className="sidebar" style={{ width }}>
-      <TopRow tab={activeTab} isPrivate={snapshot.kind === 'private'} />
+      <TopRow tab={activeTab} isPrivate={snapshot.kind === 'private'} extensionsRow={snapshot.settings.extensionsRow} />
       <UrlPill tab={activeTab} />
+      {snapshot.settings.extensionsRow && snapshot.kind !== 'private' && <ExtensionsRow />}
       <Essentials tabs={essentials} activeTabId={snapshot.activeTabId} />
       <div className="sidebar-body">
         <SpacesViewport
@@ -63,7 +64,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
 }
 
 /** Zen's top row: traffic lights, extensions, then back, forward and reload. */
-function TopRow({ tab, isPrivate }: { tab: Tab | null; isPrivate: boolean }): React.JSX.Element {
+function TopRow({ tab, isPrivate, extensionsRow }: { tab: Tab | null; isPrivate: boolean; extensionsRow: boolean }): React.JSX.Element {
   const extensionsRef = useRef<HTMLButtonElement>(null)
   const extensions = useExtensions()
   const pinned = useSnapshotPinnedExtensions(extensions)
@@ -83,11 +84,13 @@ function TopRow({ tab, isPrivate }: { tab: Tab | null; isPrivate: boolean }): Re
           >
             <IconPuzzle size={16} />
           </button>
-          <span className="top-row-extensions">
-            {pinned.map((id) => (
-              <ExtensionButton key={id} id={id} tabId={extensions.activeTabId} version={extensions} />
-            ))}
-          </span>
+          {!extensionsRow && (
+            <span className="top-row-extensions">
+              {pinned.map((id) => (
+                <ExtensionButton key={id} id={id} tabId={extensions.activeTabId} version={extensions} />
+              ))}
+            </span>
+          )}
         </>
       )}
       {isPrivate && (
@@ -195,6 +198,20 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
         )}
         <IconDownload size={16} />
       </button>
+    </div>
+  )
+}
+
+/** Optional row of pinned extensions under the address bar (Settings → Extensions). */
+function ExtensionsRow(): React.JSX.Element | null {
+  const extensions = useExtensions()
+  const pinned = useSnapshotPinnedExtensions(extensions)
+  if (pinned.length === 0) return null
+  return (
+    <div className="extensions-row">
+      {pinned.map((id) => (
+        <ExtensionButton key={id} id={id} tabId={extensions.activeTabId} version={extensions} />
+      ))}
     </div>
   )
 }

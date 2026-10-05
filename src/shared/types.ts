@@ -130,6 +130,8 @@ export interface Snapshot {
   kind: 'main' | 'blank' | 'private'
   widevine: WidevineStatus
   downloads: DownloadEntry[]
+  /** The command bar is open (the empty page steps back while it is). */
+  paletteOpen: boolean
   /** Window content size, so floating UI can line up with the window's background. */
   windowSize: { width: number; height: number }
   splits: Split[]
@@ -334,6 +336,10 @@ export type Command =
   | { type: 'downloads.clear' }
   | { type: 'ui.downloads' }
   | { type: 'ui.openHistory' }
+  | { type: 'ui.openAbout' }
+  | { type: 'extension.setEnabled'; id: string; enabled: boolean }
+  | { type: 'extension.remove'; id: string }
+  | { type: 'extension.options'; id: string }
   | { type: 'history.remove'; url: string }
   /** Forget history since a time; 0 clears it all. */
   | { type: 'history.clear'; since: number }
@@ -355,6 +361,7 @@ export type UiEvent =
   | { type: 'palette.open'; mode: 'new' | 'current' | 'split'; currentUrl: string | null }
   | { type: 'toast'; toast: ToastSpec }
   | { type: 'history.open' }
+  | { type: 'about.open'; info: AboutInfo }
   /** Open the downloads panel from the sidebar's downloads button. */
   | { type: 'downloads.open' }
   | { type: 'space.startRename'; spaceId: string }
@@ -376,6 +383,31 @@ export interface ZepperApi {
   suggest(text: string): Promise<Suggestion[]>
   /** History page entries, newest first. */
   history(query: string): Promise<HistoryEntry[]>
+  /** Installed extensions (enabled and disabled). */
+  extensions(): Promise<ExtensionInfo[]>
+}
+
+/** An installed extension, for Settings → Extensions. */
+export interface ExtensionInfo {
+  id: string
+  name: string
+  version: string
+  description: string
+  enabled: boolean
+  /** Has a settings page (manifest options_ui / options_page). */
+  hasOptions: boolean
+}
+
+/** What the About page shows. */
+export interface AboutInfo {
+  version: string
+  chromium: string
+  electron: string
+  node: string
+  v8: string
+  widevine: WidevineStatus
+  /** When the ad-block filter lists were last downloaded (0 if never). */
+  filtersUpdatedAt: number
 }
 
 export interface HistoryEntry {
@@ -393,5 +425,6 @@ export const IPC = {
   event: 'zepper:event',
   command: 'zepper:command',
   suggest: 'zepper:suggest',
+  extensions: 'zepper:extensions',
   history: 'zepper:history'
 } as const

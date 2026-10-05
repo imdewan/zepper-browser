@@ -37,7 +37,7 @@ export function buildMenu(hub: Hub): Menu {
     {
       label: app.name,
       submenu: [
-        { role: 'about' },
+        { label: `About ${app.name}`, click: run((browser) => browser.handle({ type: 'ui.openAbout' })) },
         { type: 'separator' },
         { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: run((browser) => browser.handle({ type: 'ui.openSettings' })) },
         { type: 'separator' },

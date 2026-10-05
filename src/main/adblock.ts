@@ -84,6 +84,15 @@ export class AdBlock {
     }
   }
 
+  /** When the filter lists on disk were last downloaded (0 if never). */
+  async filtersUpdatedAt(): Promise<number> {
+    try {
+      return (await stat(this.cachePath)).mtimeMs
+    } catch {
+      return 0
+    }
+  }
+
   isEnabled(): boolean {
     return this.enabled
   }

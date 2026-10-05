@@ -13,9 +13,10 @@ import type { WidevineStatus } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose } from '../icons'
 import { cx, isMac } from '../util'
+import { ExtensionsSettings } from './ExtensionsSettings'
 import { Toggle } from './Toggle'
 
-type Section = 'appearance' | 'tabs' | 'media' | 'search' | 'gestures' | 'privacy' | 'shortcuts'
+type Section = 'appearance' | 'tabs' | 'media' | 'search' | 'gestures' | 'privacy' | 'extensions' | 'shortcuts'
 
 const SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: 'appearance', label: 'Appearance', icon: '🎨' },
@@ -24,6 +25,7 @@ const SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: 'search', label: 'Search', icon: '🔎' },
   { id: 'gestures', label: 'Spaces & Gestures', icon: '👆' },
   { id: 'privacy', label: 'Privacy', icon: '🛡️' },
+  { id: 'extensions', label: 'Extensions', icon: '🧩' },
   { id: 'shortcuts', label: 'Shortcuts', icon: '⌨️' }
 ]
 
@@ -358,6 +360,8 @@ export function SettingsPanel({ settings, widevine, onClose }: SettingsPanelProp
                 </Row>
               </>
             )}
+
+            {section === 'extensions' && <ExtensionsSettings settings={settings} />}
 
             {section === 'shortcuts' && (
               <>

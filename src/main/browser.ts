@@ -457,7 +457,8 @@ export class Browser {
         overlayMode: this.overlayMode,
         showingDialog: this.showingDialog,
         showingPrompt: this.showingPrompt,
-        pendingDialogs: this.pendingDialogs.map((d) => ({ id: d.id, tabId: d.tabId, kind: d.popover.kind }))
+        pendingDialogs: this.pendingDialogs.map((d) => ({ id: d.id, tabId: d.tabId, kind: d.popover.kind })),
+        windows: BrowserWindow.getAllWindows().map((w) => ({ title: w.getTitle(), url: w.webContents.getURL().slice(0, 80), visible: w.isVisible() }))
       }),
       drag: (layer, from, to) => {
         const target = layer === 'chrome' ? this.win.webContents : layer === 'tab' ? this.activeWebContents() : this.overlay.webContents
@@ -777,6 +778,17 @@ export class Browser {
         return void this.hub.downloads[command.action](command.id)
       case 'downloads.clear':
         return this.hub.downloads.clear()
+      case 'extension.setEnabled':
+        return void this.extensions?.setEnabled(command.id, command.enabled)
+      case 'extension.remove':
+        return void this.removeExtension(command.id)
+      case 'extension.options': {
+        const url = this.extensions?.optionsUrl(command.id)
+        if (url) this.openTab(url)
+        return
+      }
+      case 'ui.openAbout':
+        return void this.openAbout()
       case 'ui.openHistory':
         this.setOverlayMode('full')
         this.overlay.webContents.focus()
@@ -1760,6 +1772,7 @@ export class Browser {
 
   private openPalette(mode: 'new' | 'current' | 'split'): void {
     this.paletteOpen = true
+    this.broadcast()
     this.setOverlayMode('full')
     this.overlay.webContents.focus()
     const current = mode === 'current' ? this.tab(this.activeTabId) : undefined
@@ -1768,6 +1781,7 @@ export class Browser {
 
   private closePalette(refocus: boolean): void {
     this.paletteOpen = false
+    this.broadcast()
     if (this.showingPrompt !== null) {
       // Dismissing a permission prompt without answering denies it for now.
       const id = this.showingPrompt
@@ -2414,6 +2428,35 @@ export class Browser {
     ]
   }
 
+  private async removeExtension(id: string): Promise<void> {
+    const info = this.extensions?.list().find((e) => e.id === id)
+    if (!info) return
+    const { response } = await dialog.showMessageBox(this.win, {
+      type: 'warning',
+      message: `Remove “${info.name}”?`,
+      detail: 'Its data and settings are deleted. You can add it again from the Chrome Web Store.',
+      buttons: ['Remove', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1
+    })
+    if (response === 0) await this.extensions?.remove(id)
+  }
+
+  private async openAbout(): Promise<void> {
+    const info = {
+      version: app.getVersion(),
+      chromium: process.versions.chrome,
+      electron: process.versions.electron,
+      node: process.versions.node,
+      v8: process.versions.v8,
+      widevine: this.hub.widevine,
+      filtersUpdatedAt: await this.adblock.filtersUpdatedAt()
+    }
+    this.setOverlayMode('full')
+    this.overlay.webContents.focus()
+    this.emit({ type: 'about.open', info }, 'overlay')
+  }
+
   private async confirmClearSpaceData(id: string): Promise<void> {
     const space = this.space(id)
     if (!space) return
@@ -2767,6 +2810,7 @@ export class Browser {
       kind: this.kind,
       widevine: this.hub.widevine,
       downloads: this.hub.downloads.list(this.kind === 'private'),
+      paletteOpen: this.paletteOpen,
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : []

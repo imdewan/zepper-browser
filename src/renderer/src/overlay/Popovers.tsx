@@ -47,7 +47,8 @@ export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }:
   // Space pickers open beside the sidebar, the extensions panel rises from the bottom bar,
   // and site panels drop down from their anchor.
   const beside = needsSpace
-  const above = popover.kind === 'extensions' || popover.kind === 'downloads'
+  // Panels from the bottom bar rise above their button; from the top of the window they drop down.
+  const above = (popover.kind === 'extensions' || popover.kind === 'downloads') && anchor.y > window.innerHeight / 2
   const width = popover.kind === 'spaces' ? Math.max(250, anchor.width) : (POPOVER_WIDTHS[popover.kind] ?? 300)
   const left = beside
     ? Math.min(anchor.x + anchor.width + 12, window.innerWidth - width - 12)

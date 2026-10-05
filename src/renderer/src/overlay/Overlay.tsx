@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { prefersDarkUi, themeAccent } from '@shared/theme'
-import type { FindResult, OverlayMode, PopoverSpec, ToastSpec, UiEvent } from '@shared/types'
+import type { AboutInfo, FindResult, OverlayMode, PopoverSpec, ToastSpec, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
 import { useSnapshot, useSystemDark, useUiEvents } from '../useSnapshot'
 import { uiAttributes } from '../chrome/App'
@@ -10,6 +10,7 @@ import { FindBar } from './FindBar'
 import { Palette } from './Palette'
 import { Peek } from './Peek'
 import { SettingsPanel } from './SettingsPanel'
+import { AboutPanel } from './AboutPanel'
 import { HistoryPanel } from './HistoryPanel'
 import { Popover } from './Popovers'
 import { Toasts } from './Toasts'
@@ -28,6 +29,7 @@ export function Overlay(): React.JSX.Element | null {
   const [find, setFind] = useState<{ key: number; result: FindResult } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [about, setAbout] = useState<AboutInfo | null>(null)
   const [creatingSpace, setCreatingSpace] = useState(false)
   const [peek, setPeek] = useState<'shown' | 'exiting' | null>(null)
   const [exiting, setExiting] = useState(false)
@@ -55,6 +57,10 @@ export function Overlay(): React.JSX.Element | null {
         setPalette(null)
         setPopover(null)
         setCreatingSpace(true)
+      } else if (event.type === 'about.open') {
+        setPalette(null)
+        setPopover(null)
+        setAbout(event.info)
       } else if (event.type === 'history.open') {
         setPalette(null)
         setPopover(null)
@@ -67,6 +73,7 @@ export function Overlay(): React.JSX.Element | null {
         setPopover(null)
         setSettingsOpen(false)
         setHistoryOpen(false)
+        setAbout(null)
         setCreatingSpace(false)
         setPeek((p) => (p ? 'exiting' : p))
         zepper.send({ type: 'ui.closePalette', refocus: true })
@@ -74,7 +81,7 @@ export function Overlay(): React.JSX.Element | null {
     }, [])
   )
 
-  const wantsFull = palette !== null || popover !== null || settingsOpen || historyOpen || creatingSpace || exiting
+  const wantsFull = palette !== null || popover !== null || settingsOpen || historyOpen || about !== null || creatingSpace || exiting
   const mode: OverlayMode = wantsFull
     ? 'full'
     : peek
@@ -106,6 +113,11 @@ export function Overlay(): React.JSX.Element | null {
   const closeSettings = useCallback(() => {
     setExiting(true)
     setSettingsOpen(false)
+    zepper.send({ type: 'ui.closePalette', refocus: true })
+  }, [])
+  const closeAbout = useCallback(() => {
+    setExiting(true)
+    setAbout(null)
     zepper.send({ type: 'ui.closePalette', refocus: true })
   }, [])
   const closeHistory = useCallback(() => {
@@ -144,6 +156,7 @@ export function Overlay(): React.JSX.Element | null {
       <AnimatePresence onExitComplete={() => setExiting(false)}>
         {settingsOpen && <SettingsPanel key="settings" settings={snapshot.settings} widevine={snapshot.widevine} onClose={closeSettings} />}
         {historyOpen && <HistoryPanel key="history" onClose={closeHistory} />}
+        {about && <AboutPanel key="about" info={about} onClose={closeAbout} />}
         {creatingSpace && <CreateSpaceDialog
             key="create"
             systemDark={systemDark}
@@ -151,7 +164,17 @@ export function Overlay(): React.JSX.Element | null {
             activeSpaceId={snapshot.activeSpaceId}
             onClose={closeCreate}
           />}
-        {palette && <Palette key={palette.key} mode={palette.mode} currentUrl={palette.currentUrl} onClose={closePalette} />}
+        {palette && (
+          <Palette
+            key={palette.key}
+            mode={palette.mode}
+            currentUrl={palette.currentUrl}
+            onClose={closePalette}
+            // Centred on the page area, not the whole window (the sidebar takes the rest).
+            insetLeft={!snapshot.compact && snapshot.settings.sidebarPosition === 'left' ? snapshot.sidebarWidth : 0}
+            insetRight={!snapshot.compact && snapshot.settings.sidebarPosition === 'right' ? snapshot.sidebarWidth : 0}
+          />
+        )}
         {popover && (
           <Popover
             key="popover"

@@ -17,7 +17,12 @@ process.on('unhandledRejection', (reason) => {
 })
 
 // Development only: a second, isolated instance with its own profile (for automated checks).
-if (!app.isPackaged && process.env['ZEPPER_PROFILE']) app.setPath('userData', process.env['ZEPPER_PROFILE'])
+if (!app.isPackaged && process.env['ZEPPER_PROFILE']) {
+  app.setPath('userData', process.env['ZEPPER_PROFILE'])
+  // Test instances usually sit behind other windows; keep animating there.
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+  app.commandLine.appendSwitch('disable-renderer-backgrounding')
+}
 
 // Present a plain Chrome user agent: many sites (Google sign-in, WhatsApp Web,
 // Teams) refuse or degrade when they see Electron or an unknown app token.

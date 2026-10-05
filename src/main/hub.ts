@@ -56,6 +56,7 @@ export class Hub {
 
     ipcMain.handle(IPC.getSnapshot, (event) => this.owner(event.sender)?.publicSnapshot() ?? null)
     ipcMain.handle(IPC.suggest, (event, text: string) => this.owner(event.sender)?.suggestions(text) ?? [])
+    ipcMain.handle(IPC.extensions, () => this.services.extensions?.list() ?? [])
     // Private windows keep no history, so their history page is empty.
     ipcMain.handle(IPC.history, (event, query: string) =>
       this.owner(event.sender)?.kind === 'private' ? [] : services.history.list(String(query ?? ''), 2000)
@@ -102,7 +103,7 @@ export class Hub {
       session.fromPartition('zepper-ui')
     )
     this.services.extensions = extensions
-    void extensions.start()
+    void extensions.start(this.services.settings)
   }
 
   /** Opens a window; with a URL it starts on that page instead of the command bar. */

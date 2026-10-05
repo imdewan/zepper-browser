@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Rect } from '@shared/types'
 import { zepper } from '../bridge'
 import { activateExtension, extensionIconUrl, extensionTitle, useExtensions } from '../extensions'
@@ -45,7 +46,7 @@ export function ExtensionsPanel({ pinned, anchor, onClose }: ExtensionsPanelProp
                   activateExtension(action.id, activeTabId, e.currentTarget, 'contextmenu')
                 }}
               >
-                <img className="extension-icon" src={extensionIconUrl(action.id, activeTabId)} alt="" draggable={false} />
+                <ExtensionIcon id={action.id} name={extensionTitle(action, activeTabId)} tabId={activeTabId} />
                 <span className="extension-name">{extensionTitle(action, activeTabId)}</span>
                 <button
                   className={cx('extension-pin', isPinned && 'pinned')}
@@ -72,5 +73,15 @@ export function ExtensionsPanel({ pinned, anchor, onClose }: ExtensionsPanelProp
         Find extensions in the Chrome Web Store
       </button>
     </div>
+  )
+}
+
+/** The extension's icon, or its initial when it has none. */
+function ExtensionIcon({ id, name, tabId }: { id: string; name: string; tabId: number | undefined }): React.JSX.Element {
+  const [failed, setFailed] = useState(false)
+  return failed ? (
+    <span className="extension-icon letter">{name.charAt(0).toUpperCase()}</span>
+  ) : (
+    <img className="extension-icon" src={extensionIconUrl(id, tabId)} alt="" draggable={false} onError={() => setFailed(true)} />
   )
 }

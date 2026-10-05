@@ -7,6 +7,7 @@ import { zepper } from '../bridge'
 import { IconBack, IconForward, IconPrivate } from '../icons'
 import { useSnapshot, useSystemDark, useUiEvents } from '../useSnapshot'
 import logo from '../assets/logo.png'
+import { cx } from '../util'
 import { Sidebar } from './Sidebar'
 
 export const GRAIN =
@@ -104,7 +105,7 @@ export function App(): React.JSX.Element | null {
       {snapshot.panes.length > 1 ? (
         <SplitPanes snapshot={snapshot} />
       ) : (
-        <ContentCard tab={activeTab} isPrivate={snapshot.kind === 'private'} />
+        <ContentCard tab={activeTab} isPrivate={snapshot.kind === 'private'} quiet={snapshot.paletteOpen} />
       )}
       <SwipeIndicator />
     </div>
@@ -142,10 +143,10 @@ export function Background({ theme, spaceKey, transparency = 1 }: BackgroundProp
 }
 
 /** Placeholder card under the web view: provides the shadow, and the empty state when no tab is open. */
-function ContentCard({ tab, isPrivate }: { tab: Tab | null; isPrivate: boolean }): React.JSX.Element {
+function ContentCard({ tab, isPrivate, quiet }: { tab: Tab | null; isPrivate: boolean; quiet: boolean }): React.JSX.Element {
   return (
     <>
-      <div className="content-card">
+      <div className={cx('content-card', quiet && 'quiet')}>
         {!tab && isPrivate && (
           <div className="empty-state private">
             <div className="private-mark">

@@ -63,8 +63,12 @@ export interface Settings {
   userAgent: UserAgentChoice
   customUserAgent: string
   // Extensions
-  /** Extensions shown in the bottom bar; the rest live in the extensions panel. */
+  /** Extensions shown beside the extensions button (or in the extensions row); the rest live in its panel. */
   pinnedExtensions: string[]
+  /** Pinned extensions get their own row under the address bar. */
+  extensionsRow: boolean
+  /** Installed extensions you've turned off (unloaded at startup). */
+  disabledExtensions: { id: string; name: string; version: string; description: string; path: string; hasOptions: boolean }[]
   /** Make Google's sign-in page accept Zepper (see main/compat.ts). */
   googleSignInCompat: boolean
 }
@@ -100,6 +104,8 @@ export const DEFAULT_SETTINGS: Settings = {
   userAgent: 'chrome',
   customUserAgent: '',
   pinnedExtensions: [],
+  extensionsRow: false,
+  disabledExtensions: [],
   googleSignInCompat: true
 }
 

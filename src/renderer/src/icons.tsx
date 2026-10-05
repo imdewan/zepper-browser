@@ -66,8 +66,11 @@ export const IconCheck = (p: IconProps): React.JSX.Element => (
   </Icon>
 )
 export const IconPuzzle = (p: IconProps): React.JSX.Element => (
-  <Icon {...p}>
-    <path d="M10 4.5a2 2 0 1 1 4 0V6h3a1 1 0 0 1 1 1v3h-1.5a2 2 0 1 0 0 4H18v3a1 1 0 0 1-1 1h-3v-1.5a2 2 0 1 0-4 0V18H7a1 1 0 0 1-1-1v-3h1.5a2 2 0 1 0 0-4H6V7a1 1 0 0 1 1-1h3z" />
+  <Icon {...p} strokeWidth={1.7}>
+    <path
+      transform="translate(1.2 1.2) scale(0.9)"
+      d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z"
+    />
   </Icon>
 )
 export const IconPin = (p: IconProps): React.JSX.Element => (

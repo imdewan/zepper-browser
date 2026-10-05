@@ -71,6 +71,7 @@ function createMock(): ZepperApi {
     kind: 'main',
     widevine: { state: 'off', version: null },
     downloads: [],
+    paletteOpen: false,
     windowSize: { width: window.innerWidth, height: window.innerHeight },
     splits: [],
     panes: []
@@ -148,6 +149,9 @@ function createMock(): ZepperApi {
       return () => eventListeners.delete(callback)
     },
     send: handle,
+    async extensions() {
+      return []
+    },
     async history(): Promise<HistoryEntry[]> {
       const now = Date.now()
       return [
