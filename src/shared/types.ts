@@ -29,7 +29,17 @@ export interface Tab {
   canGoForward: boolean
   lastActiveAt: number
   blockedCount: number
+  /** Media this tab has played since its last navigation; drives the now-playing card. */
+  media: MediaInfo | null
 }
+
+export interface MediaInfo {
+  title: string
+  artist: string
+  artwork: string | null
+}
+
+export type Harmony = 'floating' | 'complementary' | 'singleAnalogous' | 'analogous' | 'triadic' | 'splitComplementary'
 
 export interface SpaceTheme {
   /** 0–3 hex colours; empty means the default (vibrancy only) theme. */
@@ -38,6 +48,11 @@ export interface SpaceTheme {
   opacity: number
   /** Grain overlay strength, 0–1. */
   texture: number
+  /** Editor state: dot positions on the colour wheel, normalised to -1..1, primary first. */
+  dots?: { x: number; y: number }[]
+  harmony?: Harmony
+  /** Chrome appearance for this space. Auto picks light or dark from the gradient. */
+  scheme?: 'auto' | 'light' | 'dark'
 }
 
 export interface Space {
@@ -93,6 +108,34 @@ export interface CertificateInfo {
   fingerprint: string
 }
 
+export interface NameField {
+  label: string
+  value: string
+}
+
+/** One certificate in a chain, parsed for the certificate viewer. */
+export interface CertificateEntry {
+  commonName: string
+  subject: NameField[]
+  issuer: NameField[]
+  serialNumber: string
+  validFrom: number
+  validTo: number
+  sha256: string
+  sha1: string
+  altNames: string[]
+  publicKey: string
+  signatureAlgorithm: string
+  isCA: boolean
+}
+
+export interface CertificateChain {
+  host: string
+  trusted: boolean
+  /** Leaf first, root last. */
+  entries: CertificateEntry[]
+}
+
 export interface SiteInfo {
   url: string
   origin: string
@@ -101,6 +144,7 @@ export interface SiteInfo {
   /** Scheme without a certificate (http, file, about…). */
   insecureReason: string | null
   certificate: CertificateInfo | null
+  chain: CertificateChain | null
   blockedCount: number
   adblockEnabled: boolean
   permissions: { permission: string; label: string; state: PermissionState }[]
@@ -169,7 +213,10 @@ export type Command =
   | { type: 'ui.settingsMenu'; anchor: Rect }
   | { type: 'ui.toggleCompact' }
   | { type: 'ui.siteInfo'; anchor: Rect }
-  | { type: 'site.showCertificate' }
+  | { type: 'site.exportCertificate'; index: number }
+  | { type: 'clipboard.write'; text: string }
+  | { type: 'media.toggle'; tabId: string }
+  | { type: 'media.dismiss'; tabId: string }
   | { type: 'site.setPermission'; origin: string; permission: string; state: PermissionState }
   | { type: 'site.clearData'; origin: string }
   | { type: 'permission.respond'; id: number; allow: boolean }

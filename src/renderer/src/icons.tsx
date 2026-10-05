@@ -125,3 +125,26 @@ export const IconClock = (p: IconProps): React.JSX.Element => (
     <path d="M12 7v5l3 2" />
   </Icon>
 )
+
+/** Animated "now playing" bars. */
+export function Equalizer({ paused = false }: { paused?: boolean }): React.JSX.Element {
+  return (
+    <span className={`equalizer${paused ? ' paused' : ''}`} aria-hidden="true">
+      <i />
+      <i />
+      <i />
+    </span>
+  )
+}
+
+export const IconPlay = (p: IconProps): React.JSX.Element => (
+  <Icon {...p} fill="currentColor" stroke="none">
+    <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" />
+  </Icon>
+)
+export const IconPause = (p: IconProps): React.JSX.Element => (
+  <Icon {...p} fill="currentColor" stroke="none">
+    <rect x="6" y="5" width="4.2" height="14" rx="1.2" />
+    <rect x="13.8" y="5" width="4.2" height="14" rx="1.2" />
+  </Icon>
+)

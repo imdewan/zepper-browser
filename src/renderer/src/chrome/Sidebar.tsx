@@ -6,6 +6,7 @@ import { IconBack, IconForward, IconGlobe, IconLock, IconPlus, IconReload, IconS
 import { useUiEvents } from '../useSnapshot'
 import { cx, hostOf, rectOf } from '../util'
 import { Essentials } from './Essentials'
+import { MediaCard } from './MediaCard'
 import { SpaceCreate } from './SpaceCreate'
 import { SpacesViewport } from './Spaces'
 
@@ -44,6 +45,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
         />
         <AnimatePresence>{creating && <SpaceCreate onDone={() => setCreating(false)} />}</AnimatePresence>
       </div>
+      <MediaCard snapshot={snapshot} />
       <BottomBar snapshot={snapshot} />
       {!floating && <ResizeHandle width={width} side={snapshot.settings.sidebarPosition} onResize={onResize} />}
     </aside>
@@ -127,7 +129,11 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
           snapshot.spaces.map((space) => (
             <button
               key={space.id}
-              className={cx('space-dot', space.id === snapshot.activeSpaceId && 'active')}
+              className={cx(
+                'space-dot',
+                space.id === snapshot.activeSpaceId && 'active',
+                snapshot.tabs.some((t) => t.spaceId === space.id && t.audible) && 'has-audio'
+              )}
               title={space.name}
               onClick={() => zepper.send({ type: 'space.switch', spaceId: space.id })}
               onContextMenu={(e) => {

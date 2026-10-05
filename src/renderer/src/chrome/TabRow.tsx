@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import type { Tab } from '@shared/types'
 import { zepper } from '../bridge'
 import { Favicon } from '../Favicon'
-import { IconClose, IconMinus, IconMuted, IconSpeaker } from '../icons'
+import { Equalizer, IconClose, IconMinus, IconMuted, IconSpeaker } from '../icons'
 import { cx, isPinnedChanged } from '../util'
 
 /** Tracks whether ⌘ is held, which switches pinned-tab reset into "separate". */
@@ -102,14 +102,25 @@ export const TabRow = memo(function TabRow({ tab, active }: TabRowProps): React.
 
         {(tab.audible || tab.muted) && (
           <button
-            className="tab-button audio"
+            className={cx('tab-button', 'audio', tab.muted ? 'muted' : 'playing')}
             title={tab.muted ? 'Unmute tab' : 'Mute tab'}
             onClick={(e) => {
               stop(e)
               zepper.send({ type: 'tab.toggleMute', tabId: tab.id })
             }}
           >
-            {tab.muted ? <IconMuted size={13} /> : <IconSpeaker size={13} />}
+            {tab.muted ? (
+              <IconMuted size={14} />
+            ) : (
+              <>
+                <span className="audio-idle">
+                  <Equalizer />
+                </span>
+                <span className="audio-hover">
+                  <IconSpeaker size={14} />
+                </span>
+              </>
+            )}
           </button>
         )}
 

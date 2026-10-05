@@ -10,6 +10,8 @@ export interface DebugTarget {
   snapshotJson(): unknown
   /** Sends synthetic precise (trackpad) wheel events to the active page. */
   wheel(dx: number, steps: number): void
+  /** Sends a mouse drag (or click when from === to) to a layer, in window coordinates. */
+  drag(layer: string, from: [number, number], to: [number, number]): void
 }
 
 /**
@@ -33,6 +35,10 @@ export function startDebugServer(target: DebugTarget): void {
         res.end('ok')
       } else if (url.pathname === '/wheel') {
         target.wheel(Number(url.searchParams.get('dx') ?? -20), Number(url.searchParams.get('steps') ?? 15))
+        res.end('ok')
+      } else if (url.pathname === '/drag') {
+        const n = (k: string): number => Number(url.searchParams.get(k) ?? 0)
+        target.drag(url.searchParams.get('layer') ?? 'overlay', [n('x1'), n('y1')], [n('x2') || n('x1'), n('y2') || n('y1')])
         res.end('ok')
       } else if (url.pathname === '/capture') {
         const dir = url.searchParams.get('dir') ?? app.getPath('temp')

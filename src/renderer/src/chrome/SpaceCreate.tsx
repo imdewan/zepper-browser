@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { motion } from 'motion/react'
-import { THEME_PRESETS, themeBackground } from '@shared/theme'
+import { DEFAULT_THEME } from '@shared/theme'
 import type { SpaceTheme } from '@shared/types'
 import { zepper } from '../bridge'
 import { SPACE_EMOJI } from '../emoji'
+import { GradientEditor } from '../GradientEditor'
 import { cx } from '../util'
 
 interface SpaceCreateProps {
@@ -14,7 +15,7 @@ interface SpaceCreateProps {
 export function SpaceCreate({ onDone }: SpaceCreateProps): React.JSX.Element {
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('✨')
-  const [theme, setTheme] = useState<SpaceTheme>(THEME_PRESETS[0])
+  const [theme, setTheme] = useState<SpaceTheme>(DEFAULT_THEME)
   const [pickingIcon, setPickingIcon] = useState(false)
 
   const create = (): void => {
@@ -65,17 +66,8 @@ export function SpaceCreate({ onDone }: SpaceCreateProps): React.JSX.Element {
       )}
 
       <div className="space-create-label">Theme</div>
-      <div className="swatches">
-        {THEME_PRESETS.map((preset, i) => (
-          <button
-            type="button"
-            key={i}
-            className={cx('swatch', preset === theme && 'selected', preset.colors.length === 0 && 'swatch-default')}
-            style={{ background: preset.colors.length ? themeBackground({ ...preset, opacity: 1 }) : undefined }}
-            title={preset.colors.length ? preset.colors.join(' · ') : 'Default'}
-            onClick={() => setTheme(preset)}
-          />
-        ))}
+      <div className="space-create-theme">
+        <GradientEditor theme={theme} onChange={setTheme} />
       </div>
 
       <div className="space-create-buttons">

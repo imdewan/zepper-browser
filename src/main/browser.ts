@@ -18,6 +18,7 @@ import {
 } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { Settings } from '@shared/settings'
 import { DEFAULT_THEME } from '@shared/theme'
@@ -100,9 +101,32 @@ function makeTab(fields: Partial<Tab> & Pick<Tab, 'kind' | 'url'>): Tab {
     canGoForward: false,
     lastActiveAt: Date.now(),
     blockedCount: 0,
+    media: null,
     ...fields
   }
 }
+
+/** Reads the page's Media Session metadata (title, artist, artwork) if it publishes any. */
+const MEDIA_METADATA_SCRIPT = `(() => {
+  const m = navigator.mediaSession && navigator.mediaSession.metadata
+  if (!m) return null
+  const art = (m.artwork || []).slice().sort((a, b) => parseInt(b.sizes || '0') - parseInt(a.sizes || '0'))[0]
+  return { title: m.title || '', artist: m.artist || m.album || '', artwork: art ? new URL(art.src, location.href).href : null }
+})()`
+
+/** Pauses whatever is playing, or resumes what we paused last time. */
+const MEDIA_TOGGLE_SCRIPT = `(() => {
+  const media = Array.from(document.querySelectorAll('video, audio'))
+  const playing = media.filter((el) => !el.paused)
+  if (playing.length) {
+    playing.forEach((el) => el.pause())
+    window.__zepperPaused = playing
+    return 'paused'
+  }
+  const resume = (window.__zepperPaused || media).filter((el) => el.isConnected)
+  if (resume[0]) resume[0].play()
+  return 'playing'
+})()`
 
 function makeSpace(name: string, icon: string, theme: SpaceTheme = DEFAULT_THEME): Space {
   return { id: randomUUID(), name, icon, theme, collapsedPins: false, lastTabId: null }
@@ -186,6 +210,8 @@ export class Browser {
       minHeight: 495,
       show: false,
       titleBarStyle: 'hidden',
+      // Let the first click on an inactive window hit the button under it.
+      acceptFirstMouse: true,
       trafficLightPosition: { x: 17, y: 17 },
       vibrancy: 'sidebar',
       visualEffectState: 'followWindow',
@@ -215,7 +241,10 @@ export class Browser {
     this.win.on('focus', () => this.broadcast())
     this.win.on('blur', () => this.broadcast())
     this.win.on('closed', () => this.persistNow())
-    nativeTheme.on('updated', () => this.broadcast())
+    nativeTheme.on('updated', () => {
+      this.applyAppIcon()
+      this.broadcast()
+    })
 
     this.overlay.webContents.once('did-finish-load', () => {
       const restore = this.restoreTabId && this.tab(this.restoreTabId)
@@ -253,6 +282,21 @@ export class Browser {
       },
       handle: (command) => this.handle(command),
       snapshotJson: () => this.snapshot(),
+      drag: (layer, from, to) => {
+        const target = layer === 'chrome' ? this.win.webContents : layer === 'tab' ? this.activeWebContents() : this.overlay.webContents
+        const origin = layer === 'overlay' ? this.overlay.getBounds() : layer === 'tab' ? this.contentBounds() : { x: 0, y: 0 }
+        if (!target) return
+        const at = (p: [number, number]) => ({ x: Math.round(p[0] - origin.x), y: Math.round(p[1] - origin.y) })
+        target.sendInputEvent({ type: 'mouseDown', ...at(from), button: 'left', clickCount: 1 })
+        const steps = 12
+        for (let i = 1; i <= steps; i++) {
+          setTimeout(() => {
+            const p: [number, number] = [from[0] + ((to[0] - from[0]) * i) / steps, from[1] + ((to[1] - from[1]) * i) / steps]
+            target.sendInputEvent({ type: 'mouseMove', ...at(p), button: 'left' })
+            if (i === steps) target.sendInputEvent({ type: 'mouseUp', ...at(to), button: 'left', clickCount: 1 })
+          }, i * 16)
+        }
+      },
       wheel: (dx, steps) => {
         const wc = this.activeWebContents()
         if (!wc) return
@@ -416,8 +460,17 @@ export class Browser {
         return this.toggleCompact()
       case 'ui.siteInfo':
         return this.openSiteInfo(command.anchor)
-      case 'site.showCertificate':
-        return void this.showCertificate()
+      case 'site.exportCertificate':
+        return void this.exportCertificate(command.index)
+      case 'clipboard.write':
+        return void clipboard.writeText(command.text)
+      case 'media.toggle':
+        return void this.views.get(command.tabId)?.webContents.executeJavaScript(MEDIA_TOGGLE_SCRIPT, true).catch(() => {})
+      case 'media.dismiss': {
+        const tab = this.tab(command.tabId)
+        if (tab) tab.media = null
+        return this.broadcast()
+      }
       case 'site.setPermission':
         this.permissions.set(command.origin, command.permission, command.state)
         return
@@ -445,12 +498,20 @@ export class Browser {
     }
   }
 
+  /** Dock icon: light or dark artwork, or following the system appearance. */
+  private applyAppIcon(): void {
+    const choice = this.settings.appIcon
+    const dark = choice === 'dark' || (choice === 'auto' && nativeTheme.shouldUseDarkColors)
+    app.dock?.setIcon(join(__dirname, `../../resources/${dark ? 'icon-dark' : 'icon'}.png`))
+  }
+
   private get settings(): Settings {
     return this.settingsStore.get()
   }
 
   private applySettings(next: Settings, prev: Settings | null): void {
     nativeTheme.themeSource = next.colorScheme
+    this.applyAppIcon()
     setSearchEngine(next.searchEngine)
     this.adblock.setEnabled(next.adblock)
     const layoutChanged =
@@ -871,11 +932,12 @@ export class Browser {
     wc.on('did-stop-loading', () => update({ loading: false, ...navState() }))
     wc.on('page-title-updated', (_event, title) => {
       update({ title })
+      if (this.tab(tabId)?.media) void this.refreshMedia(tabId, wc)
       this.history.updateTitle(wc.getURL(), title)
     })
     wc.on('page-favicon-updated', (_event, favicons) => update({ favicon: favicons[0] ?? null }))
     wc.on('did-navigate', (_event, url) => {
-      update({ url, blockedCount: 0, ...navState() })
+      update({ url, blockedCount: 0, media: null, ...navState() })
       this.history.record(url, wc.getTitle())
     })
     wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
@@ -883,7 +945,10 @@ export class Browser {
       update({ url, ...navState() })
       this.history.record(url, wc.getTitle())
     })
-    wc.on('audio-state-changed', (event) => update({ audible: event.audible }))
+    wc.on('audio-state-changed', (event) => {
+      update({ audible: event.audible })
+      if (event.audible) void this.refreshMedia(tabId, wc)
+    })
     wc.on('enter-html-full-screen', () => {
       this.htmlFullscreen = true
       this.layout()
@@ -935,6 +1000,24 @@ export class Browser {
         return view.webContents
       }
     }
+  }
+
+  /** Captures now-playing details when a tab starts making sound. */
+  private async refreshMedia(tabId: string, wc: WebContents): Promise<void> {
+    const tab = this.tab(tabId)
+    if (!tab) return
+    let meta: { title: string; artist: string; artwork: string | null } | null = null
+    try {
+      meta = await wc.executeJavaScript(MEDIA_METADATA_SCRIPT, true)
+    } catch {
+      meta = null
+    }
+    tab.media = {
+      title: meta?.title || tab.title,
+      artist: meta?.artist || safeHost(tab.url).replace(/^www\./, ''),
+      artwork: meta?.artwork ?? null
+    }
+    this.broadcast()
   }
 
   onAdBlocked(webContentsId: number): void {
@@ -1210,6 +1293,7 @@ export class Browser {
           ? 'Information you send to this site could be seen by others.'
           : 'This is a local or internal page.',
       certificate: https ? this.certificates.info(host) : null,
+      chain: https ? this.certificates.chain(host) : null,
       blockedCount: tab.blockedCount,
       adblockEnabled: this.adblock.isEnabled(),
       permissions: /^https?:/.test(tab.url) ? this.permissions.list(origin) : []
@@ -1222,14 +1306,19 @@ export class Browser {
     this.handle({ type: 'ui.openPopover', popover: { kind: 'siteInfo', anchor, info } })
   }
 
-  private async showCertificate(): Promise<void> {
+  private async exportCertificate(index: number): Promise<void> {
     const info = this.siteInfo()
-    const captured = info && this.certificates.get(info.host)
-    if (!captured) return
-    await dialog.showCertificateTrustDialog(this.win, {
-      certificate: captured.certificate,
-      message: `Certificate for ${info.host}`
+    const pem = info && this.certificates.pem(info.host, index)
+    if (!info || !pem) return
+    const entry = info.chain?.entries[index]
+    const name = (entry?.commonName || info.host).replace(/[^\w.-]+/g, '_')
+    const { canceled, filePath } = await dialog.showSaveDialog(this.win, {
+      defaultPath: join(app.getPath('downloads'), `${name}.pem`),
+      filters: [{ name: 'Certificate', extensions: ['pem', 'crt'] }]
     })
+    if (canceled || !filePath) return
+    await writeFile(filePath, pem)
+    this.toast({ id: 'cert-exported', message: 'Certificate exported', description: basename(filePath) })
   }
 
   private async clearSiteData(origin: string): Promise<void> {

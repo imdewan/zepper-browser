@@ -82,7 +82,7 @@ export function App(): React.JSX.Element | null {
       {...uiAttributes(snapshot.settings)}
       style={layoutVars(snapshot, sidebarWidth, accent)}
     >
-      <Background theme={space.theme} />
+      <Background theme={space.theme} spaceKey={space.id} />
       <div className="drag-strip drag" />
       <AnimatePresence initial={false}>
         {showSidebar && (
@@ -108,14 +108,14 @@ export function App(): React.JSX.Element | null {
   )
 }
 
-/** The space gradient over the window's vibrancy, crossfading when the theme changes. */
-export function Background({ theme }: { theme: SpaceTheme }): React.JSX.Element {
-  const key = JSON.stringify(theme)
+/** The space gradient over the window's vibrancy. */
+export function Background({ theme, spaceKey }: { theme: SpaceTheme; spaceKey: string }): React.JSX.Element {
+  // Crossfade when switching spaces; edits within a space apply instantly so dragging feels live.
   return (
     <div className="background">
       <AnimatePresence initial={false}>
         <motion.div
-          key={key}
+          key={spaceKey}
           className="background-layer"
           style={{ background: themeBackground(theme) }}
           initial={{ opacity: 0 }}

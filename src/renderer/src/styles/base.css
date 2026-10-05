@@ -190,3 +190,188 @@ html[data-mock] body {
       linear-gradient(160deg, #e9e4dc, #dedad3 55%, #d4d0ca);
   }
 }
+
+/* ---- Gradient editor (theme popover and Create Space form) --------------------- */
+
+.gradient-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wheel-field {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+  background:
+    radial-gradient(color-mix(in srgb, var(--text) 9%, transparent) 1px, transparent 0) -3px -3px / 7px 7px,
+    var(--element);
+  box-shadow: inset 0 0 0 1px var(--separator);
+}
+
+.wheel {
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.35) 45%, rgba(255, 255, 255, 0) 72%),
+    conic-gradient(
+      from 0deg,
+      hsl(0 95% 60%),
+      hsl(45 95% 58%),
+      hsl(90 85% 55%),
+      hsl(150 80% 52%),
+      hsl(195 90% 55%),
+      hsl(240 90% 64%),
+      hsl(285 85% 62%),
+      hsl(330 90% 62%),
+      hsl(360 95% 60%)
+    );
+  opacity: 0.88;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 6px 24px rgba(0, 0, 0, 0.18);
+}
+
+.wheel-links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.wheel-links line {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 0.012;
+  stroke-dasharray: 0.03 0.025;
+  stroke-linecap: round;
+}
+
+.wheel-dot {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  transition:
+    left 0.35s cubic-bezier(0.34, 1.4, 0.64, 1),
+    top 0.35s cubic-bezier(0.34, 1.4, 0.64, 1),
+    scale 0.15s ease;
+}
+
+.wheel-dot.primary {
+  width: 34px;
+  height: 34px;
+  border-width: 4px;
+}
+
+.wheel-field.dragging .wheel-dot {
+  transition: scale 0.15s ease;
+}
+
+.wheel-field.dragging .wheel-dot.primary {
+  scale: 1.12;
+}
+
+.wheel-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.wheel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wheel-tool {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--element);
+  color: var(--text-2);
+}
+
+.wheel-tool:hover:not(:disabled),
+.wheel-harmony:hover:not(:disabled) {
+  background: var(--element-hover);
+  color: var(--text);
+}
+
+.wheel-tool:disabled,
+.wheel-harmony:disabled {
+  opacity: 0.4;
+}
+
+.wheel-harmony {
+  flex: 1;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--element);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.gradient-editor .slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.gradient-editor .slider-row span {
+  width: 58px;
+}
+
+.gradient-editor .slider-row input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.segmented {
+  display: flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--element);
+}
+
+.segmented.wide button {
+  flex: 1;
+}
+
+.segmented button {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.segmented button.selected {
+  background: var(--palette-bg);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}

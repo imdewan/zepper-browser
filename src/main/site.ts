@@ -1,5 +1,6 @@
 import type { Certificate, Session } from 'electron'
-import type { CertificateInfo, PermissionState } from '@shared/types'
+import { X509Certificate } from 'node:crypto'
+import type { CertificateChain, CertificateEntry, CertificateInfo, NameField, PermissionState } from '@shared/types'
 import { JsonFile } from './persist'
 
 /** Permissions granted silently; everything else sensitive asks first. */
@@ -122,6 +123,26 @@ export class CertificateStore {
     return this.certs.get(host)
   }
 
+  /** The full chain (leaf to root) parsed for the certificate viewer. */
+  chain(host: string): CertificateChain | null {
+    const captured = this.certs.get(host)
+    if (!captured) return null
+    const entries: CertificateEntry[] = []
+    const seen = new Set<string>()
+    for (let cert: Certificate | undefined = captured.certificate; cert && !seen.has(cert.fingerprint); cert = cert.issuerCert) {
+      seen.add(cert.fingerprint)
+      entries.push(parseCertificate(cert))
+    }
+    return { host, trusted: captured.trusted, entries }
+  }
+
+  /** PEM of the n-th certificate in the chain, for export. */
+  pem(host: string, index: number): string | null {
+    let cert: Certificate | undefined = this.certs.get(host)?.certificate
+    for (let i = 0; cert && i < index; i++) cert = cert.issuerCert
+    return cert?.data ?? null
+  }
+
   info(host: string): CertificateInfo | null {
     const captured = this.certs.get(host)
     if (!captured) return null
@@ -139,3 +160,69 @@ export class CertificateStore {
   }
 }
 
+
+const NAME_LABELS: Record<string, string> = {
+  CN: 'Common Name',
+  O: 'Organization',
+  OU: 'Organizational Unit',
+  L: 'Locality',
+  ST: 'State',
+  C: 'Country'
+}
+
+function parseName(dn: string): NameField[] {
+  return dn
+    .split('\n')
+    .map((line) => {
+      const i = line.indexOf('=')
+      return { key: line.slice(0, i), value: line.slice(i + 1) }
+    })
+    .filter((f) => NAME_LABELS[f.key])
+    .sort((a, b) => Object.keys(NAME_LABELS).indexOf(a.key) - Object.keys(NAME_LABELS).indexOf(b.key))
+    .map((f) => ({ label: NAME_LABELS[f.key], value: f.value }))
+}
+
+function describeKey(x509: X509Certificate): string {
+  const key = x509.publicKey
+  const details = key.asymmetricKeyDetails
+  if (key.asymmetricKeyType === 'ec') return `Elliptic Curve ${details?.namedCurve ?? ''}`.trim()
+  if (key.asymmetricKeyType === 'rsa') return `RSA ${details?.modulusLength ?? ''}-bit`
+  return (key.asymmetricKeyType ?? 'Unknown').toUpperCase()
+}
+
+function parseCertificate(cert: Certificate): CertificateEntry {
+  const fallback: CertificateEntry = {
+    commonName: cert.subject.commonName || cert.subjectName,
+    subject: [{ label: 'Common Name', value: cert.subjectName }],
+    issuer: [{ label: 'Common Name', value: cert.issuerName }],
+    serialNumber: cert.serialNumber,
+    validFrom: cert.validStart * 1000,
+    validTo: cert.validExpiry * 1000,
+    sha256: cert.fingerprint.replace(/^sha256\//, ''),
+    sha1: '',
+    altNames: [],
+    publicKey: '',
+    signatureAlgorithm: '',
+    isCA: false
+  }
+  try {
+    const x509 = new X509Certificate(cert.data)
+    return {
+      ...fallback,
+      subject: parseName(x509.subject),
+      issuer: parseName(x509.issuer),
+      serialNumber: x509.serialNumber.replace(/(..)(?!$)/g, '$1:'),
+      sha256: x509.fingerprint256,
+      sha1: x509.fingerprint,
+      altNames: (x509.subjectAltName ?? '')
+        .split(', ')
+        .filter(Boolean)
+        .map((n) => n.replace(/^(DNS|IP Address):/, '')),
+      publicKey: describeKey(x509),
+      signatureAlgorithm: x509.signatureAlgorithm ?? '',
+      isCA: x509.ca
+    }
+  } catch {
+    return fallback
+  }
+}

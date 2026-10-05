@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import type { Tab } from '@shared/types'
 import { zepper } from '../bridge'
 import { Favicon } from '../Favicon'
+import { Equalizer, IconMuted } from '../icons'
 import { cx } from '../util'
 
 /** Column count that keeps rows balanced, mirroring Zen's grid tweaks (5 → 3+2, 6 → 3+3, 9 → 3×3). */
@@ -46,7 +47,19 @@ export function Essentials({ tabs, activeTabId }: EssentialsProps): React.JSX.El
               {active && <span className="essential-glow" />}
               {active && <span className="essential-fill" />}
               <Favicon src={tab.favicon} size={18} />
-              {tab.audible && <span className="essential-audio" />}
+              {(tab.audible || tab.muted) && (
+                <span
+                  role="button"
+                  className={cx('essential-audio', tab.muted && 'muted')}
+                  title={tab.muted ? 'Unmute tab' : 'Mute tab'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    zepper.send({ type: 'tab.toggleMute', tabId: tab.id })
+                  }}
+                >
+                  {tab.muted ? <IconMuted size={10} /> : <Equalizer />}
+                </span>
+              )}
             </motion.button>
           )
         })}

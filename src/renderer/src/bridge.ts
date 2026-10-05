@@ -28,6 +28,7 @@ function createMock(): ZepperApi {
     canGoForward: false,
     lastActiveAt: now,
     blockedCount: 12,
+    media: null,
     ...fields
   })
   const spaces: Space[] = [
@@ -45,7 +46,15 @@ function createMock(): ZepperApi {
       tab({ id: 'p2', kind: 'pinned', spaceId: 's1', url: 'https://app.element.io/#/room/build', title: 'Element | build', pinned: pin('https://app.element.io', 'Element') }),
       tab({ id: 'p3', kind: 'pinned', spaceId: 's1', url: 'https://github.com/zen-browser/desktop', title: 'zen-browser/desktop: Experience tranquillity', loaded: false, pinned: pin('https://github.com/zen-browser/desktop', 'zen-browser/desktop') }),
       tab({ id: 'n1', kind: 'normal', spaceId: 's1', url: 'https://www.google.com/search?q=zen', title: 'Google' }),
-      tab({ id: 'n2', kind: 'normal', spaceId: 's1', url: 'https://www.youtube.com', title: 'YouTube', audible: true }),
+      tab({
+        id: 'n2',
+        kind: 'normal',
+        spaceId: 's1',
+        url: 'https://www.youtube.com',
+        title: 'YouTube',
+        audible: true,
+        media: { title: 'Lofi beats to browse to', artist: 'Lofi Girl', artwork: null }
+      }),
       tab({ id: 'w1', kind: 'pinned', spaceId: 's2', url: 'https://linear.app', title: 'Linear', pinned: pin('https://linear.app', 'Linear') }),
       tab({ id: 'w2', kind: 'normal', spaceId: 's2', url: 'https://figma.com', title: 'Figma — Zepper sidebar' }),
       tab({ id: 'r1', kind: 'normal', spaceId: 's3', url: 'https://news.ycombinator.com', title: 'Hacker News' })

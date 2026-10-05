@@ -109,6 +109,17 @@ export function SettingsPanel({ settings, onClose }: SettingsPanelProps): React.
                     onChange={(colorScheme) => set({ colorScheme })}
                   />
                 </Row>
+                <Row label="App icon" hint="Auto follows your Mac’s appearance.">
+                  <Segmented
+                    value={settings.appIcon}
+                    options={[
+                      ['auto', 'Auto'],
+                      ['light', 'Light'],
+                      ['dark', 'Dark']
+                    ]}
+                    onChange={(appIcon) => set({ appIcon })}
+                  />
+                </Row>
                 <Row label="Sidebar position">
                   <Segmented
                     value={settings.sidebarPosition}

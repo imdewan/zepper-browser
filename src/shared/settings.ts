@@ -13,6 +13,7 @@ export interface Settings {
   density: 'comfortable' | 'compact'
   essentialsGlow: boolean
   reduceMotion: boolean
+  appIcon: 'auto' | 'light' | 'dark'
   // Tabs
   newTabPosition: 'top' | 'bottom'
   pinnedCloseBehavior: PinnedCloseBehavior
@@ -38,6 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   density: 'comfortable',
   essentialsGlow: true,
   reduceMotion: false,
+  appIcon: 'auto',
   newTabPosition: 'top',
   pinnedCloseBehavior: 'reset-unload-switch',
   closeSelectsRecent: true,
