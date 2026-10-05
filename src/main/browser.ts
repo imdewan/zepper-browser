@@ -2267,6 +2267,8 @@ export class Browser {
   }
 
   private wire(tabId: string, wc: WebContents): void {
+    // Zepper and the extensions layer each watch a page's lifetime; more than Node's default ten is expected.
+    wc.setMaxListeners(30)
     const update = (patch: Partial<Tab>): void => {
       const tab = this.tab(tabId)
       if (!tab) return
