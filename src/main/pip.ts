@@ -111,6 +111,9 @@ export class PipPlayer {
     const win = new BrowserWindow({
       ...bounds,
       frame: false,
+      // A floating panel: stays above full-screen apps and on every desktop, and clicking it doesn't
+      // activate Zepper. (setVisibleOnAllWorkspaces would instead hide the whole app for a moment.)
+      type: 'panel',
       roundedCorners: true,
       resizable: true,
       minimizable: false,
@@ -129,7 +132,6 @@ export class PipPlayer {
     })
     win.setAspectRatio(aspect)
     win.setAlwaysOnTop(true, 'floating')
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 
     win.contentView.addChildView(view)
     view.setBorderRadius(RADIUS)

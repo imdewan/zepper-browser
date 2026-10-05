@@ -78,13 +78,79 @@
   right: 8px;
 }
 
-.pip-play {
+.pip-center {
   position: absolute;
   top: 50%;
   left: 50%;
+  translate: -50% -50%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pip-skip {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+  transition:
+    transform 0.15s ease,
+    background-color 0.12s ease;
+}
+
+.pip-skip:hover {
+  background: rgba(0, 0, 0, 0.45);
+  transform: scale(1.06);
+}
+
+.pip-skip:active {
+  transform: scale(0.9);
+}
+
+/* Brief "+10s" confirmation beside the controls; always visible, even after they hide. */
+.pip > .pip-skipped {
+  position: absolute;
+  top: 50%;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  opacity: 1;
+  pointer-events: none;
+  animation: pip-skipped 0.65s ease forwards;
+}
+
+.pip-skipped.back {
+  right: calc(50% + 100px);
+}
+
+.pip-skipped.forward {
+  left: calc(50% + 100px);
+}
+
+@keyframes pip-skipped {
+  0% {
+    opacity: 0;
+    translate: 0 -50%;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 calc(-50% - 10px);
+  }
+}
+
+.pip-play {
   width: 54px;
   height: 54px;
-  translate: -50% -50%;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -100,6 +166,27 @@
 .pip-play:hover {
   background: rgba(0, 0, 0, 0.5);
   transform: scale(1.06);
+}
+
+/* Small players: tighten so all three fit. */
+@media (max-width: 300px) {
+  .pip-center {
+    gap: 8px;
+  }
+  .pip-skip {
+    width: 34px;
+    height: 34px;
+  }
+  .pip-play {
+    width: 46px;
+    height: 46px;
+  }
+  .pip-skipped.back {
+    right: calc(50% + 80px);
+  }
+  .pip-skipped.forward {
+    left: calc(50% + 80px);
+  }
 }
 
 .pip-play:active {

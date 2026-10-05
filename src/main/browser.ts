@@ -144,6 +144,21 @@ const EXIT_AUTO_PIP_SCRIPT = `(() => {
   return true
 })()`
 
+/** How long a playing tab must stay out of view before its video floats. */
+const PIP_DELAY_MS = 250
+
+/** Skips the floating (or playing, or first) video/audio element by some seconds; true when it found one. */
+function mediaSeekScript(seconds: number): string {
+  return `(() => {
+  const media = Array.from(document.querySelectorAll('video, audio'))
+  const el = document.querySelector('video[data-zepper-pip]') || media.find((m) => !m.paused) || media[0]
+  if (!el) return false
+  const end = Number.isFinite(el.duration) ? el.duration - 0.25 : Infinity
+  el.currentTime = Math.max(0, Math.min(end, el.currentTime + ${seconds}))
+  return true
+})()`
+}
+
 /** Pauses every playing video and audio element. */
 const MEDIA_PAUSE_SCRIPT = `(() => {
   document.querySelectorAll('video, audio').forEach((el) => { if (!el.paused) el.pause() })
@@ -636,6 +651,12 @@ export class Browser {
         return void clipboard.writeText(command.text)
       case 'media.toggle':
         return void this.views.get(command.tabId)?.webContents.executeJavaScript(MEDIA_TOGGLE_SCRIPT, true).catch(() => {})
+      case 'media.seek': {
+        const wc = this.views.get(command.tabId)?.webContents
+        const seconds = Math.max(-600, Math.min(600, Number(command.seconds) || 0))
+        if (wc && seconds) void this.runInFrames(wc, mediaSeekScript(seconds), true, true)
+        return
+      }
       case 'media.pauseOthers':
         return this.pauseOthers(command.keepTabId)
       case 'pip.back': {
@@ -829,6 +850,11 @@ export class Browser {
     const view = this.views.get(tabId)
     if (!tab?.audible || tab.muted || !wc || !view) return
     if (this.attached.has(tabId)) return
+    // Give quick tab flicks (⌃Tab cycling, a glance at another tab) a moment, so the player only
+    // opens once you've really moved on.
+    await new Promise((resolve) => setTimeout(resolve, PIP_DELAY_MS))
+    if (this.windowClosed || this.attached.has(tabId) || this.activeTabId === tabId || !tab.audible || tab.muted) return
+    if (this.views.get(tabId) !== view || this.pip.activeTabId === tabId) return
     // Our floating player handles videos in the page itself; iframe videos fall back to Chromium's.
     let entered = await this.pip.enter(tabId, view)
     if (entered && (this.activeTabId === tabId || this.attached.has(tabId))) {

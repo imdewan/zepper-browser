@@ -241,6 +241,7 @@ export type Command =
   | { type: 'site.exportCertificate'; index: number }
   | { type: 'clipboard.write'; text: string }
   | { type: 'media.toggle'; tabId: string }
+  | { type: 'media.seek'; tabId: string; seconds: number }
   | { type: 'media.dismiss'; tabId: string }
   | { type: 'media.pauseOthers'; keepTabId: string }
   | { type: 'site.setPermission'; origin: string; permission: string; state: PermissionState }

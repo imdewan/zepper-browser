@@ -159,6 +159,26 @@ export const IconPause = (p: IconProps): React.JSX.Element => (
   </Icon>
 )
 
+/** Circular arrow with "10" inside: skip back / forward ten seconds. */
+export const IconSkipBack = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <path d="M3.5 4.5v5h5" />
+    <path d="M4.2 14.5A8.5 8.5 0 1 0 6.1 6.1L3.5 9.5" />
+    <text x="12.6" y="15.3" fontSize="7.6" fontWeight="700" textAnchor="middle" fill="currentColor" stroke="none">
+      10
+    </text>
+  </Icon>
+)
+export const IconSkipForward = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <path d="M20.5 4.5v5h-5" />
+    <path d="M19.8 14.5A8.5 8.5 0 1 1 17.9 6.1L20.5 9.5" />
+    <text x="11.4" y="15.3" fontSize="7.6" fontWeight="700" textAnchor="middle" fill="currentColor" stroke="none">
+      10
+    </text>
+  </Icon>
+)
+
 export const IconTrash = (p: IconProps): React.JSX.Element => (
   <Icon {...p}>
     <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6.5 7l.8 11.2A2 2 0 0 0 9.3 20h5.4a2 2 0 0 0 2-1.8L17.5 7" />
