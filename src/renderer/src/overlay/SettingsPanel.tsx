@@ -218,17 +218,15 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, onClos
                 </Row>
                 <Row
                   label="Transparency"
-                  hint={
-                    settings.windowTransparency === 0 ? 'Solid window' : `${Math.round(settings.windowTransparency * 100)}% see-through`
-                  }
+                  hint={settings.transparency === 0 ? 'Solid window' : `${Math.round(settings.transparency * 100)}% see-through`}
                 >
                   <input
                     type="range"
                     min={0}
                     max={1}
                     step={0.05}
-                    value={settings.windowTransparency}
-                    onChange={(e) => set({ windowTransparency: Number(e.target.value) })}
+                    value={settings.transparency}
+                    onChange={(e) => set({ transparency: Number(e.target.value) })}
                   />
                 </Row>
                 <Row label="Content gap" hint={`${settings.contentGap}px around the page`}>

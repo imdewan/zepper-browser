@@ -83,7 +83,7 @@ export function App(): React.JSX.Element | null {
         {...uiAttributes(snapshot.settings)}
         style={layoutVars(snapshot, sidebarWidth, accent)}
       >
-        <Background theme={space.theme} spaceKey={space.id} transparency={snapshot.settings.windowTransparency} />
+        <Background theme={space.theme} spaceKey={space.id} transparency={snapshot.settings.transparency} />
         <div className="drag-strip drag" />
         <AnimatePresence initial={false}>
           {showSidebar && (
@@ -121,16 +121,19 @@ interface BackgroundProps {
   transparency?: number
 }
 
-export function Background({ theme, spaceKey, transparency = 1 }: BackgroundProps): React.JSX.Element {
+export function Background({ theme, spaceKey, transparency = 0.5 }: BackgroundProps): React.JSX.Element {
+  // Up to 50% the solid base fades out to reveal the system material; past it the gradient fades too.
+  const base = Math.max(0, 1 - transparency * 2)
+  const gradient = transparency <= 0.5 ? 1 : 1 - (transparency - 0.5) * 1.4
   // Crossfade when switching spaces; edits within a space apply instantly so dragging feels live.
   return (
     <div className="background">
-      <div className="background-base" style={{ opacity: 1 - transparency }} />
+      <div className="background-base" style={{ opacity: base }} />
       <AnimatePresence initial={false}>
         <motion.div
           key={spaceKey}
           className="background-layer"
-          style={{ background: themeBackground(theme) }}
+          style={{ background: themeBackground(theme), opacity: gradient }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

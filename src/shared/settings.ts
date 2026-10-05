@@ -39,7 +39,11 @@ export interface Settings {
   reduceMotion: boolean
   appIcon: 'auto' | 'light' | 'dark'
   /** How much of the desktop shows through the window: 0 = solid, 1 = full vibrancy. */
-  windowTransparency: number
+  /**
+   * How much the desktop shows through the window: 0 is solid, 0.5 (the default) lets the
+   * system material show under the space's gradient, and beyond that the gradient fades too.
+   */
+  transparency: number
   // Tabs
   newTabPosition: 'top' | 'bottom'
   pinnedCloseBehavior: PinnedCloseBehavior
@@ -122,7 +126,7 @@ export const DEFAULT_SETTINGS: Settings = {
   essentialsGlow: true,
   reduceMotion: false,
   appIcon: 'auto',
-  windowTransparency: 1,
+  transparency: 0.5,
   newTabPosition: 'top',
   pinnedCloseBehavior: 'reset-unload-switch',
   closeSelectsRecent: true,

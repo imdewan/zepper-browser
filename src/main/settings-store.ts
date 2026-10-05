@@ -8,7 +8,11 @@ export class SettingsStore {
   private readonly listeners = new Set<(next: Settings, prev: Settings) => void>()
 
   constructor() {
-    this.value = { ...DEFAULT_SETTINGS, ...(this.file.read() ?? {}) }
+    const saved: Partial<Settings> & { windowTransparency?: number } = this.file.read() ?? {}
+    // Transparency used to top out at what is now 50% (the scale now goes further); keep the same look.
+    if (saved.windowTransparency !== undefined && saved.transparency === undefined) saved.transparency = saved.windowTransparency / 2
+    delete saved.windowTransparency
+    this.value = { ...DEFAULT_SETTINGS, ...saved }
   }
 
   get(): Settings {
