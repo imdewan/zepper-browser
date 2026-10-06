@@ -65,7 +65,6 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 - **Drag and drop** for everything: reorder, pin, add to Essentials, move to another space.
 - **Split view:** up to four tabs side by side, stacked or in a grid.
 - **Compact mode** hides the sidebar until you reach for the window edge.
-- **Tidy Tabs** sorts a messy space into named folders with Apple Intelligence, on your Mac.
 
 **Command bar.** ⌘T to search, enter an address or jump to an open tab. DuckDuckGo bangs (`!yt cats`, `!gh electron`) resolve locally, so they go straight to the site.
 
@@ -82,6 +81,16 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 | Secure DNS                 | DNS over HTTPS, automatic or through Cloudflare, Quad9 or Google                       |
 | Global Privacy Control     | Asks sites not to sell or share your data                                              |
 | Private windows            | A throwaway session that leaves nothing behind                                         |
+
+**Apple Intelligence, on your Mac.** Nothing leaves your computer.
+
+- **Summarise or ask the page:** a summary as soon as you open the panel (⇧⌘A), then answers to your questions about the page.
+- **Translate pages** in place, keeping links and formatting.
+- **Search history by meaning:** describe what you remember ("that article about async Rust") and find it.
+- **Tidy Tabs** sorts a messy space into named folders.
+- **Tabs you haven't opened lately** get a gentle nudge to close or file them.
+
+**Arc-style captures.** ⇧⌘2: click an element, drag a region, or take the visible screen or the whole page. It's copied straight away, with a thumbnail you can drag into other apps.
 
 **Media.** A now-playing card for audio in other tabs, automatic picture-in-picture when you leave a playing video, and optional Google Widevine for Netflix and other streaming services.
 
@@ -114,21 +123,21 @@ Some ideas for your fork:
 
 ## Getting started
 
-**Requirements:** macOS, [Node.js](https://nodejs.org/) 22 or later, npm 11. Tidy Tabs needs Xcode 26 to build its helper (optional).
+**Requirements:** macOS, [Node.js](https://nodejs.org/) 22 or later, npm 11. The Apple Intelligence helper needs Xcode 26 to build (optional; macOS 26 or later to run).
 
 ```bash
 npm install
 npm run dev
 ```
 
-| Command                | What it does                                                       |
-| ---------------------- | ------------------------------------------------------------------ |
-| `npm run dev`          | Runs Zepper with hot reload for the UI                             |
-| `npm run check`        | Type-checks, lints and checks formatting                           |
-| `npm run build`        | Bundles main, preload and UI into `out/`                           |
-| `npm run dist`         | Builds the macOS app (`.dmg` and `.zip`) into `dist/`              |
-| `npm run build:native` | Builds the Tidy Tabs helper into `build/bin/`                      |
-| `npm run brand:dev`    | Shows the development runtime as "Zepper" in the menu bar and Dock |
+| Command                | What it does                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------- |
+| `npm run dev`          | Runs Zepper with hot reload for the UI                                          |
+| `npm run check`        | Type-checks, lints and checks formatting                                        |
+| `npm run build`        | Bundles main, preload and UI into `out/`                                        |
+| `npm run dist`         | Builds the macOS app (`.dmg` and `.zip`) into `dist/`                           |
+| `npm run build:native` | Builds the on-device intelligence helper (`native/zepper-ai`) into `build/bin/` |
+| `npm run brand:dev`    | Shows the development runtime as "Zepper" in the menu bar and Dock              |
 
 ### Protected video (Widevine)
 
@@ -187,7 +196,7 @@ Run `npm run vmp:sign` again after reinstalling Electron, and `npm run vmp:login
 | `src/renderer/src/overlay/` | A transparent layer above the pages: command bar, popovers, settings, dialogs, history, downloads                                    |
 | `src/renderer/src/pip/`     | Controls for the floating picture-in-picture player                                                                                  |
 | `src/shared/`               | Types, settings and theme helpers shared by every process                                                                            |
-| `native/tidy/`              | A small Swift helper that asks Apple Intelligence to group tabs                                                                      |
+| `native/zepper-ai/`         | A Swift helper for Apple's on-device models: summaries, answers, translation, embeddings, Tidy Tabs                                  |
 | `scripts/`                  | Packaging hooks, icon and screenshot generators                                                                                      |
 
 </details>

@@ -40,6 +40,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
   - move to another space by dropping on its dot.
 - **Split view:** up to four tabs side by side, stacked or in a grid, with resizable dividers.
 - **Tidy:** one click groups a space's tabs into named folders, with Undo. It uses Apple Intelligence on the Mac (macOS 26 and later), so nothing leaves your computer; elsewhere it groups tabs from the same site.
+- **Tabs you haven't opened lately:** a card above them offers to close them (one ⇧⌘T brings them back) or set them aside in a folder; after 3 days by default (Settings → Tabs).
 - Reopen closed tabs, unload tabs, clear unpinned tabs.
 
 ## Command bar and search
@@ -69,6 +70,20 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - **Browser identity:** Chrome, Edge, Firefox, Safari or custom, with matching client hints.
 - **Site panel:** certificate viewer, permissions, and cookies and site data per domain.
 - **Page dialogs** name the site asking, block spam, and include HTTP sign-in.
+
+## Apple Intelligence (on the Mac)
+
+Everything here runs on your Mac with Apple's on-device models (macOS 26 and later); nothing is sent anywhere.
+
+- **Summarise or ask the page** (✦ in the address pill, ⇧⌘A, or the page menu): a summary streams in as soon as the panel opens; follow-up questions are answered from the parts of the page most related to them.
+- **Translate pages:** when a page isn't in your language, a translate button appears in the address pill. Paragraphs on screen are translated first, links and formatting are kept, text added later is translated too, and the original comes back with one click. The faster model is used when its languages are downloaded (System Settings → General → Language & Region → Translation Languages).
+- **Search history by meaning:** on the History page, a query of a few words shows Best matches by meaning, re-ranked by Apple Intelligence. The index lives with your history and goes when history is cleared.
+- **Tidy Tabs** (see Tabs).
+
+## Captures
+
+- ⇧⌘2 freezes and dims the page. Hover to highlight an element and click to capture it, or drag a region; Visible (V) and Full page (F) take the screen or the whole page; Esc cancels.
+- Captures are copied to the clipboard and marked with their pixel density (Retina captures open at their real size). A card offers Save (full pages save straight to Downloads), Show in Finder and Retake, and the thumbnail drags into other apps.
 
 ## Media
 

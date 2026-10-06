@@ -34,7 +34,8 @@ The **main process owns all state**. Renderers never change it directly:
 | `extensions.ts`                          | Chrome extension APIs (`electron-chrome-extensions`) and the Chrome Web Store, plus enable/disable/remove                                                                              |
 | `downloads.ts`, `history.ts`, `bangs.ts` | The download list, browsing history, and local DuckDuckGo bang resolution                                                                                                              |
 | `site.ts`                                | Per-site permissions and captured certificate chains                                                                                                                                   |
-| `tidy.ts`                                | Tidy Tabs: asks the `native/tidy` Swift helper (Apple's on-device Foundation Models) to group tabs, or groups them by site                                                             |
+| `ai.ts`, `tidy.ts`, `semantic.ts`        | The on-device intelligence helper (started on demand, stopped when idle), Tidy Tabs, and history search by meaning                                                                     |
+| `shields.ts`, `zoom.ts`, `capture.ts`    | Privacy protections (link cleaning, HTTPS upgrades, fingerprinting seeds), per-site zoom, and screen captures                                                                          |
 | `persist.ts`, `settings-store.ts`        | Atomic, debounced JSON files under the user data folder                                                                                                                                |
 | `devtools-server.ts`                     | Development-only debug endpoint (see below)                                                                                                                                            |
 
@@ -68,9 +69,15 @@ This runs in every frame of every page before the page's own scripts:
 
 Code run in the page's main world goes through `contextBridge.executeInMainWorld` and must be self-contained.
 
-## Tidy Tabs
+## On-device intelligence
 
-`native/tidy/main.swift` is a command-line helper built with `npm run build:native` and bundled into the app as `Resources/bin/zepper-tidy`. `--check` reports whether Apple Intelligence is available. Otherwise it reads the tabs' titles and hosts as JSON on stdin and uses guided generation (`@Generable`) to return named groups of tab indexes. The model runs on the Mac. If the helper is missing, Apple Intelligence is off, or the model fails, `tidy.ts` groups tabs by site instead.
+`native/zepper-ai/main.swift` is a small Swift program built with `npm run build:native` and bundled as `Resources/bin/zepper-ai`. `ai.ts` starts it when needed and talks to it over stdin and stdout, one JSON request per line; it exits after a few idle minutes. It uses:
+
+- **Foundation Models** (Apple Intelligence) for Tidy Tabs (guided generation with `@Generable`), page summaries and answers (streamed), and re-ranking history matches.
+- **NaturalLanguage** contextual embeddings for history search by meaning, and language detection.
+- **Translation** for translating pages, a paragraph at a time as attributed text, so each translated piece maps back to the text node (and link) it came from.
+
+Everything runs on the Mac. Where Apple Intelligence isn't available, Tidy Tabs groups by site and the other features stay hidden.
 
 ## Protected video
 

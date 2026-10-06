@@ -47,17 +47,17 @@ git merge upstream/main
 
 ## Change the behaviour
 
-| What                                                                    | Where                                                                                                                          |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Default settings                                                        | `DEFAULT_SETTINGS` in `src/shared/settings.ts`                                                                                 |
-| Search engines                                                          | `SEARCH_ENGINES` in `src/shared/settings.ts`                                                                                   |
-| Keyboard shortcuts and menus                                            | `src/main/menu.ts`                                                                                                             |
-| DuckDuckGo bangs                                                        | `src/main/bangs.ts` (the bundled list is `src/main/bangs-top.json`)                                                            |
-| Ad-blocking filter lists                                                | `AdBlock.start()` in `src/main/adblock.ts`. Swap the prebuilt lists for your own with Ghostery's `ElectronBlocker.fromLists()` |
-| Privacy protections (HTTPS upgrades, link cleaning, cross-site cookies) | `src/main/shields.ts` and `src/main/adblock.ts`                                                                                |
-| Fingerprinting protection                                               | `fingerprintShim` in `src/preload/page.ts`                                                                                     |
-| User agent and site compatibility                                       | `src/main/compat.ts`                                                                                                           |
-| Tidy Tabs (Apple Intelligence)                                          | `src/main/tidy.ts` and the Swift helper in `native/tidy/`                                                                      |
+| What                                                                       | Where                                                                                                                          |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Default settings                                                           | `DEFAULT_SETTINGS` in `src/shared/settings.ts`                                                                                 |
+| Search engines                                                             | `SEARCH_ENGINES` in `src/shared/settings.ts`                                                                                   |
+| Keyboard shortcuts and menus                                               | `src/main/menu.ts`                                                                                                             |
+| DuckDuckGo bangs                                                           | `src/main/bangs.ts` (the bundled list is `src/main/bangs-top.json`)                                                            |
+| Ad-blocking filter lists                                                   | `AdBlock.start()` in `src/main/adblock.ts`. Swap the prebuilt lists for your own with Ghostery's `ElectronBlocker.fromLists()` |
+| Privacy protections (HTTPS upgrades, link cleaning, cross-site cookies)    | `src/main/shields.ts` and `src/main/adblock.ts`                                                                                |
+| Fingerprinting protection                                                  | `fingerprintShim` in `src/preload/page.ts`                                                                                     |
+| User agent and site compatibility                                          | `src/main/compat.ts`                                                                                                           |
+| On-device intelligence (summaries, translation, history search, Tidy Tabs) | `src/main/ai.ts` and the Swift helper in `native/zepper-ai/`; prompts are in its `main.swift`                                  |
 
 ## Add a feature
 
@@ -82,7 +82,7 @@ That produces a `.dmg` and a `.zip` in `dist/`. A few things to know:
 
 - **Code signing:** to share your build without Gatekeeper warnings, sign and notarise it with your Apple Developer ID (electron-builder picks up your signing identity; see its [code signing docs](https://www.electron.build/code-signing)).
 - **Protected video (Netflix, Spotify…):** needs your own free castLabs EVS account for VMP signing. See [Protected video](../README.md#protected-video-widevine) in the README.
-- **Tidy Tabs** needs Xcode 26 to build its helper (`npm run build:native`, which `npm run dist` runs for you).
+- **The intelligence helper** needs Xcode 26 to build (`npm run build:native`, which `npm run dist` runs for you).
 - **Electron fuses** are flipped in `scripts/after-pack.cjs`; leave them on unless you know why you need one off.
 
 ## Licence
