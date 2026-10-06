@@ -47,6 +47,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - **Tidy:** one click groups a space's tabs into named folders, with Undo. It uses Apple Intelligence on the Mac (macOS 26 and later), so nothing leaves your computer; elsewhere it groups tabs from the same site.
 - **Tabs you haven't opened lately:** a card above them offers to close them (one ⇧⌘T brings them back) or set them aside in a folder; after 3 days by default (Settings → Tabs).
 - Reopen closed tabs, unload tabs, clear unpinned tabs.
+- **Camera, microphone and screen indicators** on tabs using them, in macOS's colours (camera and microphone together show as one camera).
 
 ## Command bar and search
 
@@ -71,6 +72,8 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - **Clear browsing data:** history (by time range), cookies and site data, cached files and the downloads list, across every space.
 - **Downloads:** opening a program or installer asks first.
 - **Pop-ups** have no address bar, so their title shows the site you're on.
+- **Pop-up floods blocked:** windows you open by clicking are never blocked, and a site can open a couple on its own (sign-in, payment, a call's companion window); one that keeps opening them is stopped, with **Always Allow** on the notice. Per site, from the lock icon: Allow, Auto (the default) or Block (only after a click).
+- **Site permissions** in Settings → Privacy: what you've allowed or blocked for each site, with a reset, and whether macOS lets Zepper use the camera, microphone and screen (with a shortcut to System Settings).
 - **Pop-up blocking:** pages can open tabs and windows only right after a click or key press; blocked ones can be opened from a notice.
 - **Private windows** with an in-memory session.
 - **Global Privacy Control** and Do Not Track.
@@ -117,7 +120,7 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
 ## Updates
 
 - Zepper checks for a new version in the background and downloads it. An **Update** button then stays in the sidebar until you click it, which restarts into the new version; quitting installs it too.
-- About Zepper (or Zepper › Check for Updates…) checks straight away and shows where it's at.
+- About Zepper (or Zepper › Check for Updates…) checks straight away and shows where it's at; so does Settings → General, which can also turn background downloads off.
 - Installed somewhere Zepper can't replace itself (straight from the disk image, say), the button opens the download page instead.
 
 ## Extensions, downloads and history

@@ -95,7 +95,11 @@ export class Updater {
   private relaunch = false
   private busy = false
 
-  constructor(private readonly onChange: () => void) {
+  constructor(
+    private readonly onChange: () => void,
+    /** Background checks and downloads (Settings › General); checking by hand always works. */
+    private readonly automatic: () => boolean
+  ) {
     this.feed = process.env['ZEPPER_UPDATE_FEED'] || (app.isPackaged ? FEED : null)
     this.status = this.feed ? { state: 'idle' } : { state: 'off' }
   }
@@ -103,8 +107,11 @@ export class Updater {
   start(): void {
     if (!this.feed) return
     void this.restoreStaged()
-    setTimeout(() => void this.check(), FIRST_CHECK_MS)
-    setInterval(() => void this.check(), CHECK_EVERY_MS).unref()
+    const background = (): void => {
+      if (this.automatic()) void this.check()
+    }
+    setTimeout(background, FIRST_CHECK_MS)
+    setInterval(background, CHECK_EVERY_MS).unref()
     // Quitting with an update ready installs it (and Update restarts into it).
     app.on('will-quit', () => this.install())
   }

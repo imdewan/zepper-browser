@@ -37,6 +37,14 @@ export interface Tab {
   language: string | null
   /** The page is being translated, or shows a translation. */
   translation: 'working' | 'on' | null
+  /** What the page is using right now: camera, microphone, screen (null: none). */
+  capture: CaptureState | null
+}
+
+export interface CaptureState {
+  camera: boolean
+  microphone: boolean
+  screen: boolean
 }
 
 export interface MediaInfo {
@@ -161,6 +169,10 @@ export interface Snapshot {
   defaultBrowser: boolean
   /** Zepper's own updates. */
   update: UpdateStatus
+  /** Sites you've allowed or blocked something for (Settings › Privacy). */
+  sitePermissions: SiteDecisions[]
+  /** What macOS lets Zepper use. */
+  systemAccess: SystemAccess
   /** The session partition whose extensions the UI shows (the active space's); empty in private windows. */
   extensionsPartition: string
   /** What Apple's on-device intelligence can do on this Mac. */
@@ -195,6 +207,8 @@ export interface ToastSpec {
   message: string
   description?: string
   action?: { label: string; command: Command }
+  /** A second, quieter button before the main one. */
+  secondaryAction?: { label: string; command: Command }
   timeout?: number
 }
 
@@ -530,6 +544,8 @@ export type Command =
   | { type: 'media.dismiss'; tabId: string }
   | { type: 'media.pauseOthers'; keepTabId: string }
   | { type: 'site.setPermission'; origin: string; permission: string; state: PermissionState }
+  /** Forget every decision for a site (it asks again). */
+  | { type: 'site.resetPermissions'; origin: string }
   | { type: 'site.clearData'; origin: string }
   | { type: 'site.clearDomain'; domain: string }
   | { type: 'permission.respond'; id: number; allow: boolean }
@@ -628,6 +644,21 @@ export interface ExtensionInfo {
 }
 
 /** What the About page shows. */
+export interface SiteDecisions {
+  origin: string
+  host: string
+  decisions: { key: string; label: string; state: 'allow' | 'block' }[]
+}
+
+/** macOS's answer for Zepper: allowed, refused, or not asked yet. */
+export type AccessState = 'allowed' | 'denied' | 'ask'
+
+export interface SystemAccess {
+  camera: AccessState
+  microphone: AccessState
+  screen: AccessState
+}
+
 /** Where Zepper's own update is at. */
 export type UpdateStatus =
   /** Development builds (no update feed). */

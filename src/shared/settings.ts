@@ -137,6 +137,10 @@ export interface Settings {
   globalPrivacyControl: boolean
   /** Forget browsing history when Zepper quits. */
   clearHistoryOnQuit: boolean
+  /** Pages open windows only right after you click or type (sites you allow are exempt). */
+  blockPopups: boolean
+  /** Look for and download new versions of Zepper in the background. */
+  autoUpdate: boolean
   /** Which browser sites think you're using. */
   userAgent: UserAgentChoice
   customUserAgent: string
@@ -202,6 +206,8 @@ export const DEFAULT_SETTINGS: Settings = {
   adblockAllowlist: [],
   globalPrivacyControl: true,
   clearHistoryOnQuit: false,
+  blockPopups: true,
+  autoUpdate: true,
   userAgent: 'chrome',
   customUserAgent: '',
   pinnedExtensions: [],

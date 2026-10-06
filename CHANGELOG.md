@@ -4,6 +4,21 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- Tabs show when they're using the camera, microphone or screen.
+- Settings → General shows update status, checks on demand, and can turn background downloads off.
+- Settings → Privacy lists each site's permissions (with a reset) and shows what macOS lets Zepper use.
+
+### Changed
+
+- Pop-up blocking only stops floods: windows you open are never blocked, and sites can open a couple on their own. The notice offers Always Allow, and the lock icon sets Allow, Auto or Block per site.
+
+### Fixed
+
+- Cancelling the screen-share picker left the page waiting; it now gets an answer, and the picker closes if the page goes away.
+- Choosing what to share, or answering a permission prompt, counts as a click in the page, so a call's follow-up window isn't blocked.
+
 ## [0.1.0] - 2026-10-06
 
 The first public version.

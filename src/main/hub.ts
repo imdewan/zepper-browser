@@ -1,8 +1,28 @@
-import { BrowserWindow, components, ipcMain, nativeTheme, session, shell, app, webContents, type Session, type WebContents } from 'electron'
+import {
+  BrowserWindow,
+  components,
+  ipcMain,
+  nativeTheme,
+  session,
+  shell,
+  systemPreferences,
+  app,
+  webContents,
+  type Session,
+  type WebContents
+} from 'electron'
 import { join } from 'node:path'
-import { IPC, type Command, type IntelligenceStatus, type VaultRequest, type WidevineStatus } from '@shared/types'
+import {
+  IPC,
+  type AccessState,
+  type Command,
+  type IntelligenceStatus,
+  type SystemAccess,
+  type VaultRequest,
+  type WidevineStatus
+} from '@shared/types'
 import type { AdBlock } from './adblock'
-import { Browser, type BrowserKind, type WindowSeed } from './browser'
+import { Browser, declineShare, type BrowserKind, type WindowSeed } from './browser'
 import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
 import { bangs } from './bangs'
 import { Downloads } from './downloads'
@@ -59,9 +79,14 @@ export class Hub {
   quitWithoutAsking = false
   private secureDns: string | null = null
   /** Zepper's own updates. */
-  readonly updater = new Updater(() => {
-    for (const browser of this.browsers) browser.refresh()
-  })
+  readonly updater = new Updater(
+    () => {
+      for (const browser of this.browsers) browser.refresh()
+    },
+    () => this.services.settings.get().autoUpdate
+  )
+  /** What macOS lets Zepper use (camera, microphone, screen); checked when a window comes forward. */
+  systemAccess: SystemAccess = { camera: 'ask', microphone: 'ask', screen: 'ask' }
   /** Every download, shared by all windows. */
   readonly downloads = new Downloads(() => {
     for (const browser of this.browsers) browser.refresh()
@@ -147,6 +172,10 @@ export class Hub {
       return browser.onWebAuthn(event.sender, event.senderFrame, kind, String(options ?? '{}'))
     })
     ipcMain.on(WEBAUTHN_CANCEL_CHANNEL, (event) => this.owner(event.sender)?.cancelWebAuthn(event.sender))
+    // Pages say when they start or stop using the camera, microphone or screen (for the tab's indicators).
+    ipcMain.on('zepper:capture', (event, detail: unknown) =>
+      this.owner(event.sender)?.onCapture(event.sender, event.senderFrame, String(detail))
+    )
     // Settings › Passwords (Zepper's own UI only).
     ipcMain.handle(IPC.vault, async (event, request: VaultRequest) => {
       const browser = this.uiOwner(event.sender)
@@ -160,8 +189,16 @@ export class Hub {
       if (browser) void browser.selectClientCertificate(url, list, callback)
       else callback()
     })
-    app.on('browser-window-focus', () => this.refreshDefaultBrowser())
+    app.on('browser-window-focus', () => {
+      this.refreshDefaultBrowser()
+      this.refreshSystemAccess()
+    })
     this.refreshDefaultBrowser()
+    this.refreshSystemAccess()
+    // Site decisions show in Settings, in every window.
+    this.services.permissions.onChange(() => {
+      for (const browser of this.browsers) browser.refresh()
+    })
 
     nativeTheme.on('updated', () => this.applyAppIcon())
     services.settings.onChange((next, prev) => {
@@ -331,7 +368,7 @@ export class Hub {
     ses.setDisplayMediaRequestHandler((request, callback) => {
       const wc = request.frame ? webContents.fromFrame(request.frame) : undefined
       const browser = wc ? this.owner(wc) : null
-      if (!wc || !browser) return callback({})
+      if (!wc || !browser) return declineShare(callback)
       void browser.chooseShareSource(wc, request, callback)
     })
   }
@@ -359,6 +396,19 @@ export class Hub {
     app.setAsDefaultProtocolClient('https')
     // macOS asks you to confirm; check again once you have.
     setTimeout(() => this.refreshDefaultBrowser(), 1000)
+  }
+
+  /** Asks macOS again what Zepper may use (after a prompt, or coming back from System Settings). */
+  refreshSystemAccess(): void {
+    const read = (kind: 'camera' | 'microphone' | 'screen'): AccessState => {
+      if (process.platform !== 'darwin') return 'allowed'
+      const status = systemPreferences.getMediaAccessStatus(kind)
+      return status === 'granted' ? 'allowed' : status === 'denied' || status === 'restricted' ? 'denied' : 'ask'
+    }
+    const next: SystemAccess = { camera: read('camera'), microphone: read('microphone'), screen: read('screen') }
+    if (JSON.stringify(next) === JSON.stringify(this.systemAccess)) return
+    this.systemAccess = next
+    for (const browser of this.browsers) browser.refresh()
   }
 
   private refreshDefaultBrowser(): void {

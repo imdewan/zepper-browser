@@ -262,6 +262,87 @@ function privacyControlShim(): void {
   Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: () => true, configurable: true, enumerable: true })
 }
 
+/**
+ * Which of the camera, microphone and screen the page is using (runs in the page's world), for the
+ * tab's indicators. Tracks from getUserMedia and getDisplayMedia (and their clones) count while live;
+ * stop() and "ended" end them. Changes go out as an event only our side knows the name of, sent
+ * with references taken before the page's own scripts run, so a page can't hide its own use.
+ */
+function captureShim(eventName: string): void {
+  type Kind = 'camera' | 'microphone' | 'screen'
+  const dispatch = EventTarget.prototype.dispatchEvent
+  const Custom = CustomEvent
+  const doc = document
+  const live = new Set<MediaStreamTrack>()
+  const kinds = new WeakMap<MediaStreamTrack, Kind>()
+  let last = ''
+  const report = (): void => {
+    const state = { camera: false, microphone: false, screen: false }
+    for (const track of live) {
+      if (track.readyState === 'live') state[kinds.get(track) ?? 'camera'] = true
+      else live.delete(track)
+    }
+    const detail = JSON.stringify(state)
+    if (detail === last) return
+    last = detail
+    dispatch.call(doc, new Custom(eventName, { detail }))
+  }
+  const watch = (track: MediaStreamTrack, kind: Kind): void => {
+    kinds.set(track, kind)
+    live.add(track)
+    track.addEventListener('ended', report)
+  }
+  const proto = (globalThis as unknown as { MediaDevices?: { prototype: object } }).MediaDevices?.prototype
+  const wrap = (name: 'getUserMedia' | 'getDisplayMedia', display: boolean): void => {
+    const descriptor = proto && Object.getOwnPropertyDescriptor(proto, name)
+    if (!proto || typeof descriptor?.value !== 'function') return
+    Object.defineProperty(proto, name, {
+      ...descriptor,
+      value: new Proxy(descriptor.value as (...args: unknown[]) => Promise<MediaStream>, {
+        apply(target, self, args) {
+          return Reflect.apply(target, self, args).then((stream) => {
+            for (const track of stream.getTracks()) watch(track, display ? 'screen' : track.kind === 'video' ? 'camera' : 'microphone')
+            report()
+            return stream
+          })
+        }
+      })
+    })
+  }
+  wrap('getUserMedia', false)
+  wrap('getDisplayMedia', true)
+  const track = MediaStreamTrack.prototype
+  const stop = Object.getOwnPropertyDescriptor(track, 'stop')
+  if (typeof stop?.value === 'function') {
+    Object.defineProperty(track, 'stop', {
+      ...stop,
+      value: new Proxy(stop.value as () => void, {
+        apply(target, self: MediaStreamTrack, args) {
+          const result = Reflect.apply(target, self, args)
+          if (live.has(self)) queueMicrotask(report)
+          return result
+        }
+      })
+    })
+  }
+  const clone = Object.getOwnPropertyDescriptor(track, 'clone')
+  if (typeof clone?.value === 'function') {
+    Object.defineProperty(track, 'clone', {
+      ...clone,
+      value: new Proxy(clone.value as () => MediaStreamTrack, {
+        apply(target, self: MediaStreamTrack, args) {
+          const copy = Reflect.apply(target, self, args) as MediaStreamTrack
+          const kind = kinds.get(self)
+          if (kind) watch(copy, kind)
+          return copy
+        }
+      })
+    })
+  }
+}
+
+const CAPTURE_CHANNEL = 'zepper:capture'
+
 const DRM_NEEDED_CHANNEL = 'zepper:drm-needed'
 /** Fired on the document (shared by the page's world and ours) when the page asks for Widevine. */
 const DRM_NEEDED_EVENT = 'zepper-drm-needed'
@@ -407,6 +488,10 @@ function applyCompat(): void {
   try {
     const config = ipcRenderer.sendSync(PAGE_CONFIG_CHANNEL) as PageConfig
     contextBridge.executeInMainWorld({ func: permissionsShim, args: [config.blockedPermissions ?? []] })
+    // Camera, microphone and screen use, for the tab's indicators (the event name is this page's secret).
+    const captureEvent = `zepper-capture-${crypto.randomUUID()}`
+    document.addEventListener(captureEvent, (event) => ipcRenderer.send(CAPTURE_CHANNEL, String((event as CustomEvent).detail)))
+    contextBridge.executeInMainWorld({ func: captureShim, args: [captureEvent] })
     if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
     if (config.globalPrivacyControl) contextBridge.executeInMainWorld({ func: privacyControlShim })
     if (config.brand)

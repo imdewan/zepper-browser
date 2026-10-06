@@ -43,7 +43,8 @@ export function buildMenu(hub: Hub): Menu {
       label: app.name,
       submenu: [
         { label: `About ${app.name}`, click: run((browser) => browser.handle({ type: 'ui.openAbout' })) },
-        { label: 'Check for Updates…', click: run((browser) => browser.handle({ type: 'app.checkForUpdates' })) },
+        // About checks for updates as it opens, like Chrome's.
+        { label: 'Check for Updates…', click: run((browser) => browser.handle({ type: 'ui.openAbout' })) },
         { type: 'separator' },
         { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: run((browser) => browser.handle({ type: 'ui.openSettings' })) },
         { type: 'separator' },

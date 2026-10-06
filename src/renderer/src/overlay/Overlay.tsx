@@ -95,7 +95,11 @@ export function Overlay(): React.JSX.Element | null {
         setPopover(null)
         setShare(event.request)
       } else if (event.type === 'share.close') {
-        setShare((s) => (s?.id === event.id ? null : s))
+        // Stay up while the picker animates out (a hidden overlay would leave it half-gone until next time).
+        if (shareId.current === event.id) {
+          setExiting(true)
+          setShare(null)
+        }
       } else if (event.type === 'space.startCreate') {
         setPalette(null)
         setPopover(null)
@@ -269,6 +273,9 @@ export function Overlay(): React.JSX.Element | null {
             tidy={snapshot.tidy}
             defaultBrowser={snapshot.defaultBrowser}
             intelligence={snapshot.intelligence}
+            update={snapshot.update}
+            sitePermissions={snapshot.sitePermissions}
+            systemAccess={snapshot.systemAccess}
             initialSection={settingsSection}
             onClose={closeSettings}
           />

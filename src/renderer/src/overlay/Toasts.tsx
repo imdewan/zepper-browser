@@ -48,6 +48,17 @@ function Toast({ toast, onDismiss }: { toast: ToastSpec; onDismiss: () => void }
         <div className="toast-message">{toast.message}</div>
         {toast.description && <div className="toast-description">{toast.description}</div>}
       </div>
+      {toast.secondaryAction && (
+        <button
+          className="toast-action secondary"
+          onClick={() => {
+            zepper.send(toast.secondaryAction!.command)
+            onDismiss()
+          }}
+        >
+          {toast.secondaryAction.label}
+        </button>
+      )}
       {toast.action && (
         <button
           className="toast-action"

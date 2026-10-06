@@ -32,6 +32,7 @@ function createMock(): ZepperApi {
     audibleAt: 0,
     language: null,
     translation: null,
+    capture: null,
     ...fields
   })
   const spaces: Space[] = [
@@ -140,6 +141,8 @@ function createMock(): ZepperApi {
     tidy: { kind: 'ai' },
     defaultBrowser: false,
     update: { state: 'off' },
+    sitePermissions: [],
+    systemAccess: { camera: 'allowed', microphone: 'allowed', screen: 'allowed' },
     extensionsPartition: 'zepper-browsing',
     intelligence: { ai: true, translation: true, embeddings: true },
     windowSize: { width: window.innerWidth, height: window.innerHeight },

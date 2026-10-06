@@ -1,9 +1,9 @@
 import { memo, useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import type { DropTarget, Tab } from '@shared/types'
+import type { CaptureState, DropTarget, Tab } from '@shared/types'
 import { zepper } from '../bridge'
 import { Favicon } from '../Favicon'
-import { Equalizer, IconClose, IconMinus, IconMuted, IconSpeaker } from '../icons'
+import { Equalizer, IconCamera, IconClose, IconMic, IconMinus, IconMuted, IconScreenShare, IconSpeaker } from '../icons'
 import { cx, isPinnedChanged } from '../util'
 import { dragProps, useDrop, type DragItem, type DropPosition } from './dnd'
 
@@ -68,6 +68,9 @@ function sameRow(a: TabRowProps, b: TabRowProps): boolean {
     x.loaded === y.loaded &&
     x.audible === y.audible &&
     x.muted === y.muted &&
+    x.capture?.camera === y.capture?.camera &&
+    x.capture?.microphone === y.capture?.microphone &&
+    x.capture?.screen === y.capture?.screen &&
     x.pinned?.url === y.pinned?.url &&
     x.pinned?.favicon === y.pinned?.favicon
   )
@@ -134,6 +137,8 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
           )}
         </div>
 
+        {tab.capture && <CaptureIndicator capture={tab.capture} />}
+
         {(tab.audible || tab.muted) && (
           <button
             className={cx('tab-button', 'audio', tab.muted ? 'muted' : 'playing')}
@@ -186,3 +191,19 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
     </motion.div>
   )
 }, sameRow)
+
+/**
+ * What a tab is using, in macOS's colours: camera green, microphone orange, screen purple. Camera and
+ * microphone together are one camera icon (as macOS shows one green dot), so a tab has two at most.
+ */
+export function CaptureIndicator({ capture }: { capture: CaptureState }): React.JSX.Element {
+  const using = [capture.camera && 'camera', capture.microphone && 'microphone', capture.screen && 'screen'].filter(Boolean)
+  const what = using.length > 1 ? `${using.slice(0, -1).join(', ')} and ${using[using.length - 1]}` : using[0]
+  return (
+    <span className="tab-capture" title={`Using your ${what}`} role="img" aria-label={`Using your ${what}`}>
+      {capture.camera && <IconCamera size={12} className="capture-camera" />}
+      {capture.microphone && !capture.camera && <IconMic size={12} className="capture-microphone" />}
+      {capture.screen && <IconScreenShare size={12} className="capture-screen" />}
+    </span>
+  )
+}

@@ -316,6 +316,15 @@
   background: rgba(255, 255, 255, 0.28);
 }
 
+.toast-action.secondary {
+  background: transparent;
+  border-top-color: transparent;
+}
+
+.toast-action.secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
 /* ---- Popovers ---------------------------------------------------------------- */
 
 .popover-backdrop {

@@ -1,6 +1,6 @@
 import { app, type Certificate, type Session } from 'electron'
 import { X509Certificate } from 'node:crypto'
-import type { CertificateChain, CertificateEntry, CertificateInfo, NameField, PermissionState } from '@shared/types'
+import type { CertificateChain, CertificateEntry, CertificateInfo, NameField, PermissionState, SiteDecisions } from '@shared/types'
 import { JsonFile } from './persist'
 
 /** Permissions granted silently; everything else sensitive asks first. */
@@ -21,7 +21,9 @@ const LISTED: { key: string; label: string }[] = [
   { key: 'geolocation', label: 'Location' },
   { key: 'notifications', label: 'Notifications' },
   { key: 'display-capture', label: 'Screen sharing' },
-  { key: 'clipboard-read', label: 'Clipboard' }
+  { key: 'clipboard-read', label: 'Clipboard' },
+  // Not an Electron permission: "ask" is the default (blocked, with a notice), "allow" lets the site open windows.
+  { key: 'popups', label: 'Pop-ups' }
 ]
 
 const PROMPT_LABELS: Record<string, string> = {
@@ -37,6 +39,35 @@ const PROMPT_LABELS: Record<string, string> = {
   hid: 'Connect to HID devices',
   serial: 'Connect to serial ports',
   usb: 'Connect to USB devices'
+}
+
+/** A decision's name in Settings ("Camera", "Opening Zoom", "MIDI devices"). */
+function decisionLabel(key: string): string {
+  const listed = LISTED.find((l) => l.key === key)
+  if (listed) return listed.label
+  if (key.startsWith('openExternal:')) {
+    const scheme = key.slice('openExternal:'.length)
+    const name = app.getApplicationNameForProtocol(`${scheme}://`).replace(/\.app$/, '')
+    return name ? `Opening ${name}` : `“${scheme}:” links`
+  }
+  const names: Record<string, string> = {
+    midi: 'MIDI devices',
+    midiSysex: 'MIDI device control',
+    'idle-detection': 'Idle detection',
+    'window-management': 'Window management',
+    hid: 'HID devices',
+    serial: 'Serial ports',
+    usb: 'USB devices'
+  }
+  return names[key] ?? key
+}
+
+function hostOf(origin: string): string {
+  try {
+    return new URL(origin).host || origin
+  } catch {
+    return origin
+  }
 }
 
 /** Maps an Electron permission request to the site-setting keys it needs. */
@@ -86,6 +117,7 @@ export function originOf(url: string): string {
 export class SitePermissions {
   private readonly file: JsonFile<Record<string, Record<string, 'allow' | 'block'>>> | null
   private readonly data: Record<string, Record<string, 'allow' | 'block'>>
+  private readonly listeners = new Set<() => void>()
 
   /** `persist: false` keeps decisions in memory only (private windows). */
   constructor(persist = true) {
@@ -102,7 +134,35 @@ export class SitePermissions {
     if (state === 'ask') delete site[key]
     else site[key] = state
     if (Object.keys(site).length === 0) delete this.data[origin]
+    this.changed()
+  }
+
+  /** Forgets everything decided for a site: it asks again. */
+  reset(origin: string): void {
+    if (!this.data[origin]) return
+    delete this.data[origin]
+    this.changed()
+  }
+
+  /** Every site with a decision, for Settings › Privacy. */
+  sites(): SiteDecisions[] {
+    return Object.entries(this.data)
+      .map(([origin, decisions]) => ({
+        origin,
+        host: hostOf(origin),
+        decisions: Object.entries(decisions).map(([key, state]) => ({ key, label: decisionLabel(key), state }))
+      }))
+      .sort((a, b) => a.host.localeCompare(b.host))
+  }
+
+  onChange(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  private changed(): void {
     this.file?.schedule(this.data)
+    for (const listener of this.listeners) listener()
   }
 
   list(origin: string): { permission: string; label: string; state: PermissionState }[] {

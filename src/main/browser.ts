@@ -18,6 +18,7 @@ import {
   type DisplayMediaRequestHandlerHandlerRequest,
   type NativeImage,
   type Streams,
+  type WebFrameMain,
   type Certificate,
   type ContextMenuParams,
   type DownloadItem,
@@ -46,6 +47,7 @@ import {
   type PermissionState,
   type Rect,
   type Pane,
+  type CaptureState,
   type ShareSource,
   type SiteInfo,
   type Snapshot,
@@ -114,6 +116,9 @@ interface PersistedState {
 const MAX_SPLIT_PANES = 4
 /** How long a click or key press lets a page open a tab or popup (Chrome's user activation). */
 const USER_ACTIVATION_MS = 5000
+/** Pop-up floods: a page may open this many windows on its own (no click) within POPUP_BURST_MS; more are blocked. */
+const POPUP_BURST_LIMIT = 2
+const POPUP_BURST_MS = 10_000
 const USER_INPUT = new Set(['mouseDown', 'mouseUp', 'keyDown', 'rawKeyDown', 'char', 'gestureTap', 'touchStart'])
 
 interface PendingPrompt extends PermissionPrompt {
@@ -132,7 +137,10 @@ interface PendingShare {
   /** Picker ids → the tab or the window/screen they stand for. */
   tabs: Map<string, WebContents>
   sources: Map<string, DesktopCapturerSource>
-  answer: (streams: Streams) => void
+  /** null: cancelled. */
+  answer: (streams: Streams | null) => void
+  /** The page that asked. */
+  webContentsId: number
 }
 
 interface ClosedTab {
@@ -162,6 +170,7 @@ function makeTab(fields: Partial<Tab> & Pick<Tab, 'kind' | 'url'>): Tab {
     audibleAt: 0,
     language: null,
     translation: null,
+    capture: null,
     ...fields
   }
 }
@@ -523,6 +532,10 @@ export class Browser {
   private readonly popups = new Map<BrowserWindow, string>()
   /** When each tab's page last had a click or key press (for pop-up blocking). */
   private readonly lastInput = new Map<number, number>()
+  /** What each tab's frames are capturing (camera, microphone, screen), by frame. */
+  private readonly captureFrames = new Map<string, Map<string, CaptureState>>()
+  /** When each page last opened a window on its own (no click), for spotting pop-up floods. */
+  private readonly popupTimes = new Map<number, number[]>()
   /** Error pages shown for failed loads, and the address each stands in for. */
   private readonly errorPages = new Map<string, string>()
   private tidying = false
@@ -556,6 +569,7 @@ export class Browser {
   ) {
     this.stateFile = kind === 'main' ? new JsonFile<PersistedState>('zepper-state.json', 800) : null
     this.permissions = kind === 'private' ? new SitePermissions(false) : hub.services.permissions
+    if (kind === 'private') this.disposers.push(this.permissions.onChange(() => this.refresh()))
     const saved = this.stateFile?.read()
     if (saved?.version === 1 && saved.spaces.length > 0) {
       // Spaces from before profiles keep sharing the existing sign-ins (as they did); you can
@@ -874,8 +888,10 @@ export class Browser {
     void (async () => {
       for (const kind of media) {
         const status = systemPreferences.getMediaAccessStatus(kind)
-        if (status === 'not-determined') await systemPreferences.askForMediaAccess(kind).catch(() => false)
-        else if (status === 'denied' || status === 'restricted') {
+        if (status === 'not-determined') {
+          await systemPreferences.askForMediaAccess(kind).catch(() => false)
+          this.hub.refreshSystemAccess()
+        } else if (status === 'denied' || status === 'restricted') {
           this.toast({
             id: `system-${kind}`,
             message: `macOS is blocking Zepper’s ${kind}`,
@@ -974,10 +990,13 @@ export class Browser {
     wc.on('input-event', (_event, input) => {
       if (USER_INPUT.has(input.type)) this.lastInput.set(wcId, Date.now())
     })
-    wc.once('destroyed', () => this.lastInput.delete(wcId))
+    wc.once('destroyed', () => {
+      this.lastInput.delete(wcId)
+      this.popupTimes.delete(wcId)
+    })
     wc.on('did-create-window', (child) => this.adoptPopup(child, openerId))
     wc.setWindowOpenHandler((details) => {
-      if (Date.now() - (this.lastInput.get(wcId) ?? 0) > USER_ACTIVATION_MS) return { action: 'deny' }
+      if (this.blocksPopup(wc)) return { action: 'deny' }
       if (details.disposition === 'new-window' && details.features) {
         return {
           action: 'allow',
@@ -1302,7 +1321,7 @@ export class Browser {
         return void shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?Privacy_${pane}`)
       }
       case 'app.checkForUpdates':
-        return void this.openAbout()
+        return void this.hub.updater.check(true)
       case 'app.restartToUpdate':
         return this.hub.restartToUpdate()
       case 'share.choose':
@@ -1365,6 +1384,8 @@ export class Browser {
       case 'site.setPermission':
         this.permissions.set(command.origin, command.permission, command.state)
         return
+      case 'site.resetPermissions':
+        return this.permissions.reset(command.origin)
       case 'site.clearData':
         return void this.clearSiteData(command.origin)
       case 'permission.respond':
@@ -3155,6 +3176,7 @@ export class Browser {
       const page = errorPage(tab.url, details.reason === 'oom' ? 'Out of memory' : `Reason: ${details.reason}`, 'crash')
       this.errorPages.set(page, tab.url)
       update({ loading: false, audible: false, media: null })
+      this.clearCapture(tabId)
       wc.loadURL(page).catch(() => {})
     })
     wc.on('unresponsive', () => void this.onUnresponsive(tabId, wc))
@@ -3176,21 +3198,75 @@ export class Browser {
       if (USER_INPUT.has(input.type)) this.lastInput.set(wcId, Date.now())
     })
     wc.on('did-create-window', (win) => this.adoptPopup(win, tabId))
-    wc.once('destroyed', () => this.lastInput.delete(wcId))
+    // A page (or frame) that goes elsewhere leaves its camera, microphone and screen behind.
+    wc.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) this.clearCapture(tabId)
+    })
+    wc.on('did-frame-navigate', (_event, _url, _code, _status, isMainFrame, processId, routingId) => {
+      if (!isMainFrame) this.setFrameCapture(tabId, `${processId}:${routingId}`, null)
+    })
+    wc.once('destroyed', () => {
+      this.lastInput.delete(wcId)
+      this.popupTimes.delete(wcId)
+      this.captureFrames.delete(tabId)
+    })
+  }
+
+  /** The page preload says what a frame is capturing now (camera, microphone, screen). */
+  onCapture(wc: WebContents, frame: WebFrameMain | null, detail: string): void {
+    const tabId = this.tabByWebContents.get(wc.id)
+    if (!tabId || !frame) return
+    let state: Partial<CaptureState>
+    try {
+      state = JSON.parse(detail) as Partial<CaptureState>
+    } catch {
+      return
+    }
+    const on: CaptureState = { camera: state.camera === true, microphone: state.microphone === true, screen: state.screen === true }
+    this.setFrameCapture(tabId, `${frame.processId}:${frame.routingId}`, on.camera || on.microphone || on.screen ? on : null)
+  }
+
+  private setFrameCapture(tabId: string, frameKey: string, state: CaptureState | null): void {
+    const frames = this.captureFrames.get(tabId) ?? new Map<string, CaptureState>()
+    if (state) frames.set(frameKey, state)
+    else if (!frames.delete(frameKey)) return
+    if (frames.size) this.captureFrames.set(tabId, frames)
+    else this.captureFrames.delete(tabId)
+    this.applyCapture(tabId)
+  }
+
+  private clearCapture(tabId: string): void {
+    if (!this.captureFrames.delete(tabId)) return
+    this.applyCapture(tabId)
+  }
+
+  /** The tab shows what any of its frames is using. */
+  private applyCapture(tabId: string): void {
+    const tab = this.tab(tabId)
+    if (!tab) return
+    const frames = [...(this.captureFrames.get(tabId)?.values() ?? [])]
+    const next: CaptureState | null = frames.length
+      ? { camera: frames.some((f) => f.camera), microphone: frames.some((f) => f.microphone), screen: frames.some((f) => f.screen) }
+      : null
+    const same = next === tab.capture || (next && tab.capture && JSON.stringify(next) === JSON.stringify(tab.capture))
+    if (same) return
+    tab.capture = next
+    this.broadcast()
   }
 
   private handleWindowOpen(openerId: string, details: HandlerDetails): WindowOpenHandlerResponse {
     const openerContents = this.views.get(openerId)?.webContents
-    // Pop-up blocking: pages open tabs and windows only shortly after a click or key press.
-    if (Date.now() - (this.lastInput.get(openerContents?.id ?? -1) ?? 0) > USER_ACTIVATION_MS) {
+    if (openerContents && this.blocksPopup(openerContents)) {
       if (openerId === this.activeTabId || this.attached.has(openerId)) {
+        const origin = originOf(openerContents.getURL())
         const real = /^https?:/.test(details.url)
         this.toast({
           id: 'popup-blocked',
-          message: 'Pop-up blocked',
-          description: safeHost(details.url) || undefined,
-          action: real ? { label: 'Open', command: { type: 'tab.open', input: details.url, where: 'new' } } : undefined,
-          timeout: 5000
+          message: 'Pop-ups blocked',
+          description: `${safeHost(origin) || 'This site'} kept opening windows`,
+          secondaryAction: real ? { label: 'Open', command: { type: 'tab.open', input: details.url, where: 'new' } } : undefined,
+          action: { label: 'Always Allow', command: { type: 'site.setPermission', origin, permission: 'popups', state: 'allow' } },
+          timeout: 6000
         })
       }
       return { action: 'deny' }
@@ -3232,6 +3308,29 @@ export class Browser {
         return view.webContents
       }
     }
+  }
+
+  /**
+   * Pop-up blocking. Windows you open by clicking or typing are never blocked. On their own, pages can
+   * open a couple (sign-in, payment, a call's companion window); a site that keeps going (a flood
+   * of ad windows) is stopped. Per site: "allow" never blocks, "block" allows only after a click.
+   */
+  private blocksPopup(opener: WebContents): boolean {
+    const now = Date.now()
+    if (now - (this.lastInput.get(opener.id) ?? 0) <= USER_ACTIVATION_MS) return false
+    const state = this.permissions.get(originOf(opener.getURL()), 'popups')
+    if (state === 'allow') return false
+    if (state === 'block') return true
+    if (!this.settings.blockPopups) return false
+    const recent = (this.popupTimes.get(opener.id) ?? []).filter((at) => now - at < POPUP_BURST_MS)
+    recent.push(now)
+    this.popupTimes.set(opener.id, recent)
+    return recent.length > POPUP_BURST_LIMIT
+  }
+
+  /** A choice you made in Zepper's own UI for a page (a prompt, the share picker) counts as a click there. */
+  private activatedFromUi(webContentsId: number): void {
+    this.lastInput.set(webContentsId, Date.now())
   }
 
   /** Captures now-playing details when a tab starts making sound. */
@@ -3869,23 +3968,32 @@ export class Browser {
   ): Promise<void> {
     if (this.share) this.cancelShare()
     let answered = false
+    // The page closing or going somewhere else takes its picker with it (as in Chrome).
     const onGone = (): void => {
       if (this.share?.id !== pending.id) return
       this.share = null
-      pending.answer({})
+      pending.answer(null)
       this.emit({ type: 'share.close', id: pending.id }, 'overlay')
+    }
+    const onNavigate = (details: { isMainFrame: boolean; isSameDocument: boolean }): void => {
+      if (details.isMainFrame && !details.isSameDocument) onGone()
     }
     const pending: PendingShare = {
       id: ++this.shareSeq,
+      webContentsId: wc.id,
       audio: request.audioRequested,
       tabs: new Map(),
       sources: new Map(),
       answer: (streams) => {
         if (answered) return
         answered = true
-        if (!wc.isDestroyed()) wc.off('destroyed', onGone)
+        if (!wc.isDestroyed()) {
+          wc.off('destroyed', onGone)
+          wc.off('did-start-navigation', onNavigate)
+        }
         try {
-          callback(streams)
+          if (streams) callback(streams)
+          else declineShare(callback)
         } catch (error) {
           console.warn('[share] could not start sharing', error)
         }
@@ -3893,6 +4001,7 @@ export class Browser {
     }
     this.share = pending
     wc.once('destroyed', onGone)
+    wc.on('did-start-navigation', onNavigate)
 
     const screenAccess = systemPreferences.getMediaAccessStatus('screen') === 'granted'
     const captured = await desktopCapturer
@@ -3952,16 +4061,17 @@ export class Browser {
     const pending = this.share
     if (!pending || pending.id !== id) return
     this.share = null
-    if (!sourceId) return pending.answer({})
+    this.activatedFromUi(pending.webContentsId)
+    if (!sourceId) return pending.answer(null)
     const tab = pending.tabs.get(sourceId)
     if (tab) {
-      if (tab.isDestroyed()) return pending.answer({})
+      if (tab.isDestroyed()) return pending.answer(null)
       // The tab keeps playing for you while it's shared (enableLocalEcho).
       const frame = tab.mainFrame
       return pending.answer(audio && pending.audio ? { video: frame, audio: frame, enableLocalEcho: true } : { video: frame })
     }
     const source = pending.sources.get(sourceId)
-    if (!source) return pending.answer({})
+    if (!source) return pending.answer(null)
     // The Mac's sound without Zepper's own: in a call, the other side's voices (played by Zepper) would
     // otherwise go back to them as an echo. Electron passes the device id through to Chromium as is.
     const systemAudio = 'loopbackWithoutChrome' as unknown as 'loopback'
@@ -3972,7 +4082,7 @@ export class Browser {
     const pending = this.share
     if (!pending) return
     this.share = null
-    pending.answer({})
+    pending.answer(null)
     this.emit({ type: 'share.close', id: pending.id }, 'overlay')
   }
 
@@ -3993,6 +4103,7 @@ export class Browser {
     this.prompts = this.prompts.filter((p) => p.id !== id)
     if (this.showingPrompt === id) this.showingPrompt = null
     if (!prompt) return
+    this.activatedFromUi(prompt.webContentsId)
     const state: PermissionState = allow ? 'allow' : 'block'
     for (const key of prompt.keys) this.permissions.set(prompt.origin, key, state)
     // Requests the decision now covers (queued behind this one) are answered with it.
@@ -4724,6 +4835,8 @@ export class Browser {
       tidy: this.settings.aiFeatures ? this.hub.tidy : { kind: 'site', reason: 'Apple Intelligence features are turned off in Settings.' },
       defaultBrowser: this.hub.defaultBrowser,
       update: this.hub.updater.status,
+      sitePermissions: this.permissions.sites(),
+      systemAccess: this.hub.systemAccess,
       intelligence: this.ai,
       extensionsPartition: this.extensionsPartition(),
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
@@ -4842,6 +4955,14 @@ function uniquePath(path: string): string {
     const candidate = `${stem} (${i})${ext}`
     if (!existsSync(candidate)) return candidate
   }
+}
+
+/**
+ * Turns a getDisplayMedia request down: the callback with nothing at all (the page's promise rejects).
+ * An empty object isn't a refusal to Electron: it throws, and the page would wait forever.
+ */
+export function declineShare(callback: (streams: Streams) => void): void {
+  ;(callback as (streams?: Streams) => void)()
 }
 
 /** The Mac's own audio can be shared with a window or screen: Core Audio taps, macOS 14.2 and later. */

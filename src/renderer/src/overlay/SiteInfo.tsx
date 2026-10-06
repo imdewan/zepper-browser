@@ -171,7 +171,8 @@ function SiteSummary({ info, onShowCertificate, onShowData }: SiteSummaryProps):
               <div className="segmented">
                 {(['allow', 'ask', 'block'] as const).map((state) => (
                   <button key={state} className={cx(p.state === state && 'selected')} onClick={() => setPermission(p.permission, state)}>
-                    {state === 'allow' ? 'Allow' : state === 'ask' ? 'Ask' : 'Block'}
+                    {/* Pop-ups aren't asked about: by default only floods of them are blocked. */}
+                    {state === 'allow' ? 'Allow' : state === 'ask' ? (p.permission === 'popups' ? 'Auto' : 'Ask') : 'Block'}
                   </button>
                 ))}
               </div>

@@ -1990,3 +1990,30 @@ button.site-button.insecure:hover {
 .stale-tabs-actions button:hover {
   background: var(--press);
 }
+
+/* ---- Camera, microphone and screen in use ---------------------------------------------- */
+
+.tab-capture {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  margin-right: 2px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+}
+
+/* macOS's indicator colours, solid on any theme. */
+.capture-camera {
+  color: #30b14f;
+}
+
+.capture-microphone {
+  color: #f08c00;
+}
+
+.capture-screen {
+  color: #a24fe0;
+}

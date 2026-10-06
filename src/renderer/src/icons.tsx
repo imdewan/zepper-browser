@@ -1,5 +1,5 @@
 import type { SVGProps } from 'react'
-import { CircleArrowUp, KeyRound, Monitor, Smartphone, UserRoundKey, type LucideProps } from 'lucide-react'
+import { CircleArrowUp, KeyRound, Mic, Monitor, MonitorUp, Smartphone, UserRoundKey, Video, type LucideProps } from 'lucide-react'
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number }
 
@@ -286,4 +286,14 @@ export const IconUpdate = ({ size = 16, ...p }: IconProps): React.JSX.Element =>
 )
 export const IconMonitor = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
   <Monitor size={size} strokeWidth={1.9} aria-hidden="true" {...(p as LucideProps)} />
+)
+/** In use by a tab: camera, microphone, screen. */
+export const IconCamera = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
+  <Video size={size} strokeWidth={2.2} aria-hidden="true" {...(p as LucideProps)} />
+)
+export const IconMic = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
+  <Mic size={size} strokeWidth={2.2} aria-hidden="true" {...(p as LucideProps)} />
+)
+export const IconScreenShare = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
+  <MonitorUp size={size} strokeWidth={2.2} aria-hidden="true" {...(p as LucideProps)} />
 )

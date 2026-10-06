@@ -25,7 +25,7 @@ import {
   type Settings,
   type UserAgentChoice
 } from '@shared/settings'
-import type { IntelligenceStatus, Snapshot, WidevineStatus } from '@shared/types'
+import type { AccessState, IntelligenceStatus, SiteDecisions, Snapshot, SystemAccess, UpdateStatus, WidevineStatus } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose } from '../icons'
 import { cx, isMac } from '../util'
@@ -112,6 +112,9 @@ interface SettingsPanelProps {
   tidy: Snapshot['tidy']
   defaultBrowser: boolean
   intelligence: IntelligenceStatus
+  update: UpdateStatus
+  sitePermissions: SiteDecisions[]
+  systemAccess: SystemAccess
   /** The section to open on (e.g. "passwords" from the passwords popup). */
   initialSection?: string
   onClose: () => void
@@ -141,6 +144,9 @@ export function SettingsPanel({
   tidy,
   defaultBrowser,
   intelligence,
+  update,
+  sitePermissions,
+  systemAccess,
   initialSection,
   onClose
 }: SettingsPanelProps): React.JSX.Element {
@@ -252,6 +258,13 @@ export function SettingsPanel({
                     ]}
                     onChange={(newWindowSpace) => set({ newWindowSpace })}
                   />
+                </Row>
+                <UpdatesRow update={update} />
+                <Row
+                  label="Download updates automatically"
+                  hint="Zepper looks for a new version every few hours and gets it ready; an Update button then appears in the sidebar."
+                >
+                  <Toggle checked={settings.autoUpdate} disabled={update.state === 'off'} onChange={(autoUpdate) => set({ autoUpdate })} />
                 </Row>
                 <Row label="Welcome and setup" hint="Import from other browsers, pick a look and see what Zepper can do.">
                   <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openOnboarding' })}>
@@ -595,6 +608,14 @@ export function SettingsPanel({
                     <option value="off">Off</option>
                   </select>
                 </Row>
+                <Row
+                  label="Block pop-up floods"
+                  hint="Windows you open are never blocked, and sites can open a couple on their own; one that keeps opening them is stopped. Change it for a site from its lock icon."
+                >
+                  <Toggle checked={settings.blockPopups} onChange={(blockPopups) => set({ blockPopups })} />
+                </Row>
+                <SitePermissionsRow sites={sitePermissions} />
+                <SystemAccessRows access={systemAccess} />
                 <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
                   <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
                 </Row>
@@ -713,6 +734,122 @@ function ClearBrowsingData(): React.JSX.Element {
         </button>
       </div>
     </div>
+  )
+}
+
+/** Settings › General: where Zepper's update is at, and what to do about it. */
+function UpdatesRow({ update }: { update: UpdateStatus }): React.JSX.Element {
+  const check = (): void => zepper.send({ type: 'app.checkForUpdates' })
+  const restart = (): void => zepper.send({ type: 'app.restartToUpdate' })
+  const [hint, control]: [string, React.ReactNode] = (() => {
+    switch (update.state) {
+      case 'off':
+        return ['Updates are off in development builds.', null]
+      case 'checking':
+        return ['Checking for updates…', null]
+      case 'downloading':
+        return [`Downloading Zepper ${update.version}… ${Math.round(update.progress * 100)}%`, null]
+      case 'ready':
+        return [
+          `Zepper ${update.version} is ready. Restart to update (quitting installs it too).`,
+          <button key="restart" className="panel-button primary" onClick={restart}>
+            Restart to Update
+          </button>
+        ]
+      case 'manual':
+        return [
+          `Zepper ${update.version} is out. Zepper can’t update itself where it’s installed: download it and move it to Applications.`,
+          <button key="download" className="panel-button primary" onClick={restart}>
+            Download
+          </button>
+        ]
+      case 'error':
+        return [update.message + '.', <CheckButton key="check" onClick={check} />]
+      case 'current':
+        return ['Zepper is up to date.', <CheckButton key="check" onClick={check} />]
+      default:
+        return ['Zepper checks for new versions and downloads them in the background.', <CheckButton key="check" onClick={check} />]
+    }
+  })()
+  return (
+    <Row label="Updates" hint={hint}>
+      {control}
+    </Row>
+  )
+}
+
+function CheckButton({ onClick }: { onClick: () => void }): React.JSX.Element {
+  return (
+    <button className="panel-button" onClick={onClick}>
+      Check Now
+    </button>
+  )
+}
+
+/** Settings › Privacy: sites you've allowed or blocked something for, each resettable. */
+function SitePermissionsRow({ sites }: { sites: SiteDecisions[] }): React.JSX.Element {
+  const summary = (site: SiteDecisions): string => {
+    const named = (state: 'allow' | 'block'): string[] => site.decisions.filter((d) => d.state === state).map((d) => d.label)
+    const allowed = named('allow')
+    const blocked = named('block')
+    return [allowed.length ? `${allowed.join(', ')} allowed` : '', blocked.length ? `${blocked.join(', ')} blocked` : '']
+      .filter(Boolean)
+      .join(' · ')
+  }
+  return (
+    <div className="settings-row settings-row-stacked">
+      <div className="settings-row-text">
+        <div className="settings-row-label">Site permissions</div>
+        <div className="settings-row-hint">
+          {sites.length
+            ? 'What you’ve allowed or blocked for each site. Change one from the site’s lock icon, or reset a site to be asked again.'
+            : 'Sites you allow or block the camera, microphone, location, notifications or pop-ups for show up here.'}
+        </div>
+      </div>
+      {sites.length > 0 && (
+        <div className="site-chips">
+          {sites.map((site) => (
+            <span key={site.origin} className="site-chip" title={summary(site)}>
+              {site.host}
+              <span className="site-chip-detail">{summary(site)}</span>
+              <button title={`Reset ${site.host}`} onClick={() => zepper.send({ type: 'site.resetPermissions', origin: site.origin })}>
+                <IconClose size={9} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const ACCESS_LABELS: [keyof SystemAccess, string, string][] = [
+  ['camera', 'Camera', 'camera'],
+  ['microphone', 'Microphone', 'microphone'],
+  ['screen', 'Screen & System Audio Recording', 'screen']
+]
+
+function accessHint(state: AccessState): string {
+  if (state === 'allowed') return 'Allowed. Sites still ask you first.'
+  if (state === 'denied') return 'Turned off for Zepper in macOS. Turn it on in System Settings, then reload the page.'
+  return 'macOS asks the first time a site you’ve allowed uses it.'
+}
+
+/** Settings › Privacy: what macOS lets Zepper use, with a way to change it there. */
+function SystemAccessRows({ access }: { access: SystemAccess }): React.JSX.Element {
+  return (
+    <>
+      {ACCESS_LABELS.map(([key, label]) => (
+        <Row key={key} label={`macOS: ${label}`} hint={accessHint(access[key])}>
+          <button
+            className={cx('panel-button', access[key] === 'denied' && 'primary')}
+            onClick={() => zepper.send({ type: 'app.openMediaPrivacySettings', kind: key })}
+          >
+            Open Settings
+          </button>
+        </Row>
+      ))}
+    </>
   )
 }
 
