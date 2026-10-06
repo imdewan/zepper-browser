@@ -1,4 +1,6 @@
 import { session, type BrowserWindow, type Extension, type Session, type WebContents } from 'electron'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { ElectronChromeExtensions, setSessionPartitionResolver } from 'electron-chrome-extensions'
 import { installChromeWebStore, uninstallExtension } from 'electron-chrome-web-store'
 import type { ExtensionInfo } from '@shared/types'
@@ -59,8 +61,12 @@ export class Extensions {
         removeWindow: () => {}
       })
     )
-    // Installed from this session's Web Store: every other session gets it too.
-    ses.extensions.on('extension-loaded', (_event, extension) => this.spread(extension))
+    ses.extensions.on('extension-loaded', (_event, extension) => {
+      // Content scripts first get chrome.storage.sync (see patchContentScripts); that needs a reload, once.
+      if (patchContentScripts(extension.path)) return this.reload(extension)
+      // Installed from this session's Web Store: every other session gets it too.
+      this.spread(extension)
+    })
     if (this.started) void this.prepare(ses)
   }
 
@@ -84,6 +90,17 @@ export class Extensions {
     }
     for (const off of this.settings?.get().disabledExtensions ?? []) {
       if (ses.extensions.getExtension(off.id)) ses.extensions.removeExtension(off.id)
+    }
+  }
+
+  /** Loads an extension again everywhere it's loaded (after its files changed). */
+  private reload(extension: Extension): void {
+    for (const ses of this.contexts.keys()) {
+      if (!ses.extensions.getExtension(extension.id)) continue
+      ses.extensions.removeExtension(extension.id)
+      void ses.extensions.loadExtension(extension.path, { allowFileAccess: true }).catch((error) => {
+        console.error('[extensions] failed to reload', extension.id, error)
+      })
     }
   }
 
@@ -167,4 +184,50 @@ function describe(extension: Extension, enabled: boolean): ExtensionInfo {
 /** Manifest strings like "__MSG_appDesc__" are localized; without the messages, leave them out. */
 function localized(text: string, _extension: Extension): string {
   return /^__MSG_.+__$/.test(text) ? '' : text
+}
+
+const SYNC_SHIM = 'zepper-storage-sync.js'
+const SYNC_SHIM_SOURCE = `// Added by Zepper. Electron has no chrome.storage.sync, so content scripts use local storage instead,
+// as the extension's own pages (popup, options, background) already do: they then share settings.
+(() => {
+  for (const ns of [globalThis.chrome, globalThis.browser]) {
+    const storage = ns && ns.storage
+    if (!storage || !storage.local || storage.__zepperSync) continue
+    try {
+      Object.defineProperty(ns, 'storage', {
+        value: { ...storage, sync: storage.local, managed: storage.local, __zepperSync: true },
+        configurable: true,
+        writable: true
+      })
+    } catch {}
+  }
+})()
+`
+
+/**
+ * Electron provides chrome.storage.local but not chrome.storage.sync, which many extensions keep
+ * their settings in. Their own pages get sync aliased to local (electron-chrome-extensions does
+ * that), but their content scripts don't, so a setting changed in the popup never reaches the page.
+ * This adds a tiny first content script that makes the same alias. Returns whether it changed the
+ * extension (which then needs loading again).
+ */
+function patchContentScripts(extensionPath: string): boolean {
+  try {
+    const manifestPath = join(extensionPath, 'manifest.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { content_scripts?: { js?: string[] }[] }
+    const scripts = (manifest.content_scripts ?? []).filter((entry) => Array.isArray(entry.js) && entry.js.length > 0)
+    if (scripts.length === 0) return false
+    const shimPath = join(extensionPath, SYNC_SHIM)
+    const shimCurrent = existsSync(shimPath) && readFileSync(shimPath, 'utf8') === SYNC_SHIM_SOURCE
+    const missing = scripts.filter((entry) => entry.js![0] !== SYNC_SHIM)
+    if (missing.length === 0 && shimCurrent) return false
+    writeFileSync(shimPath, SYNC_SHIM_SOURCE)
+    for (const entry of missing) entry.js!.unshift(SYNC_SHIM)
+    if (missing.length > 0) writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
+    return true
+  } catch (error) {
+    // A manifest Zepper can't read (comments, say) is left as it is.
+    console.warn('[extensions] could not add chrome.storage.sync for content scripts', extensionPath, error)
+    return false
+  }
 }
