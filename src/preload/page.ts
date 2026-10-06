@@ -155,7 +155,8 @@ function chromeIdentityShim(name: string, major: string, full: string): void {
  * Fingerprinting protection (runs in the page's world). Readouts fingerprinters rely on get
  * tiny, consistent noise: the same site sees the same values all session, another site (or the
  * next launch) sees different ones, so they can't be used to recognise you. Patched functions
- * are Proxies, so they still look native.
+ * are Proxies, so they still look native. The CPU core count is left alone: workers report the
+ * real one, and X's sign-in refused a page and its workers that disagreed.
  */
 function fingerprintShim(seed: number): void {
   let state = seed >>> 0 || 0x9e3779b9
@@ -261,14 +262,6 @@ function fingerprintShim(seed: number): void {
     if (data instanceof Float32Array) for (let i = 0; i < data.length; i++) data[i] += (bits[i & 255] ? 1 : -1) * 1e-4
     return result
   })
-
-  // CPU cores: somewhere between 2 and the real count.
-  const cores = Object.getOwnPropertyDescriptor(Navigator.prototype, 'hardwareConcurrency')
-  if (cores?.get) {
-    const real = cores.get.call(navigator) as number
-    const shown = Math.max(2, Math.min(real, 2 + Math.floor(random() * Math.max(1, real - 1))))
-    Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { ...cores, get: disguise(cores.get, { apply: () => shown }) })
-  }
 }
 
 /**

@@ -66,7 +66,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - **Ad blocking:** built in, using uBlock Origin's filter lists (refreshed daily). Covers network requests, cosmetic filtering and scriptlets, including YouTube ads.
 - **Protections, on by default.** Each can be turned off in Settings → Privacy, and all of them for one site from the lock icon:
   - **Cookie banners hidden**, with uBlock Origin's annoyance lists.
-  - **Fingerprinting protection:** tiny per-site, per-session noise on canvas, WebGL and audio readouts, a limited CPU core count, and WebRTC kept to the public network interface.
+  - **Fingerprinting protection:** tiny per-site, per-session noise on canvas, WebGL and audio readouts, and WebRTC kept to the public network interface.
   - **Cross-site cookies blocked:** third-party requests can't set or send cookies (sign-in frames from Google, Microsoft and Apple still work).
   - **HTTPS upgrades** for plain-HTTP pages, falling back for sites without HTTPS.
   - **Clean links:** click identifiers (fbclid, gclid, msclkid…) are removed and Google AMP pages open on the real site.

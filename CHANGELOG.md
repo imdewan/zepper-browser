@@ -4,6 +4,12 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-07
+
+### Fixed
+
+- With fingerprinting protection on, X answered "We've temporarily limited your login". The protection lowered the CPU core count pages see, but background workers still reported the real one, and X's sign-in check refuses that mismatch. The core count is no longer changed; the rest of the protection stays on, on X too.
+
 ## [0.1.1] - 2026-10-06
 
 ### Added
@@ -59,6 +65,7 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/imdewan/zepper-browser/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/imdewan/zepper-browser/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/imdewan/zepper-browser/releases/tag/v0.1.0

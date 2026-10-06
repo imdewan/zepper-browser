@@ -79,17 +79,17 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 
 **Privacy, the way it should be.** Every protection is on by default and can be switched off for one site from the lock icon.
 
-| Protection                 | What it does                                                                           |
-| -------------------------- | -------------------------------------------------------------------------------------- |
-| Ad and tracker blocking    | uBlock Origin's filter lists, including YouTube ads                                    |
-| Cookie banners hidden      | uBlock Origin's annoyance lists                                                        |
-| Fingerprinting protection  | Per-site noise on canvas, WebGL and audio; limited hardware details; no local IP leaks |
-| Cross-site cookies blocked | Embedded third parties can't set or read cookies                                       |
-| HTTPS upgrades             | Plain-HTTP pages load over HTTPS when the site supports it                             |
-| Clean links                | Click identifiers (fbclid, gclid…) and Google AMP wrappers removed                     |
-| Secure DNS                 | DNS over HTTPS, automatic or through Cloudflare, Quad9 or Google                       |
-| Global Privacy Control     | Asks sites not to sell or share your data                                              |
-| Private windows            | A throwaway session that leaves nothing behind                                         |
+| Protection                 | What it does                                                       |
+| -------------------------- | ------------------------------------------------------------------ |
+| Ad and tracker blocking    | uBlock Origin's filter lists, including YouTube ads                |
+| Cookie banners hidden      | uBlock Origin's annoyance lists                                    |
+| Fingerprinting protection  | Per-site noise on canvas, WebGL and audio; no local IP leaks       |
+| Cross-site cookies blocked | Embedded third parties can't set or read cookies                   |
+| HTTPS upgrades             | Plain-HTTP pages load over HTTPS when the site supports it         |
+| Clean links                | Click identifiers (fbclid, gclid…) and Google AMP wrappers removed |
+| Secure DNS                 | DNS over HTTPS, automatic or through Cloudflare, Quad9 or Google   |
+| Global Privacy Control     | Asks sites not to sell or share your data                          |
+| Private windows            | A throwaway session that leaves nothing behind                     |
 
 **Apple Intelligence, on your Mac.** Nothing leaves your computer.
 
