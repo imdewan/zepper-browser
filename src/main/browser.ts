@@ -3051,18 +3051,27 @@ export class Browser {
 
   /** A page stopped responding: wait, or end it (it then shows the crash page with Reload). */
   private async onUnresponsive(tabId: string, wc: WebContents): Promise<void> {
-    if (this.hungTabs.has(tabId) || this.windowClosed || this.printing.has(wc.id)) return
+    // A page waiting on its own dialog (an alert, a confirm: Calendar's reminders, say) or printing is
+    // paused on purpose, not stuck. Chrome doesn't ask then either.
+    const waitingOnDialog = this.pendingDialogs.some((d) => d.tabId === tabId)
+    if (this.hungTabs.has(tabId) || this.windowClosed || this.printing.has(wc.id) || waitingOnDialog) return
     this.hungTabs.add(tabId)
+    // The question goes away by itself if the page comes back.
+    const recovered = new AbortController()
+    const onResponsive = (): void => recovered.abort()
+    wc.once('responsive', onResponsive)
     const { response } = await dialog.showMessageBox(this.win, {
       type: 'warning',
       message: 'Page isn’t responding',
       detail: `${safeHost(this.tab(tabId)?.url ?? '') || 'This page'} has stopped responding. You can wait for it, or close the page.`,
       buttons: ['Wait', 'Close Page'],
       defaultId: 0,
-      cancelId: 0
+      cancelId: 0,
+      signal: recovered.signal
     })
+    if (!wc.isDestroyed()) wc.off('responsive', onResponsive)
     this.hungTabs.delete(tabId)
-    if (response === 1 && !wc.isDestroyed()) wc.forcefullyCrashRenderer()
+    if (response === 1 && !recovered.signal.aborted && !wc.isDestroyed()) wc.forcefullyCrashRenderer()
   }
 
   toggleDevTools(): void {
