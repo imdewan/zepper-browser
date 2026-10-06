@@ -32,6 +32,7 @@ git merge upstream/main
 | App icon                                | `resources/icon.png` and `resources/icon-dark.png` (Dock), `build/icon.icns` (the packaged app); `scripts/make-icons.py` builds them from `resources/logo.png` |
 | Logo in the About panel                 | `src/renderer/src/assets/logo.png`; the text is in `src/renderer/src/overlay/AboutPanel.tsx`                                                                   |
 | Name in the menu bar during development | `scripts/brand-dev-runtime.mjs` (run `npm run brand:dev`)                                                                                                      |
+| Where updates come from                 | `REPOSITORY` in `src/main/updater.ts`: your fork's GitHub repository (publish `latest-mac.yml` and the `.zip` with each release)                               |
 
 ## Change the look
 

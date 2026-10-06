@@ -107,7 +107,7 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 
 **Moving in is easy.** A short setup on first launch brings over your history and passwords from Chrome, Brave, Arc, Firefox, Safari and others.
 
-**Everything you expect from a browser.** Default browser support, Chrome Web Store extensions, downloads and history, Print, Save Page As and Export as PDF, a built-in PDF viewer, per-site zoom, find in page, certificate details and site permissions, and trackpad swipes to go back and forward.
+**Everything you expect from a browser.** Automatic updates, Chrome-style screen sharing with tab or system audio, default browser support, Chrome Web Store extensions, downloads and history, Print, Save Page As and Export as PDF, a built-in PDF viewer, per-site zoom, find in page, certificate details and site permissions, and trackpad swipes to go back and forward.
 
 See the [full feature list](docs/FEATURES.md).
 

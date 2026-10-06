@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import type { AboutInfo } from '@shared/types'
+import type { AboutInfo, UpdateStatus } from '@shared/types'
 import logo from '../assets/logo.png'
 import { zepper } from '../bridge'
 import { IconCheck, IconClose, IconCopy } from '../icons'
@@ -17,8 +17,59 @@ function widevineLabel(info: AboutInfo): string {
   return version ? `${version} · off` : 'Off'
 }
 
+/** Where Zepper's update is at, with what you can do about it (opening About checks, like Chrome). */
+function UpdateLine({ update }: { update: UpdateStatus }): React.JSX.Element | null {
+  const check = (): void => zepper.send({ type: 'app.checkForUpdates' })
+  switch (update.state) {
+    case 'off':
+      return <div className="about-update">Updates are off in development builds</div>
+    case 'idle':
+    case 'checking':
+      return <div className="about-update">Checking for updates…</div>
+    case 'current':
+      return (
+        <div className="about-update">
+          <IconCheck size={13} /> Zepper is up to date
+        </div>
+      )
+    case 'downloading':
+      return (
+        <div className="about-update">
+          Downloading Zepper {update.version}… {Math.round(update.progress * 100)}%
+        </div>
+      )
+    case 'ready':
+      return (
+        <div className="about-update">
+          Zepper {update.version} is ready
+          <button className="panel-button primary" onClick={() => zepper.send({ type: 'app.restartToUpdate' })}>
+            Restart to Update
+          </button>
+        </div>
+      )
+    case 'manual':
+      return (
+        <div className="about-update">
+          Zepper {update.version} is out
+          <button className="panel-button primary" onClick={() => zepper.send({ type: 'app.restartToUpdate' })}>
+            Download
+          </button>
+        </div>
+      )
+    case 'error':
+      return (
+        <div className="about-update">
+          {update.message}
+          <button className="panel-button" onClick={check}>
+            Try Again
+          </button>
+        </div>
+      )
+  }
+}
+
 /** About Zepper: what you're running and what it's built on. */
-export function AboutPanel({ info, onClose }: { info: AboutInfo; onClose: () => void }): React.JSX.Element {
+export function AboutPanel({ info, update, onClose }: { info: AboutInfo; update: UpdateStatus; onClose: () => void }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -72,6 +123,7 @@ export function AboutPanel({ info, onClose }: { info: AboutInfo; onClose: () => 
         <img className="about-logo" src={logo} alt="" draggable={false} />
         <h1 className="about-name">Zepper</h1>
         <div className="about-version">Version {info.version}</div>
+        <UpdateLine update={update} />
         <p className="about-tagline">A calm browser with Spaces and built-in ad blocking, on Chromium.</p>
         <dl className="about-rows">
           {rows.map(([label, value]) => (

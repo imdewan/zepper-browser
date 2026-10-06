@@ -34,6 +34,7 @@ The **main process owns all state**. Renderers never change it directly:
 | `extensions.ts`                          | Chrome extension APIs (`electron-chrome-extensions`) and the Chrome Web Store, plus enable/disable/remove                                                                              |
 | `downloads.ts`, `history.ts`, `bangs.ts` | The download list, browsing history, and local DuckDuckGo bang resolution                                                                                                              |
 | `site.ts`                                | Per-site permissions and captured certificate chains                                                                                                                                   |
+| `updater.ts`                             | Zepper's own updates: checks GitHub Releases, downloads and unpacks the new version, and installs it when Zepper quits                                                                 |
 | `ai.ts`, `tidy.ts`, `semantic.ts`        | The on-device intelligence helper (started on demand, stopped when idle), Tidy Tabs, and history search by meaning                                                                     |
 | `shields.ts`, `zoom.ts`, `capture.ts`    | Privacy protections (link cleaning, HTTPS upgrades, fingerprinting seeds), per-site zoom, and screen captures                                                                          |
 | `vault.ts`, `importers.ts`               | The password manager's encrypted store (passwords and passkeys), and importing from other browsers and CSV exports                                                                     |
@@ -113,9 +114,19 @@ Zepper uses castLabs' Electron build. Widevine is opt-in: while it's off, `compo
 - A second, isolated instance can run alongside your own: `ZEPPER_PROFILE=<folder> ZEPPER_DEBUG_PORT=9877 node_modules/.bin/electron .` (after `npm run build`). Stop it by the process listening on its port: `kill $(lsof -ti tcp:9877 -sTCP:LISTEN)`.
 - `npm run check` runs type checking, ESLint and Prettier; CI runs the same on every push.
 
+## Screen sharing
+
+`getDisplayMedia` requests go to `Browser.chooseShareSource()`, which gathers your other tabs and, through `desktopCapturer`, windows and screens with previews, then shows the picker (`SharePicker.tsx`) in the overlay. A tab is shared as its `WebFrameMain`, with its sound if asked (`enableLocalEcho` keeps it playing for you). A window or screen can carry the Mac's sound: Chromium's Core Audio tap (`MacCatapLoopbackAudioForScreenShare`, macOS 14.2+, which needs `NSAudioCaptureUsageDescription` in Info.plist), asked for as `loopbackWithoutChrome` so Zepper's own sound (a call's other voices) isn't sent back.
+
+## Updates
+
+`updater.ts` reads electron-builder's `latest-mac.yml` from the latest GitHub release a few seconds after launch and every four hours. A newer version's zip is downloaded, checked against the feed's sha512, unpacked with `ditto` (which keeps the signature intact) into `Updates/` in the profile, and checked again (bundle id, version, `codesign --verify`). The sidebar then shows Update. Installing happens on quit: a small shell script waits for Zepper to exit, swaps the app bundle (restoring the old one if that fails), and reopens it when you clicked Update. This avoids Squirrel.Mac, which only trusts updates signed with a Developer ID. `ZEPPER_UPDATE_FEED` points a build at another feed (a local folder served over HTTP, for trying an update), and `ZEPPER_PROFILE` gives a packaged copy a profile of its own.
+
 ## Packaging
 
 `npm run dist` builds the app with electron-builder. Its `afterPack` hook (`scripts/after-pack.cjs`) flips Electron's fuses (no running as Node, no Node debugging flags, app code only from the integrity-checked asar, cookies encrypted on disk) and then VMP-signs, in that order, because the signature covers the framework binary the fuses change. Last, it re-seals the app with an ad-hoc signature, since VMP signing adds a file inside the framework; Apple code signing, when there's a Developer ID, replaces it. electron-builder packages a copy of the Electron runtime staged by `scripts/stage-electron.mjs`, because `npm run brand:dev` renames the development copy. Hardened-runtime entitlements (`build/entitlements.mac.plist`) allow JIT, the Widevine library, and the camera, microphone and location for sites you allow. The app registers for `http`/`https` links and web page files, so it can be the default browser.
+
+Each release should include `latest-mac.yml` and the `.zip` alongside the `.dmg`: they're the update feed.
 
 `npm run dist:browser` (with `ZEPPER_PROVISIONING_PROFILE` pointing at the Developer ID profile Apple issues with the browser entitlement) adds the app identity and `com.apple.developer.web-browser.public-key-credential` to the main app's entitlements only. Electron's helper apps have no profile, and macOS stops any process claiming a restricted entitlement without one.
 

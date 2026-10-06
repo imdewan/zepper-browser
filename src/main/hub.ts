@@ -1,16 +1,4 @@
-import {
-  BrowserWindow,
-  components,
-  desktopCapturer,
-  dialog,
-  ipcMain,
-  nativeTheme,
-  session,
-  app,
-  webContents,
-  type Session,
-  type WebContents
-} from 'electron'
+import { BrowserWindow, components, ipcMain, nativeTheme, session, shell, app, webContents, type Session, type WebContents } from 'electron'
 import { join } from 'node:path'
 import { IPC, type Command, type IntelligenceStatus, type VaultRequest, type WidevineStatus } from '@shared/types'
 import type { AdBlock } from './adblock'
@@ -30,6 +18,7 @@ import { CertificateStore, SitePermissions } from './site'
 import { PASSWORDS_CHANNEL, type PageMessage } from './autofill'
 import { handleVaultRequest } from './password-settings'
 import { Vault } from './vault'
+import { RELEASES_PAGE, Updater } from './updater'
 
 const WEBAUTHN_CHANNEL = 'zepper:webauthn'
 const WEBAUTHN_CANCEL_CHANNEL = 'zepper:webauthn-cancel'
@@ -69,6 +58,10 @@ export class Hub {
   /** Set when quitting on purpose (restart), so Zepper doesn't ask first. */
   quitWithoutAsking = false
   private secureDns: string | null = null
+  /** Zepper's own updates. */
+  readonly updater = new Updater(() => {
+    for (const browser of this.browsers) browser.refresh()
+  })
   /** Every download, shared by all windows. */
   readonly downloads = new Downloads(() => {
     for (const browser of this.browsers) browser.refresh()
@@ -334,38 +327,13 @@ export class Hub {
       return browser ? browser.checkPermission(permission, requestingOrigin, details) : false
     })
     ses.on('will-download', (_event, item, wc) => (this.owner(wc) ?? this.focused())?.handleDownload(item))
-    // Screen sharing (getDisplayMedia): macOS's own picker, or a simple screen choice where it isn't available.
-    ses.setDisplayMediaRequestHandler(
-      (request, callback) => {
-        void desktopCapturer
-          .getSources({ types: ['screen'] })
-          .then(async (screens) => {
-            const host = (() => {
-              try {
-                return new URL(request.securityOrigin).host
-              } catch {
-                return 'This site'
-              }
-            })()
-            const win = BrowserWindow.getFocusedWindow()
-            const options = {
-              type: 'question' as const,
-              message: `${host} wants to share your screen`,
-              buttons: [
-                ...screens.map((s, i) => (screens.length === 1 ? 'Share Screen' : `Share ${s.name || `Screen ${i + 1}`}`)),
-                'Cancel'
-              ],
-              defaultId: 0,
-              cancelId: screens.length
-            }
-            const { response } = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options)
-            const source = screens[response]
-            callback(source ? { video: source } : {})
-          })
-          .catch(() => callback({}))
-      },
-      { useSystemPicker: true }
-    )
+    // Screen sharing (getDisplayMedia): Zepper's picker, in the window showing the page.
+    ses.setDisplayMediaRequestHandler((request, callback) => {
+      const wc = request.frame ? webContents.fromFrame(request.frame) : undefined
+      const browser = wc ? this.owner(wc) : null
+      if (!wc || !browser) return callback({})
+      void browser.chooseShareSource(wc, request, callback)
+    })
   }
 
   /** Opens a link or file from another app in the window you're using. */
@@ -505,6 +473,16 @@ export class Hub {
       else app.configureHostResolver({ secureDnsMode: 'automatic' })
     } catch (error) {
       console.warn('[dns] could not configure secure DNS', error)
+    }
+  }
+
+  /** Restarts into the downloaded update, or opens the download page where Zepper can't update itself. */
+  restartToUpdate(): void {
+    if (this.updater.restartToUpdate()) {
+      this.quitWithoutAsking = true
+      app.quit()
+    } else if (this.updater.status.state === 'manual') {
+      void shell.openExternal(RELEASES_PAGE)
     }
   }
 

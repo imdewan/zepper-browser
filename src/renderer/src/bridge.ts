@@ -139,6 +139,7 @@ function createMock(): ZepperApi {
     folders: [],
     tidy: { kind: 'ai' },
     defaultBrowser: false,
+    update: { state: 'off' },
     extensionsPartition: 'zepper-browsing',
     intelligence: { ai: true, translation: true, embeddings: true },
     windowSize: { width: window.innerWidth, height: window.innerHeight },

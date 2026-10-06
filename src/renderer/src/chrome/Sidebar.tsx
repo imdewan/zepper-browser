@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Snapshot, Tab, UiEvent } from '@shared/types'
+import type { Snapshot, Tab, UiEvent, UpdateStatus } from '@shared/types'
 import { zepper } from '../bridge'
 import { ExtensionButton, useExtensions } from '../extensions'
 import { useDrop } from './dnd'
@@ -19,7 +19,8 @@ import {
   IconSearch,
   IconSettings,
   IconSparkle,
-  IconTranslate
+  IconTranslate,
+  IconUpdate
 } from '../icons'
 import { useSnapshot, useUiEvents } from '../useSnapshot'
 import { cx, hostOf, rectOf } from '../util'
@@ -46,7 +47,12 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
 
   return (
     <aside className="sidebar" style={{ width }}>
-      <TopRow tab={activeTab} isPrivate={snapshot.kind === 'private'} extensionsRow={snapshot.settings.extensionsRow} />
+      <TopRow
+        tab={activeTab}
+        isPrivate={snapshot.kind === 'private'}
+        extensionsRow={snapshot.settings.extensionsRow}
+        update={snapshot.update}
+      />
       <UrlPill tab={activeTab} ai={snapshot.intelligence.ai} />
       {snapshot.settings.extensionsRow && snapshot.kind !== 'private' && <ExtensionsRow />}
       <div className="sidebar-body">
@@ -64,8 +70,18 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
   )
 }
 
-/** Top row: traffic lights, extensions, then back, forward and reload. */
-function TopRow({ tab, isPrivate, extensionsRow }: { tab: Tab | null; isPrivate: boolean; extensionsRow: boolean }): React.JSX.Element {
+/** Top row: traffic lights, extensions, the Update button when there is one, then back, forward and reload. */
+function TopRow({
+  tab,
+  isPrivate,
+  extensionsRow,
+  update
+}: {
+  tab: Tab | null
+  isPrivate: boolean
+  extensionsRow: boolean
+  update: UpdateStatus
+}): React.JSX.Element {
   const extensionsRef = useRef<HTMLButtonElement>(null)
   const extensions = useExtensions()
   const pinned = useSnapshotPinnedExtensions(extensions)
@@ -101,6 +117,17 @@ function TopRow({ tab, isPrivate, extensionsRow }: { tab: Tab | null; isPrivate:
         </span>
       )}
       <div className="top-row-spacer" />
+      {/* Like Chrome's: stays until you update. */}
+      {(update.state === 'ready' || update.state === 'manual') && (
+        <button
+          className="update-button"
+          title={update.state === 'ready' ? `Restart to update to Zepper ${update.version}` : `Download Zepper ${update.version}`}
+          onClick={() => zepper.send({ type: 'app.restartToUpdate' })}
+        >
+          <IconUpdate size={14} />
+          <span>Update</span>
+        </button>
+      )}
       <button className="icon-button" title="Back (⌘[)" disabled={!tab?.canGoBack} onClick={() => zepper.send({ type: 'nav.back' })}>
         <IconBack size={17} />
       </button>

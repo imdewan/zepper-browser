@@ -28,6 +28,9 @@ if (readFileSync(pathFile, 'utf8').trim() !== executable) writeFileSync(pathFile
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit' })
 for (const key of ['CFBundleName', 'CFBundleDisplayName']) run('plutil', ['-replace', key, '-string', 'Zepper', plist])
+// Sharing the Mac's audio with a screen share needs this, or macOS refuses without asking.
+const audioUse = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).build.mac.extendInfo.NSAudioCaptureUsageDescription
+run('plutil', ['-replace', 'NSAudioCaptureUsageDescription', '-string', audioUse, plist])
 copyFileSync(join(root, 'build/icon.icns'), join(app, 'Contents/Resources/electron.icns'))
 run('codesign', ['--force', '--deep', '--sign', '-', app])
 // Tell Launch Services about the renamed bundle, so the Dock and ⌘Tab use the new name straight away.

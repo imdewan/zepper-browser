@@ -3655,3 +3655,241 @@
 .ob-quiet:active {
   transform: scale(0.98);
 }
+
+.ob-primary:disabled {
+  opacity: 0.45;
+}
+
+.ob-primary:disabled:hover {
+  filter: none;
+}
+
+/* ---- Screen-share picker ----------------------------------------------------------- */
+
+.share {
+  width: min(760px, calc(100vw - 48px));
+  height: min(560px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--panel);
+  box-shadow:
+    0 30px 100px rgba(0, 0, 0, 0.45),
+    0 0 0 0.5px var(--panel-border);
+}
+
+.share-header {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 22px 24px 14px;
+}
+
+.share-header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.share-header h1 strong {
+  font-weight: 700;
+}
+
+.share-kinds button {
+  height: 26px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.share-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden auto;
+  padding: 4px 24px 12px;
+}
+
+.share-empty {
+  margin: 48px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.share-notice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 12px 12px 12px 14px;
+  border-radius: 12px;
+  background: var(--element);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.share-notice .panel-button {
+  flex: none;
+  height: 28px;
+  font-size: 12px;
+}
+
+.share-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.share-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 9px;
+  text-align: left;
+  color: var(--text);
+}
+
+.share-tab:hover {
+  background: var(--hover);
+}
+
+.share-tab.selected {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.share-tab-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+
+.share-tab-host {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.share-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.share-grid.screens {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.share-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 12px;
+  text-align: left;
+  transition: background-color 0.12s ease;
+}
+
+.share-card:hover {
+  background: var(--hover);
+}
+
+.share-card.selected {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.share-thumb {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text-3);
+}
+
+.share-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.share-card-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.share-app-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.share-card-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.share-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px 18px 24px;
+  border-top: 1px solid var(--separator);
+}
+
+.share-audio {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.share-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---- Update ---------------------------------------------------------------------- */
+
+.about-update {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 30px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.about-update .panel-button {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+}

@@ -4,11 +4,6 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
-### Fixed
-
-- Google Meet, Zoom, Teams and other sites that check before asking said the camera and microphone were blocked instead of asking for them. Undecided permissions now read as "prompt", and allowing the camera or microphone also asks macOS for access.
-- Buttons and switches in a space's accent colour looked faded on pale themes. The accent keeps the theme's hue but is always solid enough for white text.
-
 ## [0.1.0] - 2026-10-06
 
 The first public version.
@@ -16,6 +11,8 @@ The first public version.
 ### Added
 
 - A welcome and setup on first launch: import history and passwords from other browsers, pick a look, review privacy, and set Zepper as the default browser.
+- Automatic updates: new versions download in the background, an Update button restarts into them, and quitting installs them too.
+- Screen sharing like Chrome's: choose a tab, a window or a whole screen, with the tab's sound or the Mac's (macOS 14.2 and later).
 - Spaces with gradient themes and optional separate sign-ins (profiles).
 - A vertical sidebar with Essentials, pinned tabs, nestable folders, drag and drop, split view and compact mode.
 - Tidy Tabs: groups tabs into folders with Apple Intelligence (macOS 26 and later), or by site.

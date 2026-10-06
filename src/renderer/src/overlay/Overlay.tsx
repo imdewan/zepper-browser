@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { PEEK_AREA_EXTRA, SEARCH_ENGINES } from '@shared/settings'
 import { prefersDarkUi, themeAccent } from '@shared/theme'
-import type { AboutInfo, FindResult, OverlayMode, PopoverSpec, ToastSpec, UiEvent } from '@shared/types'
+import type { AboutInfo, FindResult, OverlayMode, PopoverSpec, ShareRequest, ToastSpec, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
 import { useSnapshot, useSystemDark, useUiEvents } from '../useSnapshot'
 import { uiAttributes } from '../chrome/App'
@@ -16,6 +16,7 @@ import { Peek } from './Peek'
 const CORNER_MARGIN = { x: 18 + 32, y: 16 + 36 }
 import { SettingsPanel } from './SettingsPanel'
 import { Onboarding } from './Onboarding'
+import { SharePicker } from './SharePicker'
 import { AboutPanel } from './AboutPanel'
 import { DownloadsPanel } from './DownloadsPanel'
 import { HistoryPanel } from './HistoryPanel'
@@ -38,6 +39,10 @@ export function Overlay(): React.JSX.Element | null {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsSection, setSettingsSection] = useState<string | undefined>(undefined)
   const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [share, setShare] = useState<ShareRequest | null>(null)
+  // The open picker, for answering it when the overlay is dismissed some other way.
+  const shareId = useRef<number | null>(null)
+  shareId.current = share?.id ?? null
   const [historyOpen, setHistoryOpen] = useState(false)
   const [about, setAbout] = useState<AboutInfo | null>(null)
   const [downloadsOpen, setDownloadsOpen] = useState(false)
@@ -85,6 +90,12 @@ export function Overlay(): React.JSX.Element | null {
         setDownloadsOpen(false)
         setAbout(null)
         setOnboardingOpen(true)
+      } else if (event.type === 'share.open') {
+        setPalette(null)
+        setPopover(null)
+        setShare(event.request)
+      } else if (event.type === 'share.close') {
+        setShare((s) => (s?.id === event.id ? null : s))
       } else if (event.type === 'space.startCreate') {
         setPalette(null)
         setPopover(null)
@@ -114,6 +125,8 @@ export function Overlay(): React.JSX.Element | null {
       } else if (event.type === 'peek.show') {
         setPeek('shown')
       } else if (event.type === 'overlay.dismiss') {
+        if (shareId.current !== null) zepper.send({ type: 'share.choose', id: shareId.current, sourceId: null, audio: false })
+        setShare(null)
         setPalette(null)
         setPopover(null)
         setSettingsOpen(false)
@@ -133,6 +146,7 @@ export function Overlay(): React.JSX.Element | null {
     popover !== null ||
     settingsOpen ||
     onboardingOpen ||
+    share !== null ||
     historyOpen ||
     downloadsOpen ||
     about !== null ||
@@ -189,6 +203,12 @@ export function Overlay(): React.JSX.Element | null {
   const closeSettings = useCallback(() => {
     setExiting(true)
     setSettingsOpen(false)
+    zepper.send({ type: 'ui.closePalette', refocus: true })
+  }, [])
+  const answerShare = useCallback((id: number, sourceId: string | null, audio: boolean) => {
+    zepper.send({ type: 'share.choose', id, sourceId, audio })
+    setExiting(true)
+    setShare(null)
     zepper.send({ type: 'ui.closePalette', refocus: true })
   }, [])
   const closeOnboarding = useCallback(() => {
@@ -254,8 +274,11 @@ export function Overlay(): React.JSX.Element | null {
           />
         )}
         {onboardingOpen && <Onboarding key="onboarding" snapshot={snapshot} onClose={closeOnboarding} />}
+        {share && (
+          <SharePicker key={`share-${share.id}`} request={share} onDone={(sourceId, audio) => answerShare(share.id, sourceId, audio)} />
+        )}
         {historyOpen && <HistoryPanel key="history" meaning={snapshot.intelligence.embeddings} onClose={closeHistory} />}
-        {about && <AboutPanel key="about" info={about} onClose={closeAbout} />}
+        {about && <AboutPanel key="about" info={about} update={snapshot.update} onClose={closeAbout} />}
         {downloadsOpen && <DownloadsPanel key="downloads" downloads={snapshot.downloads} onClose={closeDownloads} />}
         {creatingSpace && (
           <CreateSpaceDialog

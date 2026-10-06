@@ -110,6 +110,15 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
   - a rounded, resizable floating player;
   - ±10s, play/pause and mute controls, plus keyboard shortcuts.
 - **Protected video:** opt-in Google Widevine, through castLabs' Electron, with VMP signing.
+- **Screen sharing** (Meet, Zoom, Teams…): a picker with your other tabs, windows and screens.
+  - A tab can share its sound (and keeps playing for you).
+  - A window or screen can share your Mac's sound, minus Zepper's own, so a call doesn't hear itself back (macOS 14.2 and later; macOS asks the first time).
+
+## Updates
+
+- Zepper checks for a new version in the background and downloads it. An **Update** button then stays in the sidebar until you click it, which restarts into the new version; quitting installs it too.
+- About Zepper (or Zepper › Check for Updates…) checks straight away and shows where it's at.
+- Installed somewhere Zepper can't replace itself (straight from the disk image, say), the button opens the download page instead.
 
 ## Extensions, downloads and history
 

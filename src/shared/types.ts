@@ -159,6 +159,8 @@ export interface Snapshot {
   tidy: { kind: 'ai' } | { kind: 'site'; reason: string }
   /** Zepper opens links from other apps. */
   defaultBrowser: boolean
+  /** Zepper's own updates. */
+  update: UpdateStatus
   /** The session partition whose extensions the UI shows (the active space's); empty in private windows. */
   extensionsPartition: string
   /** What Apple's on-device intelligence can do on this Mac. */
@@ -504,8 +506,14 @@ export type Command =
   /** Translate the page into your language, or back to the original. */
   | { type: 'page.translate'; tabId: string }
   | { type: 'app.openTranslationSettings' }
-  /** System Settings › Privacy & Security › Camera or Microphone. */
-  | { type: 'app.openMediaPrivacySettings'; kind: 'camera' | 'microphone' }
+  /** System Settings › Privacy & Security › Camera, Microphone, or Screen & System Audio Recording. */
+  | { type: 'app.openMediaPrivacySettings'; kind: 'camera' | 'microphone' | 'screen' }
+  /** Look for a newer Zepper now (About shows how it went). */
+  | { type: 'app.checkForUpdates' }
+  /** Restart into the downloaded update (or, where Zepper can't update itself, open the download page). */
+  | { type: 'app.restartToUpdate' }
+  /** The screen-share picker's answer: a tab, window or screen (null: cancelled), and whether to share audio. */
+  | { type: 'share.choose'; id: number; sourceId: string | null; audio: boolean }
   /** Summarise the current page, or answer a question about it (with earlier questions and answers). */
   | { type: 'ui.openAssistant'; anchor?: Rect }
   | { type: 'assistant.run'; requestId: string; question?: string; history?: [string, string][] }
@@ -583,6 +591,10 @@ export type UiEvent =
   | { type: 'find.result'; result: FindResult }
   | { type: 'settings.open'; section?: string }
   | { type: 'onboarding.open' }
+  /** A page wants to share your screen: choose a tab, window or screen. */
+  | { type: 'share.open'; request: ShareRequest }
+  /** The page went away before you chose. */
+  | { type: 'share.close'; id: number }
   | { type: 'peek.show' }
   | { type: 'overlay.dismiss' }
   | { type: 'swipe.progress'; direction: 'back' | 'forward'; progress: number; allowed: boolean }
@@ -616,6 +628,45 @@ export interface ExtensionInfo {
 }
 
 /** What the About page shows. */
+/** Where Zepper's own update is at. */
+export type UpdateStatus =
+  /** Development builds (no update feed). */
+  | { state: 'off' }
+  | { state: 'idle' | 'checking' | 'current' }
+  | { state: 'downloading'; version: string; progress: number }
+  /** Downloaded and unpacked: restart (or quit) to install. */
+  | { state: 'ready'; version: string }
+  /** Newer version out, but Zepper can't replace itself where it's installed: download it from the release page. */
+  | { state: 'manual'; version: string }
+  | { state: 'error'; message: string }
+
+/** Something you can share in the screen-share picker. */
+export interface ShareSource {
+  id: string
+  name: string
+  /** A preview (data URL), when there is one. */
+  thumbnail: string | null
+  /** The app's icon for windows, the favicon for tabs. */
+  icon: string | null
+  /** The site, for tabs. */
+  detail?: string
+}
+
+export interface ShareRequest {
+  id: number
+  /** The site asking. */
+  host: string
+  /** The page asked for audio too. */
+  audio: boolean
+  /** This Mac can share its own audio (macOS 14.2 and later). */
+  systemAudio: boolean
+  /** macOS lets Zepper record the screen (windows and screens need it; tabs don't). */
+  screenAccess: boolean
+  tabs: ShareSource[]
+  windows: ShareSource[]
+  screens: ShareSource[]
+}
+
 export interface AboutInfo {
   version: string
   chromium: string

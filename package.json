@@ -131,7 +131,8 @@
         "NSMicrophoneUsageDescription": "Websites you allow can use your microphone.",
         "NSLocationWhenInUseUsageDescription": "Websites you allow can use your location.",
         "NSLocationUsageDescription": "Websites you allow can use your location.",
-        "NSBluetoothAlwaysUsageDescription": "Zepper uses Bluetooth to check your phone is nearby when you sign in with a passkey from it."
+        "NSBluetoothAlwaysUsageDescription": "Zepper uses Bluetooth to check your phone is nearby when you sign in with a passkey from it.",
+        "NSAudioCaptureUsageDescription": "When you share a window or your screen, Zepper can share your Mac’s audio too."
       },
       "target": [
         "dmg",

@@ -1,5 +1,5 @@
 import type { SVGProps } from 'react'
-import { KeyRound, Smartphone, UserRoundKey, type LucideProps } from 'lucide-react'
+import { CircleArrowUp, KeyRound, Monitor, Smartphone, UserRoundKey, type LucideProps } from 'lucide-react'
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number }
 
@@ -279,4 +279,11 @@ export const IconPopIn = (p: IconProps): React.JSX.Element => (
     <rect x="3" y="4" width="18" height="16" rx="3" />
     <path d="M14 10l-4 4M10 10v4h4" />
   </Icon>
+)
+/** An update is ready. */
+export const IconUpdate = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
+  <CircleArrowUp size={size} strokeWidth={2.1} aria-hidden="true" {...(p as LucideProps)} />
+)
+export const IconMonitor = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
+  <Monitor size={size} strokeWidth={1.9} aria-hidden="true" {...(p as LucideProps)} />
 )

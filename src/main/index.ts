@@ -23,13 +23,18 @@ process.on('unhandledRejection', (reason) => {
   console.error('Unhandled promise rejection:', reason)
 })
 
-// Development only: a second, isolated instance with its own profile (for automated checks).
-if (!app.isPackaged && process.env['ZEPPER_PROFILE']) {
+// A second, isolated instance with its own profile (for automated checks, and trying an update).
+if (process.env['ZEPPER_PROFILE']) {
   app.setPath('userData', process.env['ZEPPER_PROFILE'])
   // Test instances usually sit behind other windows; keep animating there.
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
   app.commandLine.appendSwitch('disable-renderer-backgrounding')
+  // A packaged test copy keeps out of your Keychain (it's signed differently, so macOS would ask).
+  if (app.isPackaged) app.commandLine.appendSwitch('use-mock-keychain')
 }
+
+// Sharing the Mac's audio along with a window or screen (Core Audio taps, macOS 14.2 and later).
+app.commandLine.appendSwitch('enable-features', 'MacCatapLoopbackAudioForScreenShare')
 
 // Present a plain Chrome user agent: many sites (Google sign-in, WhatsApp Web,
 // Teams) refuse or degrade when they see Electron or an unknown app token.
@@ -82,6 +87,7 @@ if (!app.requestSingleInstanceLock()) {
     hub.openWindow('main')
     for (const url of pendingUrls.splice(0)) hub.openUrl(url)
     hub.startExtensions()
+    hub.updater.start()
     Menu.setApplicationMenu(buildMenu(hub))
     await adblock.start()
     void bangs.load()

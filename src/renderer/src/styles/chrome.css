@@ -292,6 +292,27 @@
   }
 }
 
+/* With the Update button too, the buttons start sharing the row sooner (all fit at full size from 230px). */
+@container (max-width: 229.5px) {
+  .top-row:has(.update-button) {
+    gap: 0;
+  }
+  .top-row:has(.update-button) .extensions-button {
+    margin-left: 8px;
+  }
+  .top-row:has(.update-button) .update-button {
+    width: 22px;
+    height: 22px;
+    margin: 0 2px;
+  }
+  .top-row:has(.update-button) .icon-button {
+    width: clamp(18px, calc((100cqw - 104px) / 4), 28px);
+  }
+  .top-row:has(.update-button) .private-badge {
+    display: none;
+  }
+}
+
 /* The private badge shortens to its icon before it would crowd the buttons. */
 @container (max-width: 260px) {
   .private-badge-label {
@@ -304,6 +325,47 @@
 
 .top-row-spacer {
   flex: 1;
+}
+
+/* Update ready: a solid pill, like Chrome's, until you update. */
+.update-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  margin-right: 4px;
+  padding: 0 9px 0 7px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 90%, #000);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  -webkit-app-region: no-drag;
+  transition:
+    filter 0.12s ease,
+    transform 0.12s ease;
+}
+
+.update-button:hover {
+  filter: brightness(1.08);
+}
+
+.update-button:active {
+  transform: scale(0.96);
+}
+
+/* A narrow sidebar has no room for the word: the button keeps its colour and icon (the tooltip says the rest). */
+@container (max-width: 300px) {
+  .update-button {
+    width: 24px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .update-button span {
+    display: none;
+  }
 }
 
 .icon-button {

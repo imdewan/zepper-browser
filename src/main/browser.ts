@@ -10,9 +10,14 @@ import {
   nativeTheme,
   screen,
   session,
+  desktopCapturer,
   shell,
   systemPreferences,
   type AuthInfo,
+  type DesktopCapturerSource,
+  type DisplayMediaRequestHandlerHandlerRequest,
+  type NativeImage,
+  type Streams,
   type Certificate,
   type ContextMenuParams,
   type DownloadItem,
@@ -41,6 +46,7 @@ import {
   type PermissionState,
   type Rect,
   type Pane,
+  type ShareSource,
   type SiteInfo,
   type Snapshot,
   type Space,
@@ -116,6 +122,17 @@ interface PendingPrompt extends PermissionPrompt {
   /** The page that asked; its prompts go when it does. */
   webContentsId: number
   callback: (granted: boolean) => void
+}
+
+/** A getDisplayMedia request waiting on the picker. */
+interface PendingShare {
+  id: number
+  /** The page asked for audio too. */
+  audio: boolean
+  /** Picker ids → the tab or the window/screen they stand for. */
+  tabs: Map<string, WebContents>
+  sources: Map<string, DesktopCapturerSource>
+  answer: (streams: Streams) => void
 }
 
 interface ClosedTab {
@@ -448,6 +465,9 @@ export class Browser {
   private readonly permissions: SitePermissions
   private prompts: PendingPrompt[] = []
   private promptSeq = 0
+  /** The screen-share picker that's open, waiting for your choice. */
+  private share: PendingShare | null = null
+  private shareSeq = 0
   private showingPrompt: number | null = null
   private lastFindText = ''
   private peeking = false
@@ -1277,10 +1297,16 @@ export class Browser {
         return void this.translatePage(command.tabId)
       case 'app.openTranslationSettings':
         return void shell.openExternal('x-apple.systempreferences:com.apple.Localization-Settings.extension')
-      case 'app.openMediaPrivacySettings':
-        return void shell.openExternal(
-          `x-apple.systempreferences:com.apple.preference.security?Privacy_${command.kind === 'camera' ? 'Camera' : 'Microphone'}`
-        )
+      case 'app.openMediaPrivacySettings': {
+        const pane = { camera: 'Camera', microphone: 'Microphone', screen: 'ScreenCapture' }[command.kind]
+        return void shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?Privacy_${pane}`)
+      }
+      case 'app.checkForUpdates':
+        return void this.openAbout()
+      case 'app.restartToUpdate':
+        return this.hub.restartToUpdate()
+      case 'share.choose':
+        return this.answerShare(command.id, command.sourceId, command.audio)
       case 'ui.openAssistant':
         return this.openAssistant(command.anchor)
       case 'assistant.run':
@@ -3829,6 +3855,127 @@ export class Browser {
     this.reloadPage(this.activeWebContents())
   }
 
+  // ---------------------------------------------------------------------------
+  // Screen sharing
+
+  /**
+   * A page called getDisplayMedia: your tabs, windows and screens, in Zepper's picker (like Chrome's).
+   * A tab can share its own sound; a window or screen can share the Mac's (macOS 14.2 and later).
+   */
+  async chooseShareSource(
+    wc: WebContents,
+    request: DisplayMediaRequestHandlerHandlerRequest,
+    callback: (streams: Streams) => void
+  ): Promise<void> {
+    if (this.share) this.cancelShare()
+    let answered = false
+    const onGone = (): void => {
+      if (this.share?.id !== pending.id) return
+      this.share = null
+      pending.answer({})
+      this.emit({ type: 'share.close', id: pending.id }, 'overlay')
+    }
+    const pending: PendingShare = {
+      id: ++this.shareSeq,
+      audio: request.audioRequested,
+      tabs: new Map(),
+      sources: new Map(),
+      answer: (streams) => {
+        if (answered) return
+        answered = true
+        if (!wc.isDestroyed()) wc.off('destroyed', onGone)
+        try {
+          callback(streams)
+        } catch (error) {
+          console.warn('[share] could not start sharing', error)
+        }
+      }
+    }
+    this.share = pending
+    wc.once('destroyed', onGone)
+
+    const screenAccess = systemPreferences.getMediaAccessStatus('screen') === 'granted'
+    const captured = await desktopCapturer
+      .getSources({ types: ['window', 'screen'], thumbnailSize: { width: 400, height: 250 }, fetchWindowIcons: true })
+      .catch(() => [] as DesktopCapturerSource[])
+    if (this.share !== pending) return
+    const preview = (image: NativeImage | null | undefined): string | null =>
+      image && !image.isEmpty() ? `data:image/jpeg;base64,${image.toJPEG(78).toString('base64')}` : null
+    const displays = new Map(screen.getAllDisplays().map((d) => [String(d.id), d.label]))
+    const windows: ShareSource[] = []
+    const screens: ShareSource[] = []
+    for (const source of captured) {
+      pending.sources.set(source.id, source)
+      if (source.id.startsWith('screen:')) {
+        const name =
+          displays.get(source.display_id) || (captured.filter((s) => s.id.startsWith('screen:')).length > 1 ? source.name : 'Entire Screen')
+        screens.push({ id: source.id, name, thumbnail: preview(source.thumbnail), icon: null })
+      } else if (source.name) {
+        windows.push({
+          id: source.id,
+          name: source.name,
+          thumbnail: preview(source.thumbnail),
+          icon: source.appIcon?.isEmpty() === false ? source.appIcon.toDataURL() : null
+        })
+      }
+    }
+    // Your other tabs, most recently used first (Chrome leaves out the one asking, too).
+    const tabs: ShareSource[] = []
+    for (const tab of [...this.tabs].sort((a, b) => b.lastActiveAt - a.lastActiveAt)) {
+      const tabContents = this.views.get(tab.id)?.webContents
+      if (!tabContents || tabContents.isDestroyed() || tabContents.id === wc.id || !/^https?:|^file:/.test(tab.url)) continue
+      pending.tabs.set(`tab:${tab.id}`, tabContents)
+      tabs.push({ id: `tab:${tab.id}`, name: tab.title || tab.url, thumbnail: null, icon: tab.favicon, detail: safeHost(tab.url) })
+    }
+
+    this.setOverlayMode('full')
+    this.overlay.webContents.focus()
+    this.emit(
+      {
+        type: 'share.open',
+        request: {
+          id: pending.id,
+          host: safeHost(request.securityOrigin) || 'This site',
+          audio: request.audioRequested,
+          systemAudio: systemAudioCapture(),
+          screenAccess,
+          tabs,
+          windows,
+          screens
+        }
+      },
+      'overlay'
+    )
+  }
+
+  private answerShare(id: number, sourceId: string | null, audio: boolean): void {
+    const pending = this.share
+    if (!pending || pending.id !== id) return
+    this.share = null
+    if (!sourceId) return pending.answer({})
+    const tab = pending.tabs.get(sourceId)
+    if (tab) {
+      if (tab.isDestroyed()) return pending.answer({})
+      // The tab keeps playing for you while it's shared (enableLocalEcho).
+      const frame = tab.mainFrame
+      return pending.answer(audio && pending.audio ? { video: frame, audio: frame, enableLocalEcho: true } : { video: frame })
+    }
+    const source = pending.sources.get(sourceId)
+    if (!source) return pending.answer({})
+    // The Mac's sound without Zepper's own: in a call, the other side's voices (played by Zepper) would
+    // otherwise go back to them as an echo. Electron passes the device id through to Chromium as is.
+    const systemAudio = 'loopbackWithoutChrome' as unknown as 'loopback'
+    pending.answer(audio && pending.audio && systemAudioCapture() ? { video: source, audio: systemAudio } : { video: source })
+  }
+
+  private cancelShare(): void {
+    const pending = this.share
+    if (!pending) return
+    this.share = null
+    pending.answer({})
+    this.emit({ type: 'share.close', id: pending.id }, 'overlay')
+  }
+
   /** Shows the oldest pending permission prompt that belongs to the active tab. */
   private showNextPrompt(): void {
     if (this.showingPrompt !== null || this.showingDialog !== null || this.paletteOpen) return
@@ -4184,6 +4331,7 @@ export class Browser {
   }
 
   private async openAbout(): Promise<void> {
+    if (['idle', 'current', 'error'].includes(this.hub.updater.status.state)) void this.hub.updater.check(true)
     const info = {
       version: app.getVersion(),
       chromium: process.versions.chrome,
@@ -4575,6 +4723,7 @@ export class Browser {
       folders: this.folders,
       tidy: this.settings.aiFeatures ? this.hub.tidy : { kind: 'site', reason: 'Apple Intelligence features are turned off in Settings.' },
       defaultBrowser: this.hub.defaultBrowser,
+      update: this.hub.updater.status,
       intelligence: this.ai,
       extensionsPartition: this.extensionsPartition(),
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
@@ -4693,6 +4842,13 @@ function uniquePath(path: string): string {
     const candidate = `${stem} (${i})${ext}`
     if (!existsSync(candidate)) return candidate
   }
+}
+
+/** The Mac's own audio can be shared with a window or screen: Core Audio taps, macOS 14.2 and later. */
+function systemAudioCapture(): boolean {
+  if (process.platform !== 'darwin') return false
+  const [major = 0, minor = 0] = process.getSystemVersion().split('.').map(Number)
+  return major > 14 || (major === 14 && minor >= 2)
 }
 
 function safeHost(url: string): string {
