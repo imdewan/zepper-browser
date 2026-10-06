@@ -19,7 +19,8 @@ const api: ZepperApi = {
   suggest: (text: string) => ipcRenderer.invoke(IPC.suggest, text),
   history: (query: string) => ipcRenderer.invoke(IPC.history, query),
   historyMeaning: (query: string) => ipcRenderer.invoke(IPC.historyMeaning, query),
-  extensions: () => ipcRenderer.invoke(IPC.extensions)
+  extensions: () => ipcRenderer.invoke(IPC.extensions),
+  vault: (request) => ipcRenderer.invoke(IPC.vault, request)
 }
 
 contextBridge.exposeInMainWorld('zepper', api)

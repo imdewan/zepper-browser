@@ -12,7 +12,7 @@ import {
   type WebContents
 } from 'electron'
 import { join } from 'node:path'
-import { IPC, type Command, type IntelligenceStatus, type WidevineStatus } from '@shared/types'
+import { IPC, type Command, type IntelligenceStatus, type VaultRequest, type WidevineStatus } from '@shared/types'
 import type { AdBlock } from './adblock'
 import { Browser, type BrowserKind, type WindowSeed } from './browser'
 import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
@@ -27,9 +27,9 @@ import type { History } from './history'
 import type { SemanticHistory } from './semantic'
 import type { SettingsStore } from './settings-store'
 import { CertificateStore, SitePermissions } from './site'
-import { PASSWORDS_CHANNEL, type PageMessage, type PasswordStore } from './autofill'
-import { ApplePasswords, MemoryPasswords } from './passwords'
-import { cancelWebAuthn, passkeysAvailable } from './passkeys'
+import { PASSWORDS_CHANNEL, type PageMessage } from './autofill'
+import { handleVaultRequest } from './password-settings'
+import { Vault } from './vault'
 
 const WEBAUTHN_CHANNEL = 'zepper:webauthn'
 const WEBAUTHN_CANCEL_CHANNEL = 'zepper:webauthn-cancel'
@@ -44,8 +44,8 @@ export interface Services {
   permissions: SitePermissions
   certificates: CertificateStore
   extensions: Extensions | null
-  /** Saved passwords (Apple Passwords). */
-  passwords: PasswordStore
+  /** Zepper's password manager: saved passwords and passkeys. */
+  vault: Vault
   rendererUrl: string | undefined
   rendererDir: string
 }
@@ -89,13 +89,13 @@ export class Hub {
   private readonly widevineInstallableNow: boolean
   private widevineInstall: Promise<void> | null = null
 
-  constructor(services: Omit<Services, 'extensions' | 'certificates' | 'permissions' | 'passwords'>) {
+  constructor(services: Omit<Services, 'extensions' | 'certificates' | 'permissions' | 'vault'>) {
     this.services = {
       ...services,
       permissions: new SitePermissions(),
       certificates: new CertificateStore(),
       extensions: null,
-      passwords: process.env['ZEPPER_FAKE_PASSWORDS'] && !app.isPackaged ? new MemoryPasswords() : new ApplePasswords()
+      vault: new Vault()
     }
     this.widevineInstallableNow = services.settings.get().widevine
 
@@ -139,18 +139,21 @@ export class Hub {
     servePageConfig(
       services.settings,
       () => this.userAgent,
-      (url) => services.adblock.protects(url, 'fingerprinting'),
-      passkeysAvailable
+      (url) => services.adblock.protects(url, 'fingerprinting')
     )
-    // Passkeys: pages' WebAuthn requests, run through macOS by the window showing the page.
+    // Passkeys: pages' WebAuthn requests, answered by the window showing the page.
     ipcMain.handle(WEBAUTHN_CHANNEL, async (event, kind: string, options: string) => {
       const browser = this.owner(event.sender)
       if (!browser || (kind !== 'create' && kind !== 'get'))
         return JSON.stringify({ ok: false, name: 'NotAllowedError', message: 'Not allowed.' })
       return browser.onWebAuthn(event.sender, event.senderFrame, kind, String(options ?? '{}'))
     })
-    ipcMain.on(WEBAUTHN_CANCEL_CHANNEL, (event) => {
-      if (this.owner(event.sender)) cancelWebAuthn()
+    ipcMain.on(WEBAUTHN_CANCEL_CHANNEL, (event) => this.owner(event.sender)?.cancelWebAuthn(event.sender))
+    // Settings › Passwords (Zepper's own UI only).
+    ipcMain.handle(IPC.vault, async (event, request: VaultRequest) => {
+      const browser = this.uiOwner(event.sender)
+      if (!browser || !request || typeof request !== 'object') return null
+      return handleVaultRequest(this.services.vault, services.settings, browser.window(), request)
     })
     // Client certificates: you choose which (if any) a site gets.
     app.on('select-client-certificate', (event, wc, url, list, callback) => {

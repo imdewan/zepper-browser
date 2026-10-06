@@ -367,8 +367,8 @@ static napi_value Init(napi_env env, napi_value exports) {
       {"available", nullptr, Available, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"perform", nullptr, Perform, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"cancel", nullptr, Cancel, nullptr, nullptr, nullptr, napi_default, nullptr},
-      {"pickPassword", nullptr, PickPassword, nullptr, nullptr, nullptr, napi_default, nullptr},
-      {"cancelPick", nullptr, CancelPick, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"verifyOwner", nullptr, VerifyOwner, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"readKeychain", nullptr, ReadKeychain, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(properties) / sizeof(properties[0]), properties);
   return exports;

@@ -1,19 +1,19 @@
-import { app } from 'electron'
+import { app, systemPreferences } from 'electron'
 import { join } from 'node:path'
 
 /**
  * Zepper's native credentials addon (native/credentials, built by npm run build:credentials):
- * passkeys through macOS, and the Apple Passwords picker. Absent (not built, or not macOS),
- * those features simply stay off.
+ * the system's passkeys (with Apple's browser entitlement), proving you're the Mac's owner, and
+ * reading another browser's Keychain key for imports. Absent (not built, or not macOS), those
+ * features fall back or stay off.
  */
 export interface CredentialsAddon {
-  /** Whether this process may use passkeys (Apple's browser entitlement). */
+  /** Whether this process may use the system's passkeys (Apple's browser entitlement). */
   available(): boolean
   perform(windowHandle: Buffer, request: string): Promise<string>
   cancel(): void
-  /** Shows the Apple Passwords picker panel at a point in the window; resolves a login JSON or "null". */
-  pickPassword(windowHandle: Buffer, place: string): Promise<string>
-  cancelPick(): void
+  verifyOwner(reason: string): Promise<string>
+  readKeychain(service: string, account: string): Promise<string>
 }
 
 let addon: CredentialsAddon | null | undefined
@@ -33,4 +33,31 @@ export function credentialsAddon(): CredentialsAddon | null {
     // Not built.
   }
   return addon
+}
+
+/**
+ * Asks for Touch ID (or your Mac's password) before something sensitive. "unavailable" when this
+ * Mac has no way to check (no password set), so callers decide whether that's acceptable.
+ */
+export async function verifyOwner(reason: string): Promise<boolean | 'unavailable'> {
+  const native = credentialsAddon()
+  if (native) {
+    const result = JSON.parse(await native.verifyOwner(reason)) as boolean | 'unavailable'
+    return result
+  }
+  if (process.platform === 'darwin' && systemPreferences.canPromptTouchID()) {
+    return systemPreferences.promptTouchID(reason).then(
+      () => true,
+      () => false
+    )
+  }
+  return 'unavailable'
+}
+
+/** A generic password from the Keychain (macOS asks you to allow it); null if refused or missing. */
+export async function readKeychain(service: string, account: string): Promise<string | null> {
+  const native = credentialsAddon()
+  if (!native) return null
+  const result = JSON.parse(await native.readKeychain(service, account)) as [string] | null
+  return result ? result[0] : null
 }

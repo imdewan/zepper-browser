@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from '@shared/settings'
-import type { Command, HistoryEntry, Snapshot, Space, Suggestion, Tab, UiEvent, ZepperApi } from '@shared/types'
+import type { Command, HistoryEntry, Snapshot, Space, Suggestion, Tab, UiEvent, VaultReplies, VaultRequest, ZepperApi } from '@shared/types'
 
 /**
  * The preload exposes `window.zepper` inside Electron. When the renderer is
@@ -232,6 +232,31 @@ function createMock(): ZepperApi {
     },
     async historyMeaning(): Promise<HistoryEntry[]> {
       return []
+    },
+    async vault<T extends VaultRequest>(request: T): Promise<VaultReplies[T['type']]> {
+      const replies: Partial<VaultReplies> = {
+        list: {
+          logins: [
+            { id: 'l1', origin: 'https://github.com', host: 'github.com', username: 'octocat', note: '', updated: now, lastUsed: now },
+            {
+              id: 'l2',
+              origin: 'https://news.ycombinator.com',
+              host: 'news.ycombinator.com',
+              username: 'pg',
+              note: '',
+              updated: now,
+              lastUsed: null
+            }
+          ],
+          passkeys: [{ id: 'k1', rpId: 'webauthn.io', userName: 'zepper-test', displayName: 'Zepper', created: now, lastUsed: null }]
+        },
+        reveal: { password: 'hunter2' },
+        sources: [{ id: 'chrome', name: 'Google Chrome', profiles: [{ dir: 'Default', name: 'Person 1' }] }],
+        importBrowser: { added: 12, skipped: 2, conflicts: 0, invalid: 0 },
+        importFile: { added: 3, skipped: 0, conflicts: 0, invalid: 1 },
+        export: { saved: '/Users/you/Downloads/Zepper Passwords.csv' }
+      }
+      return (replies[request.type] ?? {}) as VaultReplies[T['type']]
     },
     async history(): Promise<HistoryEntry[]> {
       const now = Date.now()

@@ -1,7 +1,8 @@
-// Shared by the passkey and password-picker halves of the credentials addon: native results reach
+// Shared by the passkey and system halves of the credentials addon: native results reach
 // JavaScript as JSON strings, settling a promise on the JavaScript thread through a threadsafe function.
 #pragma once
 
+#import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 #include <node_api.h>
 #include <string>
@@ -71,5 +72,5 @@ static inline NSWindow *WindowFromHandle(napi_env env, napi_value handle) {
   return view.window;
 }
 
-napi_value PickPassword(napi_env env, napi_callback_info info);
-napi_value CancelPick(napi_env env, napi_callback_info info);
+napi_value VerifyOwner(napi_env env, napi_callback_info info);
+napi_value ReadKeychain(napi_env env, napi_callback_info info);

@@ -1,41 +1,37 @@
 import { BrowserWindow, nativeTheme, type WebContents, type WebFrameMain } from 'electron'
+import { randomInt } from 'node:crypto'
 import { parse as parseDomain } from 'tldts-experimental'
 import type { Settings } from '@shared/settings'
-import { IPC, type AutofillState, type Command, type Rect, type SavedLogin } from '@shared/types'
+import { IPC, type AutofillItem, type AutofillState, type Command, type Rect } from '@shared/types'
+import { getAssertion, makeCredential } from './authenticator'
+import { verifyOwner } from './native'
+import {
+  WebAuthnError,
+  cancelSystemPasskey,
+  checkRequest,
+  systemPasskey,
+  systemPasskeysAvailable,
+  type PasskeyRequest,
+  type Verification
+} from './passkeys'
+import type { Vault } from './vault'
 
 /**
- * Passwords in sign-in forms: the dropdown under a username or password field, filling the
- * login you pick, and offering to save a new or changed password after you sign in. Logins
- * live in a PasswordStore (Apple Passwords); the page never sees the list, only the login you
- * choose, and only after you choose it.
+ * Zepper's password manager in pages: the dropdown under sign-in fields (saved logins, passkeys
+ * a page is ready to accept, a strong password for new accounts), the offer to save a password
+ * after you sign in, and the sheets for creating and using passkeys. Pages never see the list,
+ * only the login you choose, after you choose it. Everything is drawn in one small borderless
+ * child window, so it has a real shadow and never takes focus from the page.
  */
-
-export type StoreStatus = { state: 'ready' } | { state: 'connect' } | { state: 'unavailable'; reason: string }
-
-export interface PasswordStore {
-  /** Whether save() asks you itself (Apple's "Save Password?" alert), so Zepper doesn't ask first. */
-  readonly confirmsSaves: boolean
-  status(): Promise<StoreStatus>
-  /** Saved logins for a page (user names only). */
-  logins(url: string): Promise<SavedLogin[]>
-  /** The user name and password of one login, to fill. */
-  password(url: string, id: string): Promise<{ username: string; password: string } | null>
-  save(url: string, username: string, password: string): Promise<void>
-  /** Connecting: macOS shows a code, which comes back through finishPairing. */
-  startPairing(): Promise<void>
-  finishPairing(pin: string): Promise<void>
-  /** You closed the code prompt. */
-  cancelPairing?(): void
-  /** Says where the pairing code comes from, when it isn't macOS (the development store). */
-  readonly pairingHint?: string
-}
 
 export const PASSWORDS_CHANNEL = 'zepper:passwords'
 const FILL_CHANNEL = 'zepper:passwords-fill'
 const OPEN_CHANNEL = 'zepper:passwords-open'
 
+export type FieldKind = 'username' | 'password' | 'new-password'
+
 export type PageMessage =
-  | { type: 'focus'; field: 'username' | 'password'; rect: [number, number, number, number] | null }
+  | { type: 'focus'; field: FieldKind; rect: [number, number, number, number] | null }
   | { type: 'blur' }
   | { type: 'key'; key: 'ArrowDown' | 'ArrowUp' | 'Enter' }
   | { type: 'submit'; username: string; password: string }
@@ -51,20 +47,20 @@ export interface AutofillHost {
   pageBounds(wc: WebContents): Rect | null
   /** Whether a page belongs to this window's visible tabs. */
   ownsVisiblePage(wc: WebContents): boolean
-  /** macOS's own Passwords picker, for when the store can't be used (no browser entitlement). */
-  canPickPasswords(): boolean
-  /** Shows the picker under a field (window coordinates); the login you choose, or null. */
-  pickPassword(anchor: Rect): Promise<{ username: string; password: string } | null>
-  cancelPick(): void
+  /** Settings › Passwords. */
+  openPasswordSettings(): void
 }
 
-const SAVE_WIDTH = 340
+const SHEET_WIDTH = 340
 /** How long a typed password waits for the page to move on before the save offer is dropped. */
 const SAVE_WAIT_MS = 15_000
+/** A passkey request nobody answers fails after this long, as browsers' do. */
+const PASSKEY_TIMEOUT_MS = 5 * 60_000
 
 interface Field {
   wc: WebContents
   frame: WebFrameMain
+  kind: FieldKind
   origin: string
   url: string
   /** The field in window coordinates. */
@@ -79,12 +75,38 @@ interface PendingSave {
   timer: NodeJS.Timeout
 }
 
+/** A page's passkey request waiting for you. */
+interface Ticket {
+  wc: WebContents
+  request: PasskeyRequest
+  resolve: (reply: string) => void
+  timer: NodeJS.Timeout | null
+}
+
+const ok = (result: Record<string, unknown>): string => JSON.stringify({ ok: true, result })
+const failure = (name: string, message: string): string => JSON.stringify({ ok: false, name, message })
+const NOT_ALLOWED = failure(
+  'NotAllowedError',
+  'The operation either timed out or was not allowed. See: https://www.w3.org/TR/webauthn-2/#sctn-privacy-considerations-client.'
+)
+
+/** A strong password in Apple's style: three groups of six, with one capital and one digit (about 90 bits). */
+export function strongPassword(): string {
+  const letters = 'abcdefghijkmnopqrstuvwxyz'
+  const chars = Array.from({ length: 18 }, () => letters[randomInt(letters.length)])
+  const capital = randomInt(18)
+  let digit = randomInt(18)
+  while (digit === capital) digit = randomInt(18)
+  chars[capital] = chars[capital].toUpperCase()
+  chars[digit] = String(randomInt(2, 10))
+  return [chars.slice(0, 6), chars.slice(6, 12), chars.slice(12)].map((group) => group.join('')).join('-')
+}
+
 export class AutofillController {
   private popup: BrowserWindow | null = null
   /** Where the popup is, in window coordinates. */
   private bounds: Rect = { x: 0, y: 0, width: 0, height: 0 }
   private pendingShow = false
-  private focusPopup = false
   private ready: Promise<void> | null = null
   private field: Field | null = null
   private state: AutofillState | null = null
@@ -93,17 +115,21 @@ export class AutofillController {
   private saving: Omit<PendingSave, 'timer'> | null = null
   private hideTimer: NodeJS.Timeout | null = null
   private readonly watched = new WeakSet<WebContents>()
-  /** The login last filled from the list, so signing in with it doesn't offer to save it again. */
-  private lastFilled: { origin: string; username: string } | null = null
+  /** A password Zepper suggested, saved without asking once you use it. */
+  private generated: { origin: string; password: string } | null = null
+  /** The passkey sheet's request (create, or sign in). */
+  private sheet: Ticket | null = null
+  /** Pages waiting to offer passkeys in the dropdown (mediation: "conditional"). */
+  private readonly conditional = new Map<WebContents, Ticket>()
 
   constructor(
     private readonly host: AutofillHost,
-    private readonly store: PasswordStore
+    private readonly vault: Vault
   ) {
     host.win.on('resize', () => this.hide())
   }
 
-  /** The dropdown or save prompt while it's showing, and where it is in the window. */
+  /** The popup while it's showing, and where it is in the window. */
   visible(): { webContents: WebContents; bounds: Rect } | null {
     const popup = this.livePopup()
     return this.state && popup?.isVisible() ? { webContents: popup.webContents, bounds: this.bounds } : null
@@ -115,73 +141,72 @@ export class AutofillController {
 
   /** A message from a page's sign-in field. */
   onPageMessage(wc: WebContents, frame: WebFrameMain | null, message: PageMessage): void {
-    if (!this.host.settings().passwords || !frame || frame !== wc.mainFrame) return
+    if (!frame || frame !== wc.mainFrame) return
     switch (message.type) {
       case 'focus':
-        if (message.rect) void this.openFor(wc, frame, message.rect)
+        if (message.rect) this.openFor(wc, frame, message.field, message.rect)
         return
       case 'blur':
         return this.scheduleHide()
       case 'key':
-        if (this.field?.wc === wc && (this.state?.kind === 'logins' || this.state?.kind === 'picker')) {
-          this.send({ type: 'autofill.key', key: message.key })
-        }
+        if (this.field?.wc === wc && this.state?.kind === 'list') this.send({ type: 'autofill.key', key: message.key })
         return
       case 'submit':
-        return void this.noteSubmit(wc, frame.url, String(message.username ?? ''), String(message.password ?? ''))
+        return this.noteSubmit(wc, frame.url, String(message.username ?? ''), String(message.password ?? ''))
     }
   }
 
   handle(command: Command): void {
     switch (command.type) {
-      case 'autofill.fill':
-        return void this.fill(command.loginId)
-      case 'autofill.pick':
-        return void this.pick()
-      case 'autofill.connect':
-        return void this.connect()
-      case 'autofill.pin':
-        return void this.enterPin(command.pin)
+      case 'autofill.choose':
+        return void this.choose(command.index)
       case 'autofill.save':
-        return void this.answerSave(command.choice)
+        return this.answerSave(command.choice)
       case 'autofill.dismiss':
-        return this.close()
+        return this.dismiss()
       case 'autofill.resize':
         this.height = Math.max(0, Math.min(600, Math.round(command.height)))
         return this.position()
-      case 'autofill.openPasswords':
+      case 'autofill.manage':
         this.close()
-        return void import('electron').then(({ shell }) => shell.openPath('/System/Applications/Passwords.app'))
+        return this.host.openPasswordSettings()
+      case 'autofill.passkeyCreate':
+        return void this.createPasskey()
+      case 'autofill.passkeyChoose':
+        return void this.usePasskey(command.id)
+      case 'autofill.passkeyOther':
+        return void this.otherDevice()
     }
   }
 
-  /** Hides the dropdown (switching tabs, opening a panel). A waiting save prompt stays. */
+  /** Hides the dropdown (switching tabs, opening a panel). A save prompt or passkey sheet stays. */
   hide(): void {
-    this.host.cancelPick()
-    if (this.state?.kind === 'save') return
-    this.close()
+    if (this.state?.kind === 'list') this.close()
   }
 
   destroy(): void {
     this.clearOffer()
     this.saving = null
+    if (this.sheet) this.finish(this.sheet, NOT_ALLOWED)
+    for (const ticket of this.conditional.values()) ticket.resolve(NOT_ALLOWED)
+    this.conditional.clear()
     this.livePopup()?.destroy()
     this.popup = null
   }
 
   // ---------------------------------------------------------------------------
+  // The dropdown
 
-  private async openFor(wc: WebContents, frame: WebFrameMain, rect: [number, number, number, number]): Promise<void> {
-    if (!this.host.ownsVisiblePage(wc)) return
+  private openFor(wc: WebContents, frame: WebFrameMain, kind: FieldKind, rect: [number, number, number, number]): void {
+    if (!this.host.ownsVisiblePage(wc) || this.sheet) return
     const url = frame.url
-    let origin: string
+    let parsed: URL
     try {
-      const parsed = new URL(url)
-      if (!secureForPasswords(parsed)) return
-      origin = parsed.origin
+      parsed = new URL(url)
     } catch {
       return
     }
+    if (!secureForPasswords(parsed)) return
     const bounds = this.host.pageBounds(wc)
     if (!bounds) return
     const zoom = wc.getZoomFactor()
@@ -190,90 +215,59 @@ export class AutofillController {
     // Off the visible page (scrolled away or tiny): nothing to anchor to.
     if (anchor.y + anchor.height < bounds.y || anchor.y > bounds.y + bounds.height || anchor.width < 20) return
     this.cancelHide()
-    this.field = { wc, frame, origin, url, anchor }
+    this.field = { wc, frame, kind, origin: parsed.origin, url, anchor }
     this.watch(wc)
 
-    const status = await this.store.status().catch((): StoreStatus => ({ state: 'unavailable', reason: 'Apple Passwords didn’t respond.' }))
-    if (this.field?.wc !== wc) return
-    const host = new URL(url).hostname.replace(/^www\./, '')
-    if (status.state === 'unavailable') return this.host.canPickPasswords() ? this.show({ kind: 'picker', host }) : this.close()
-    if (status.state === 'connect') {
-      // Asked once per site and session; after "Not now" the fields stay quiet.
-      if (this.declinedConnect.has(origin)) return this.close()
-      return this.show({ kind: 'connect', host })
-    }
-    const logins = await this.store.logins(url).catch(() => [])
-    if (this.field?.wc !== wc || this.field.url !== url) return
-    if (logins.length === 0) return this.close()
-    this.show({ kind: 'logins', host, logins })
-  }
-
-  private readonly declinedConnect = new Set<string>()
-
-  private async fill(loginId: string): Promise<void> {
-    const field = this.field
-    if (!field || field.wc.isDestroyed()) return this.close()
-    // The page may have moved on since the list opened: only fill the page it was opened for.
-    if (frameOrigin(field.frame) !== field.origin) return this.close()
-    const login = await this.store.password(field.url, loginId).catch(() => null)
-    this.close()
-    if (!login) return
-    this.lastFilled = { origin: field.origin, username: login.username }
-    field.wc.focus()
-    field.frame.send(FILL_CHANNEL, login)
-  }
-
-  /** macOS's picker: a small native panel under the field, where AutoFill offers your saved logins. */
-  private async pick(): Promise<void> {
-    const field = this.field
-    this.close()
-    if (!field || field.wc.isDestroyed()) return
-    const login = await this.host.pickPassword(field.anchor).catch(() => null)
-    if (!login || field.wc.isDestroyed()) return
-    if (frameOrigin(field.frame) !== field.origin) return
-    this.lastFilled = { origin: field.origin, username: login.username }
-    field.wc.focus()
-    field.frame.send(FILL_CHANNEL, login)
-  }
-
-  private async connect(): Promise<void> {
-    const host = this.state && 'host' in this.state ? this.state.host : ''
-    try {
-      await this.store.startPairing()
-      this.show({ kind: 'pin', host, hint: this.store.pairingHint }, true)
-    } catch (error) {
-      this.show({ kind: 'connect', host, error: message(error, 'Couldn’t reach Apple Passwords.') })
-    }
-  }
-
-  private async enterPin(pin: string): Promise<void> {
-    const host = this.state && 'host' in this.state ? this.state.host : ''
-    try {
-      await this.store.finishPairing(pin)
-    } catch (error) {
-      return this.show(
-        { kind: 'pin', host, hint: this.store.pairingHint, error: message(error, 'That code didn’t work. Try again.') },
-        true
-      )
-    }
-    // Connected: carry on with what you were doing.
-    if (this.saving) return this.show({ kind: 'save', host, username: this.saving.username, update: false })
-    const field = this.field
-    if (field && !field.wc.isDestroyed()) {
-      const logins = await this.store.logins(field.url).catch(() => [])
-      if (logins.length > 0) {
-        this.close()
-        field.wc.focus()
-        return this.show({ kind: 'logins', host, logins })
+    const items: AutofillItem[] = []
+    const passwords = this.host.settings().passwords
+    if (kind === 'new-password') {
+      if (passwords) items.push({ kind: 'generate', password: strongPassword() })
+    } else {
+      // Passkeys the page is ready to accept come first, as other browsers list them.
+      const waiting = this.conditional.get(wc)
+      if (waiting && kind === 'username') {
+        const allowed = (waiting.request.allowCredentials ?? []).map((d) => d.id)
+        for (const passkey of this.vault.passkeysFor(waiting.request.rpId, allowed)) {
+          items.push({ kind: 'passkey', id: passkey.id, username: passkey.userName || passkey.displayName, site: passkey.rpId })
+        }
       }
+      if (passwords) for (const login of this.vault.loginsFor(url)) items.push({ kind: 'login', ...login })
     }
-    this.close()
-    field?.wc.focus()
+    if (items.length === 0) return this.close()
+    this.show({ kind: 'list', host: parsed.hostname.replace(/^www\./, ''), items })
   }
+
+  private async choose(index: number): Promise<void> {
+    const field = this.field
+    const item = this.state?.kind === 'list' ? this.state.items[index] : undefined
+    this.close()
+    if (!field || !item || field.wc.isDestroyed()) return
+    // The page may have moved on since the list opened: only fill the page it was opened for.
+    if (frameOrigin(field.frame) !== field.origin) return
+    if (item.kind === 'login') {
+      // Only a login offered for this page, whatever the request says.
+      const offered = this.vault.loginsFor(field.url).some((login) => login.id === item.id)
+      const login = offered ? this.vault.login(item.id) : undefined
+      if (!login) return
+      this.vault.usedLogin(login.id)
+      field.wc.focus()
+      field.frame.send(FILL_CHANNEL, { username: login.username, password: login.password })
+    } else if (item.kind === 'generate') {
+      this.generated = { origin: field.origin, password: item.password }
+      field.wc.focus()
+      field.frame.send(FILL_CHANNEL, { password: item.password, allPasswords: true })
+    } else {
+      const ticket = this.conditional.get(field.wc)
+      if (ticket) await this.signIn(ticket, item.id)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Saving
 
   /** A sign-in form was sent: offer to save once the page moves on (a failed sign-in usually doesn't). */
-  private async noteSubmit(wc: WebContents, url: string, username: string, password: string): Promise<void> {
-    if (!password || password.length > 512 || username.length > 512) return
+  private noteSubmit(wc: WebContents, url: string, username: string, password: string): void {
+    if (!this.host.settings().passwords || !password || password.length > 512 || username.length > 512) return
     let parsed: URL
     try {
       parsed = new URL(url)
@@ -281,8 +275,7 @@ export class AutofillController {
       return
     }
     if (!secureForPasswords(parsed)) return
-    const domain = parseDomain(parsed.hostname).domain ?? parsed.hostname
-    if (this.host.settings().neverSavePasswords.includes(domain)) return
+    if (this.host.settings().neverSavePasswords.includes(siteOf(parsed.hostname))) return
     this.clearOffer()
     const timer = setTimeout(() => this.clearOffer(), SAVE_WAIT_MS)
     this.offer = { wc, url, username, password, timer }
@@ -290,54 +283,44 @@ export class AutofillController {
   }
 
   /** The page with a pending save offer navigated: the sign-in went through. */
-  private async pageMovedOn(wc: WebContents): Promise<void> {
+  private pageMovedOn(wc: WebContents): void {
     const offer = this.offer
     if (!offer || offer.wc !== wc) return
     this.clearOffer()
-    if (this.lastFilled?.origin === new URL(offer.url).origin && this.lastFilled.username === offer.username) return
-    const status = await this.store.status().catch(() => null)
-    if (status?.state !== 'ready') return
-    const logins = await this.store.logins(offer.url).catch(() => [])
-    const match = logins.find((l) => l.username === offer.username)
-    if (this.store.confirmsSaves) {
-      // Reading the saved password back would ask for Touch ID, so a known account isn't offered again;
-      // a new one goes straight to Apple's own "Save Password?" alert.
-      if (match) return
-      return void this.store
-        .save(offer.url, offer.username, offer.password)
-        .catch((error) => console.warn('[passwords] save failed', error))
+    const host = new URL(offer.url).hostname.replace(/^www\./, '')
+    // A password Zepper suggested is saved straight away.
+    if (this.generated?.origin === new URL(offer.url).origin && this.generated.password === offer.password) {
+      this.generated = null
+      if (this.vault.saveLogin(offer.url, offer.username, offer.password) && this.host.ownsVisiblePage(wc)) {
+        this.saving = null
+        this.field = null
+        this.show({ kind: 'saved', host, username: offer.username })
+        setTimeout(() => this.state?.kind === 'saved' && this.close(), 3000)
+      }
+      return
     }
-    if (match) {
-      const saved = await this.store.password(offer.url, match.id).catch(() => null)
-      if (saved?.password === offer.password) return
-    }
-    if (!this.host.ownsVisiblePage(wc)) return
+    const existing = this.vault.findLogin(offer.url, offer.username)
+    if (existing?.password === offer.password || !this.host.ownsVisiblePage(wc)) return
     this.saving = { wc, url: offer.url, username: offer.username, password: offer.password }
     this.field = null
-    this.show({ kind: 'save', host: new URL(offer.url).hostname.replace(/^www\./, ''), username: offer.username, update: Boolean(match) })
+    this.show({ kind: 'save', host, username: offer.username, update: Boolean(existing) })
     // Unanswered prompts don't keep the password around.
     setTimeout(() => {
       if (this.state?.kind === 'save' && this.saving?.password === offer.password) this.answerSave('later')
     }, 60_000)
   }
 
-  private async answerSave(choice: 'save' | 'later' | 'never'): Promise<void> {
+  private answerSave(choice: 'save' | 'later' | 'never'): void {
     const saving = this.saving
     this.saving = null
     this.close()
     if (!saving) return
     if (choice === 'never') {
-      const hostname = new URL(saving.url).hostname
-      const domain = parseDomain(hostname).domain ?? hostname
+      const domain = siteOf(new URL(saving.url).hostname)
       const list = this.host.settings().neverSavePasswords
       if (!list.includes(domain)) this.host.updateSettings({ neverSavePasswords: [...list, domain] })
-      return
-    }
-    if (choice !== 'save') return
-    try {
-      await this.store.save(saving.url, saving.username, saving.password)
-    } catch (error) {
-      console.warn('[passwords] save failed', error)
+    } else if (choice === 'save') {
+      this.vault.saveLogin(saving.url, saving.username, saving.password)
     }
   }
 
@@ -346,63 +329,192 @@ export class AutofillController {
     this.offer = null
   }
 
+  // ---------------------------------------------------------------------------
+  // Passkeys
+
+  /** A page's navigator.credentials request; resolves with the reply the page's shim expects. */
+  requestPasskey(wc: WebContents, frame: WebFrameMain, kind: 'create' | 'get', options: Record<string, unknown>): Promise<string> {
+    let request: PasskeyRequest
+    try {
+      request = checkRequest(frame, kind, options)
+    } catch (error) {
+      return Promise.resolve(replyFor(error))
+    }
+    return new Promise((resolve) => {
+      const ticket: Ticket = { wc, request, resolve, timer: null }
+      this.watch(wc)
+      if (request.conditional) {
+        // Offered in the dropdown under the page's username field until the page gives up.
+        this.conditional.get(wc)?.resolve(failure('AbortError', 'Replaced by a newer request.'))
+        this.conditional.set(wc, ticket)
+        return
+      }
+      if (!this.host.ownsVisiblePage(wc)) return resolve(failure('NotAllowedError', 'The document is not focused.'))
+      if (this.sheet) return resolve(failure('NotAllowedError', 'A request is already pending.'))
+      ticket.timer = setTimeout(() => this.finish(ticket, NOT_ALLOWED), PASSKEY_TIMEOUT_MS)
+      this.sheet = ticket
+      const other = systemPasskeysAvailable()
+      if (kind === 'create') {
+        // Zepper's passkeys are ES256; anything else can only go to macOS.
+        if (!request.algorithms?.includes(-7)) {
+          return other
+            ? void this.otherDevice()
+            : this.finish(ticket, failure('NotSupportedError', 'None of the requested algorithms are supported.'))
+        }
+        const saved = new Set(this.vault.passkeysFor(request.rpId).map((p) => p.id))
+        if (request.excludeCredentials?.some((d) => saved.has(d.id))) {
+          return this.finish(ticket, failure('InvalidStateError', 'The authenticator was previously registered.'))
+        }
+        this.field = null
+        this.show({ kind: 'passkeyCreate', rpId: request.rpId, userName: request.user?.name || request.user?.displayName || '', other })
+      } else {
+        const allowed = (request.allowCredentials ?? []).map((d) => d.id)
+        const passkeys = this.vault
+          .passkeysFor(request.rpId, allowed)
+          .map((p) => ({ id: p.id, userName: p.userName, displayName: p.displayName }))
+        this.field = null
+        this.show({ kind: 'passkeyGet', rpId: request.rpId, passkeys, other })
+      }
+    })
+  }
+
+  /** The page aborted its request (or went away). */
+  cancelPasskey(wc: WebContents): void {
+    const waiting = this.conditional.get(wc)
+    if (waiting) {
+      this.conditional.delete(wc)
+      waiting.resolve(failure('AbortError', 'The operation was aborted.'))
+    }
+    if (this.sheet?.wc === wc) {
+      cancelSystemPasskey()
+      this.finish(this.sheet, failure('AbortError', 'The operation was aborted.'))
+    }
+  }
+
+  private finish(ticket: Ticket, reply: string): void {
+    if (ticket.timer) clearTimeout(ticket.timer)
+    if (this.sheet === ticket) {
+      this.sheet = null
+      if (this.state?.kind === 'passkeyCreate' || this.state?.kind === 'passkeyGet') this.close()
+    }
+    for (const [wc, waiting] of this.conditional) if (waiting === ticket) this.conditional.delete(wc)
+    ticket.resolve(reply)
+  }
+
+  /** Touch ID (or your password) when the site asks for verification; null if you didn't confirm. */
+  private async verify(preference: Verification, reason: string): Promise<boolean | null> {
+    if (preference === 'discouraged') return false
+    const result = await verifyOwner(reason).catch(() => false as const)
+    if (result === true) return true
+    if (result === 'unavailable') return preference === 'required' ? null : false
+    return null
+  }
+
+  private async createPasskey(): Promise<void> {
+    const ticket = this.sheet
+    if (!ticket || ticket.request.kind !== 'create' || !ticket.request.user) return
+    const { request } = ticket
+    this.close()
+    const verified = await this.verify(request.userVerification, `save a passkey for ${request.rpId}`)
+    if (verified === null) return this.finish(ticket, NOT_ALLOWED)
+    const { record, response } = makeCredential({ ...request, user: request.user!, verified })
+    this.vault.addPasskey(record)
+    this.finish(ticket, ok(response))
+  }
+
+  private async usePasskey(id: string): Promise<void> {
+    const ticket = this.sheet
+    if (!ticket || ticket.request.kind !== 'get') return
+    this.close()
+    await this.signIn(ticket, id)
+  }
+
+  /** Signs in with a saved passkey (from the sheet, or the dropdown for a waiting page). */
+  private async signIn(ticket: Ticket, id: string): Promise<void> {
+    const { request } = ticket
+    const allowed = (request.allowCredentials ?? []).map((d) => d.id)
+    const passkey = this.vault.passkeysFor(request.rpId, allowed).find((p) => p.id === id)
+    if (!passkey) return this.finish(ticket, NOT_ALLOWED)
+    const verified = await this.verify(request.userVerification, `sign in to ${request.rpId}`)
+    if (verified === null) {
+      // Turning down Touch ID in the dropdown leaves the page waiting, as if you'd closed the list.
+      if (request.conditional) return
+      return this.finish(ticket, NOT_ALLOWED)
+    }
+    this.finish(ticket, ok(getAssertion(this.vault, passkey, { ...request, verified })))
+  }
+
+  /** iCloud Keychain, a phone nearby or a security key, through macOS (with Apple's browser entitlement). */
+  private async otherDevice(): Promise<void> {
+    const ticket = this.sheet
+    if (!ticket) return
+    this.close()
+    try {
+      this.finish(ticket, ok(await systemPasskey(this.host.win, ticket.request)))
+    } catch (error) {
+      this.finish(ticket, replyFor(error))
+    }
+  }
+
+  private dismiss(): void {
+    if (this.sheet && (this.state?.kind === 'passkeyCreate' || this.state?.kind === 'passkeyGet'))
+      return this.finish(this.sheet, NOT_ALLOWED)
+    if (this.state?.kind === 'save') return this.answerSave('later')
+    this.close()
+  }
+
   private watch(wc: WebContents): void {
     if (this.watched.has(wc)) return
     this.watched.add(wc)
     wc.on('did-start-navigation', (_e, _url, inPage, isMainFrame) => {
-      if (!isMainFrame) return
-      if (this.field?.wc === wc && !inPage) this.hide()
+      if (!isMainFrame || inPage) return
+      if (this.field?.wc === wc) this.hide()
+      // A new page: requests from the old one are over.
+      const waiting = this.conditional.get(wc)
+      if (waiting) this.finish(waiting, failure('AbortError', 'The page navigated.'))
+      if (this.sheet?.wc === wc) this.finish(this.sheet, NOT_ALLOWED)
     })
-    wc.on('did-navigate', () => void this.pageMovedOn(wc))
-    wc.on('did-navigate-in-page', (_e, _url, isMainFrame) => isMainFrame && void this.pageMovedOn(wc))
+    wc.on('did-navigate', () => this.pageMovedOn(wc))
+    wc.on('did-navigate-in-page', (_e, _url, isMainFrame) => isMainFrame && this.pageMovedOn(wc))
     wc.once('destroyed', () => {
       if (this.field?.wc === wc) this.close()
       if (this.offer?.wc === wc) this.clearOffer()
+      this.conditional.delete(wc)
+      if (this.sheet?.wc === wc) this.finish(this.sheet, NOT_ALLOWED)
     })
   }
 
   // ---------------------------------------------------------------------------
   // The popup: a small borderless child window, so it gets a real macOS shadow, can hang over the
-  // window's edge, and never takes focus from the page (except to type the pairing code).
+  // window's edge, and never takes focus from the page.
 
-  private show(state: AutofillState, focus = false): void {
+  private show(state: AutofillState): void {
     this.cancelHide()
     this.state = state
     const popup = this.ensurePopup()
-    this.focusPopup = focus
     void this.ready?.then(() => {
       if (this.state !== state || popup.isDestroyed()) return
       // Shown once the page reports its height for this state (see 'autofill.resize').
       this.pendingShow = true
       this.send({ type: 'autofill.show', state, dark: nativeTheme.shouldUseDarkColors })
-      this.setPageDropdown(state.kind === 'logins' || state.kind === 'picker')
+      this.setPageDropdown(state.kind === 'list')
     })
   }
 
   private close(): void {
     this.cancelHide()
-    if (this.state?.kind === 'connect' && this.field) this.declinedConnect.add(this.field.origin)
-    if (this.state?.kind === 'save') this.saving = null
-    if (this.state?.kind === 'pin') this.store.cancelPairing?.()
     this.setPageDropdown(false)
     this.state = null
     this.pendingShow = false
-    const popup = this.livePopup()
-    if (popup) {
-      const hadFocus = popup.isFocused()
-      popup.setFocusable(false)
-      popup.hide()
-      if (hadFocus) this.host.win.focus()
-    }
+    this.livePopup()?.hide()
   }
 
-  /** The field lost focus: close soon (the popup itself never takes it, apart from the code prompt). */
+  /** The field lost focus: close the dropdown soon (the popup itself never takes focus). */
   private scheduleHide(): void {
     this.cancelHide()
     this.hideTimer = setTimeout(() => {
       this.hideTimer = null
-      if (this.state?.kind === 'save' || this.state?.kind === 'pin') return
-      this.close()
+      if (this.state?.kind === 'list') this.close()
     }, 150)
   }
 
@@ -469,19 +581,25 @@ export class AutofillController {
     let x: number
     let y: number
     let width: number
-    if (state.kind === 'save' || !this.field) {
-      // The save prompt sits at the top right of the page.
-      const page = (this.saving && !this.saving.wc.isDestroyed() && this.host.pageBounds(this.saving.wc)) || this.activeBounds()
-      width = SAVE_WIDTH
-      x = page.x + page.width - width - 10
-      y = page.y + 10
-    } else {
+    if (state.kind === 'list' && this.field) {
       const { anchor } = this.field
-      width = Math.min(380, Math.max(state.kind === 'logins' || state.kind === 'picker' ? 260 : 320, anchor.width))
+      width = Math.min(380, Math.max(260, anchor.width))
       x = anchor.x
       y = anchor.y + anchor.height + 4
       // No room below: open above the field.
       if (y + height > winHeight) y = Math.max(0, anchor.y - 4 - height)
+    } else {
+      const wc = this.sheet?.wc ?? this.saving?.wc
+      const page = (wc && !wc.isDestroyed() && this.host.pageBounds(wc)) || this.windowBounds()
+      width = SHEET_WIDTH
+      if (state.kind === 'passkeyCreate' || state.kind === 'passkeyGet') {
+        // Passkey sheets drop from the top centre of the page, like other browsers'.
+        x = page.x + (page.width - width) / 2
+      } else {
+        // Save prompts sit at the top right.
+        x = page.x + page.width - width - 10
+      }
+      y = page.y + 10
     }
     x = Math.round(Math.max(0, Math.min(x, winWidth - width)))
     this.bounds = { x, y: Math.round(y), width: Math.round(width), height: Math.round(height) }
@@ -489,24 +607,24 @@ export class AutofillController {
     popup.setBounds({ ...this.bounds, x: content.x + this.bounds.x, y: content.y + this.bounds.y })
     if (this.pendingShow) {
       this.pendingShow = false
-      if (this.focusPopup) {
-        popup.setFocusable(true)
-        popup.show()
-        popup.focus()
-      } else {
-        popup.setFocusable(false)
-        popup.showInactive()
-      }
+      popup.showInactive()
     }
     // The shadow follows the card's shape; recompute it once the new size has painted.
     setTimeout(() => this.livePopup()?.invalidateShadow(), 40)
   }
 
-  private activeBounds(): Rect {
+  private windowBounds(): Rect {
     const [width, height] = this.host.win.getContentSize()
     return { x: 0, y: 0, width, height }
   }
 }
+
+function replyFor(error: unknown): string {
+  if (error instanceof WebAuthnError) return failure(error.domName, error.message)
+  return NOT_ALLOWED
+}
+
+const siteOf = (host: string): string => parseDomain(host).domain ?? host
 
 /** The origin a frame is showing now ('' if it's gone). */
 function frameOrigin(frame: WebFrameMain): string {
@@ -520,8 +638,4 @@ function frameOrigin(frame: WebFrameMain): string {
 /** Passwords are only offered and saved on secure pages (HTTPS, or a local development server). */
 function secureForPasswords(url: URL): boolean {
   return url.protocol === 'https:' || (url.protocol === 'http:' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname))
-}
-
-function message(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message && !/^\[/.test(error.message) ? error.message : fallback
 }

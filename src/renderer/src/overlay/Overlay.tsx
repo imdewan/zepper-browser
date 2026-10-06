@@ -32,6 +32,7 @@ export function Overlay(): React.JSX.Element | null {
   const [toasts, setToasts] = useState<ToastSpec[]>([])
   const [find, setFind] = useState<{ key: number; result: FindResult } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsSection, setSettingsSection] = useState<string | undefined>(undefined)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [about, setAbout] = useState<AboutInfo | null>(null)
   const [downloadsOpen, setDownloadsOpen] = useState(false)
@@ -69,6 +70,7 @@ export function Overlay(): React.JSX.Element | null {
         setHistoryOpen(false)
         setDownloadsOpen(false)
         setAbout(null)
+        setSettingsSection(event.section)
         setSettingsOpen(true)
       } else if (event.type === 'space.startCreate') {
         setPalette(null)
@@ -208,6 +210,7 @@ export function Overlay(): React.JSX.Element | null {
             tidy={snapshot.tidy}
             defaultBrowser={snapshot.defaultBrowser}
             intelligence={snapshot.intelligence}
+            initialSection={settingsSection}
             onClose={closeSettings}
           />
         )}

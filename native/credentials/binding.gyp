@@ -2,7 +2,7 @@
   "targets": [
     {
       "target_name": "zepper_credentials",
-      "sources": ["passkeys.mm", "picker.mm"],
+      "sources": ["passkeys.mm", "system.mm"],
       "xcode_settings": {
         "CLANG_ENABLE_OBJC_ARC": "YES",
         "MACOSX_DEPLOYMENT_TARGET": "14.0",
@@ -13,7 +13,8 @@
           "-framework AuthenticationServices",
           "-framework AppKit",
           "-framework Foundation",
-          "-framework Security"
+          "-framework Security",
+          "-framework LocalAuthentication"
         ]
       }
     }

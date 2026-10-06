@@ -312,22 +312,98 @@ export type PopoverSpec =
 export interface SavedLogin {
   id: string
   username: string
-  /** The site it was saved for, as Apple Passwords shows it. */
+  /** The site it was saved for (its host). */
   site: string
 }
 
-/** What the passwords dropdown under a sign-in field (or the save prompt) shows. */
+/** A row in the dropdown under a sign-in field. */
+export type AutofillItem =
+  | ({ kind: 'login' } & SavedLogin)
+  /** A passkey the page is waiting to accept (passkey autofill). */
+  | { kind: 'passkey'; id: string; username: string; site: string }
+  /** A strong password to use for a new account. */
+  | { kind: 'generate'; password: string }
+
+/** What Zepper's password popup shows. */
 export type AutofillState =
-  | { kind: 'logins'; host: string; logins: SavedLogin[] }
-  /** Apple Passwords isn't connected yet. */
-  | { kind: 'connect'; host: string; error?: string }
-  /** Connecting: macOS shows a code to type here (hint: where it comes from, if not macOS). */
-  | { kind: 'pin'; host: string; error?: string; hint?: string }
+  | { kind: 'list'; host: string; items: AutofillItem[] }
   /** After signing in with a new or changed password. */
   | { kind: 'save'; host: string; username: string; update: boolean }
-  | { kind: 'unavailable'; reason: string }
-  /** Without Apple's browser entitlement: pick a login with macOS's own Passwords picker. */
-  | { kind: 'picker'; host: string }
+  /** A suggested password was saved. */
+  | { kind: 'saved'; host: string; username: string }
+  /** A site wants to create a passkey (other: macOS's passkeys can be offered too). */
+  | { kind: 'passkeyCreate'; rpId: string; userName: string; other: boolean }
+  /** A site wants you to sign in with a passkey. */
+  | { kind: 'passkeyGet'; rpId: string; passkeys: { id: string; userName: string; displayName: string }[]; other: boolean }
+
+/** A saved password, as Settings lists it (never with the password). */
+export interface LoginSummary {
+  id: string
+  origin: string
+  host: string
+  username: string
+  note: string
+  updated: number
+  lastUsed: number | null
+}
+
+/** A saved passkey, as Settings lists it. */
+export interface PasskeySummary {
+  id: string
+  rpId: string
+  userName: string
+  displayName: string
+  created: number
+  lastUsed: number | null
+}
+
+/** A browser on this Mac whose passwords can be imported. */
+export interface ImportSource {
+  id: string
+  name: string
+  profiles: { dir: string; name: string }[]
+  /** macOS keeps its data from other apps until you allow Zepper (Full Disk Access). */
+  blocked?: boolean
+}
+
+export interface ImportResult {
+  added: number
+  /** Already saved, with the same password. */
+  skipped: number
+  /** Already saved with a different password (Zepper's is kept). */
+  conflicts: number
+  /** Not a web login (or no password). */
+  invalid: number
+}
+
+/** Settings › Passwords asks main for these. */
+export type VaultRequest =
+  | { type: 'list' }
+  | { type: 'reveal'; id: string }
+  | { type: 'add'; url: string; username: string; password: string }
+  | { type: 'update'; id: string; url: string; username: string; password?: string; note?: string }
+  | { type: 'delete'; id: string }
+  | { type: 'deletePasskey'; id: string }
+  | { type: 'sources' }
+  | { type: 'importBrowser'; source: string; profile: string }
+  | { type: 'importFile' }
+  | { type: 'export' }
+  | { type: 'openPrivacySettings' }
+
+export interface VaultReplies {
+  list: { logins: LoginSummary[]; passkeys: PasskeySummary[] }
+  reveal: { password: string } | { error: string }
+  add: { error?: string }
+  update: { error?: string }
+  delete: { error?: string }
+  deletePasskey: { error?: string }
+  sources: ImportSource[]
+  importBrowser: ImportResult | { error: string }
+  /** null: you closed the file dialog. */
+  importFile: ImportResult | { error: string } | null
+  export: { saved: string | null; error?: string }
+  openPrivacySettings: Record<string, never>
+}
 
 export interface FindResult {
   active: number
@@ -404,14 +480,14 @@ export type Command =
   | { type: 'capture.retake' }
   | { type: 'capture.drag' }
   | { type: 'capture.dismiss' }
-  | { type: 'autofill.fill'; loginId: string }
-  | { type: 'autofill.pick' }
-  | { type: 'autofill.connect' }
-  | { type: 'autofill.pin'; pin: string }
+  | { type: 'autofill.choose'; index: number }
   | { type: 'autofill.save'; choice: 'save' | 'later' | 'never' }
   | { type: 'autofill.dismiss' }
   | { type: 'autofill.resize'; height: number }
-  | { type: 'autofill.openPasswords' }
+  | { type: 'autofill.manage' }
+  | { type: 'autofill.passkeyCreate' }
+  | { type: 'autofill.passkeyChoose'; id: string }
+  | { type: 'autofill.passkeyOther' }
   /** Translate the page into your language, or back to the original. */
   | { type: 'page.translate'; tabId: string }
   | { type: 'app.openTranslationSettings' }
@@ -451,7 +527,7 @@ export type Command =
   /** Forget history since a time; 0 clears it all. */
   | { type: 'history.clear'; since: number }
   | { type: 'settings.update'; patch: Partial<Settings> }
-  | { type: 'ui.openSettings' }
+  | { type: 'ui.openSettings'; section?: string }
   | { type: 'ui.peekSidebar'; show: boolean }
   | { type: 'ui.dismissOverlay' }
   | { type: 'ui.createSpace' }
@@ -486,7 +562,7 @@ export type UiEvent =
   | { type: 'popover.open'; popover: PopoverSpec }
   | { type: 'find.open' }
   | { type: 'find.result'; result: FindResult }
-  | { type: 'settings.open' }
+  | { type: 'settings.open'; section?: string }
   | { type: 'peek.show' }
   | { type: 'overlay.dismiss' }
   | { type: 'swipe.progress'; direction: 'back' | 'forward'; progress: number; allowed: boolean }
@@ -504,6 +580,8 @@ export interface ZepperApi {
   historyMeaning(query: string): Promise<HistoryEntry[]>
   /** Installed extensions (enabled and disabled). */
   extensions(): Promise<ExtensionInfo[]>
+  /** Zepper's password manager, for Settings › Passwords. */
+  vault<T extends VaultRequest>(request: T): Promise<VaultReplies[T['type']]>
 }
 
 /** An installed extension, for Settings → Extensions. */
@@ -546,5 +624,6 @@ export const IPC = {
   suggest: 'zepper:suggest',
   extensions: 'zepper:extensions',
   history: 'zepper:history',
-  historyMeaning: 'zepper:history-meaning'
+  historyMeaning: 'zepper:history-meaning',
+  vault: 'zepper:vault'
 } as const

@@ -1,6 +1,7 @@
 /**
- * Passkeys: navigator.credentials.create() and get() for public-key credentials go to Zepper,
- * which runs them through macOS (iCloud Keychain passkeys, a phone nearby, security keys).
+ * Passkeys: navigator.credentials.create() and get() for public-key credentials go to Zepper's
+ * password manager, which keeps passkeys on this Mac (and, in builds signed with Apple's browser
+ * entitlement, can also hand a request to macOS for iCloud Keychain, a phone or a security key).
  * Runs in the page's own world, so it must stay self-contained: contextBridge sends this
  * function's source text, not its closure. `invoke` and `cancel` are bridged in from the preload.
  *
@@ -245,6 +246,7 @@ export function webauthnShim(invoke: (kind: string, options: string) => Promise<
     } else {
       json = {
         challenge: toB64(pk['challenge'] as Bytes),
+        mediation: options['mediation'],
         rpId: pk['rpId'],
         allowCredentials: descriptors(pk['allowCredentials']),
         userVerification: pk['userVerification'],
@@ -285,19 +287,8 @@ export function webauthnShim(invoke: (kind: string, options: string) => Promise<
     },
     get(this: unknown, options?: unknown): Promise<unknown> {
       const o = options as Dict | undefined
-      if (o && typeof o === 'object' && o['publicKey']) {
-        // Passkey autofill isn't offered (isConditionalMediationAvailable says so); a conditional
-        // request just waits, as it would with no saved passkeys, until the page aborts it.
-        if (o['mediation'] === 'conditional') {
-          const signal = o['signal'] as AbortSignal | undefined
-          return new Promise((_resolve, reject) =>
-            signal?.addEventListener('abort', () => reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError')), {
-              once: true
-            })
-          )
-        }
-        return run('get', o)
-      }
+      // Conditional requests (passkey autofill) wait until you pick a passkey under the username field.
+      if (o && typeof o === 'object' && o['publicKey']) return run('get', o)
       return originalGet.call(this, options)
     }
   }
@@ -309,13 +300,13 @@ export function webauthnShim(invoke: (kind: string, options: string) => Promise<
       return Promise.resolve(true)
     },
     isConditionalMediationAvailable(): Promise<boolean> {
-      return Promise.resolve(false)
+      return Promise.resolve(true)
     },
     getClientCapabilities(): Promise<Record<string, boolean>> {
       return Promise.resolve({
         conditionalCreate: false,
-        conditionalGet: false,
-        hybridTransport: true,
+        conditionalGet: true,
+        hybridTransport: false,
         passkeyPlatformAuthenticator: true,
         userVerifyingPlatformAuthenticator: true,
         relatedOrigins: false,

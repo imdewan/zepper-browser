@@ -628,11 +628,29 @@ const PASSWORDS_CHANNEL = 'zepper:passwords'
 const PASSWORDS_FILL_CHANNEL = 'zepper:passwords-fill'
 const PASSWORDS_OPEN_CHANNEL = 'zepper:passwords-open'
 
-type CredentialField = 'username' | 'password'
+type CredentialField = 'username' | 'password' | 'new-password'
+
+const visible = (input: HTMLInputElement): boolean => input.offsetParent !== null
+
+/** The password fields in a form (or the page), as you'd see them. */
+function passwordFields(scope: ParentNode): HTMLInputElement[] {
+  return [...scope.querySelectorAll<HTMLInputElement>('input[type="password"]')].filter(visible)
+}
+
+/** A field for choosing a password (sign-up or change), where Zepper suggests a strong one. */
+function isNewPassword(input: HTMLInputElement): boolean {
+  const autocomplete = input.autocomplete.toLowerCase()
+  if (autocomplete.includes('new-password')) return true
+  if (autocomplete.includes('current-password')) return false
+  const hint = `${input.name} ${input.id} ${input.placeholder} ${input.getAttribute('aria-label') ?? ''}`.toLowerCase()
+  if (/new|confirm|create|repeat|retype|verify|choose/.test(hint)) return true
+  // Sign-up forms ask for the password twice.
+  return passwordFields(input.form ?? document).length >= 2
+}
 
 function credentialField(target: EventTarget | null): [HTMLInputElement, CredentialField] | null {
   if (!(target instanceof HTMLInputElement) || target.disabled || target.readOnly) return null
-  if (target.type === 'password') return [target, 'password']
+  if (target.type === 'password') return [target, isNewPassword(target) ? 'new-password' : 'password']
   if (!['text', 'email', 'tel', ''].includes(target.type)) return null
   const hint =
     `${target.autocomplete} ${target.name} ${target.id} ${target.getAttribute('aria-label') ?? ''} ${target.placeholder}`.toLowerCase()
@@ -743,11 +761,19 @@ function watchCredentials(): void {
   )
 
   // Filling: Zepper sends the chosen login back.
-  ipcRenderer.on(PASSWORDS_FILL_CHANNEL, (_event, login: { username: string; password: string }) => {
+  ipcRenderer.on(PASSWORDS_FILL_CHANNEL, (_event, login: { username?: string; password: string; allPasswords?: boolean }) => {
     if (!focused) return
     const [input, kind] = focused
+    if (login.allPasswords) {
+      // A suggested password goes in every new-password field of the form (the password and its confirmation).
+      for (const field of passwordFields(input.form ?? document)) {
+        if (!field.autocomplete.toLowerCase().includes('current-password')) setFieldValue(field, login.password)
+      }
+      setFieldValue(input, login.password)
+      return
+    }
     const user = kind === 'username' ? input : usernameBefore(input)
-    const pass = kind === 'password' ? input : passwordAfter(input)
+    const pass = kind === 'username' ? passwordAfter(input) : input
     if (user && login.username) setFieldValue(user, login.username)
     if (pass && login.password) setFieldValue(pass, login.password)
   })
@@ -755,9 +781,14 @@ function watchCredentials(): void {
   // Saving: when a form with a typed password is submitted (or its button pressed), offer to save it.
   let offered = ''
   const capture = (scope: ParentNode): void => {
-    const pass = [...scope.querySelectorAll<HTMLInputElement>('input[type="password"]')].find((f) => f.value)
+    const filled = [...scope.querySelectorAll<HTMLInputElement>('input[type="password"]')].filter((f) => f.value)
+    // Sign-up and change-password forms: the new password (the last one), not the current one.
+    const pass = filled.find((f) => f.autocomplete.toLowerCase().includes('new-password')) ?? filled[filled.length - 1]
     if (!pass) return
-    const user = usernameBefore(pass)
+    const named = [...scope.querySelectorAll<HTMLInputElement>('input')].find(
+      (f) => visible(f) && f.value && (/username|email/.test(f.autocomplete.toLowerCase()) || f.type === 'email')
+    )
+    const user = named ?? usernameBefore(filled[0])
     const key = `${user?.value ?? ''}\u0000${pass.value}`
     if (key === offered) return
     offered = key

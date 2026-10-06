@@ -33,7 +33,7 @@ export interface PageConfig {
   fingerprintSeed: number | null
   /** The browser brand pages see in navigator.userAgentData, matching the headers (null: leave as is). */
   brand: { name: string; major: string; full: string } | null
-  /** Route WebAuthn (passkeys, security keys) to macOS: top-level secure pages, when Zepper may. */
+  /** Answer WebAuthn (passkeys) with Zepper's password manager: top-level secure pages. */
   passkeys: boolean
 }
 
@@ -91,12 +91,7 @@ export function clientHintHeaders(headers: Record<string, string>, ua: string): 
   return next
 }
 
-export function servePageConfig(
-  settings: SettingsStore,
-  currentUa: () => string,
-  protects: (pageUrl: string) => boolean,
-  passkeys: () => boolean
-): void {
+export function servePageConfig(settings: SettingsStore, currentUa: () => string, protects: (pageUrl: string) => boolean): void {
   ipcMain.on(PAGE_CONFIG_CHANNEL, (event) => {
     let pageUrl = ''
     let topLevel = false
@@ -124,7 +119,7 @@ export function servePageConfig(
             full: process.versions.chrome
           }
         : null,
-      passkeys: topLevel && /^https:|^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(pageUrl) && passkeys()
+      passkeys: topLevel && /^https:|^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(pageUrl)
     }
     event.returnValue = config
   })

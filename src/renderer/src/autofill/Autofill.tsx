@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AutofillState } from '@shared/types'
+import type { AutofillItem, AutofillState } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconKey } from '../icons'
+import { IconCheck, IconKey, IconPasskey, IconSparkle } from '../icons'
 import { cx } from '../util'
 
 /**
- * The passwords dropdown under a sign-in field, and the "Save password?" prompt after signing in.
- * It's a small view of its own so it can sit over the page without taking focus from the field:
- * the page keeps the keyboard, and passes arrow keys and Return here while the list is open.
+ * Zepper's password popup: the dropdown under a sign-in field, the "Save password?" prompt after
+ * signing in, and the sheets for creating and using passkeys. It's a small window of its own so it
+ * can sit over the page without taking focus from the field: the page keeps the keyboard, and
+ * passes arrow keys and Return here while the list is open.
  */
 export function Autofill(): React.JSX.Element | null {
   const [state, setState] = useState<AutofillState | null>(null)
@@ -26,17 +27,12 @@ export function Autofill(): React.JSX.Element | null {
           setSelected(-1)
         } else if (event.type === 'autofill.key') {
           const { state, selected } = current.current
-          if (state?.kind === 'picker') {
-            if (event.key === 'Enter' && selected === 0) zepper.send({ type: 'autofill.pick' })
-            else if (event.key !== 'Enter') setSelected(0)
-            return
-          }
-          if (state?.kind !== 'logins') return
-          const count = state.logins.length
+          if (state?.kind !== 'list') return
           if (event.key === 'Enter') {
-            if (state.logins[selected]) fill(state.logins[selected].id)
+            if (state.items[selected]) zepper.send({ type: 'autofill.choose', index: selected })
             return
           }
+          const count = state.items.length
           const next = event.key === 'ArrowDown' ? (selected + 1) % count : selected <= 0 ? count - 1 : selected - 1
           // Keys can come faster than renders.
           current.current = { state, selected: next }
@@ -46,7 +42,7 @@ export function Autofill(): React.JSX.Element | null {
     []
   )
 
-  // The view is sized to what it shows.
+  // The window is sized to what it shows.
   useEffect(() => {
     const el = root.current
     if (!el) return
@@ -66,75 +62,26 @@ export function Autofill(): React.JSX.Element | null {
   if (!state) return null
   return (
     <div ref={root} className={cx('autofill', `autofill-${state.kind}`)} data-ui={dark ? 'dark' : 'light'}>
-      {state.kind === 'logins' && (
+      {state.kind === 'list' && (
         <>
           <div className="af-list">
-            {state.logins.map((login, i) => (
+            {state.items.map((item, i) => (
               <button
-                key={login.id}
+                key={item.kind === 'generate' ? 'generate' : `${item.kind}:${item.id}`}
                 className={cx('af-row', i === selected && 'selected')}
                 onMouseEnter={() => setSelected(i)}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => fill(login.id)}
+                onClick={() => zepper.send({ type: 'autofill.choose', index: i })}
               >
-                <span className="af-icon">
-                  <IconKey size={13} />
-                </span>
-                <span className="af-text">
-                  <span className="af-name">{login.username || 'No user name'}</span>
-                  <span className="af-sub">{login.site}</span>
-                </span>
+                <ItemRow item={item} />
               </button>
             ))}
           </div>
-          <button
-            className="af-footer"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => zepper.send({ type: 'autofill.openPasswords' })}
-          >
-            Passwords…
+          <button className="af-footer" onMouseDown={(e) => e.preventDefault()} onClick={() => zepper.send({ type: 'autofill.manage' })}>
+            Manage passwords…
           </button>
         </>
       )}
-      {state.kind === 'picker' && (
-        <div className="af-list">
-          <button
-            className={cx('af-row', selected === 0 && 'selected')}
-            onMouseEnter={() => setSelected(0)}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => zepper.send({ type: 'autofill.pick' })}
-          >
-            <span className="af-icon">
-              <IconKey size={13} />
-            </span>
-            <span className="af-text">
-              <span className="af-name">Apple Passwords…</span>
-              <span className="af-sub">Choose a saved login for {state.host}</span>
-            </span>
-          </button>
-        </div>
-      )}
-      {state.kind === 'connect' && (
-        <div className="af-card">
-          <div className="af-head">
-            <span className="af-icon large">
-              <IconKey size={16} />
-            </span>
-            <span className="af-text">
-              <span className="af-name">Use Apple Passwords</span>
-              <span className="af-sub">Fill and save passwords from your iCloud Keychain, here and on your other devices.</span>
-            </span>
-          </div>
-          {state.error && <div className="af-error">{state.error}</div>}
-          <div className="af-actions">
-            <button onClick={() => zepper.send({ type: 'autofill.dismiss' })}>Not now</button>
-            <button className="af-primary" onClick={() => zepper.send({ type: 'autofill.connect' })}>
-              Connect
-            </button>
-          </div>
-        </div>
-      )}
-      {state.kind === 'pin' && <PinEntry error={state.error} hint={state.hint} />}
       {state.kind === 'save' && (
         <div className="af-card">
           <div className="af-title">
@@ -146,7 +93,7 @@ export function Autofill(): React.JSX.Element | null {
             </span>
             <span className="af-text">
               <span className="af-name">{state.username || 'No user name'}</span>
-              <span className="af-sub">Saved in Apple Passwords and synced with your devices.</span>
+              <span className="af-sub">Saved in Zepper on this Mac, encrypted with your Keychain.</span>
             </span>
           </div>
           <div className="af-actions">
@@ -163,16 +110,85 @@ export function Autofill(): React.JSX.Element | null {
           </div>
         </div>
       )}
-      {state.kind === 'unavailable' && (
+      {state.kind === 'saved' && (
+        <div className="af-card">
+          <div className="af-head">
+            <span className="af-icon">
+              <IconCheck size={14} />
+            </span>
+            <span className="af-text">
+              <span className="af-name">Password saved</span>
+              <span className="af-sub">{state.username ? `${state.username} on ${state.host}` : state.host}, in Zepper’s passwords.</span>
+            </span>
+          </div>
+        </div>
+      )}
+      {state.kind === 'passkeyCreate' && (
         <div className="af-card">
           <div className="af-head">
             <span className="af-icon large">
-              <IconKey size={16} />
+              <IconPasskey size={17} />
             </span>
             <span className="af-text">
-              <span className="af-name">Apple Passwords isn’t available</span>
-              <span className="af-sub">{state.reason}</span>
+              <span className="af-name">Create a passkey for {state.rpId}?</span>
+              <span className="af-sub">
+                {state.userName ? <strong>{state.userName}</strong> : 'Your account'} · saved in Zepper on this Mac. You’ll sign in with
+                Touch ID instead of a password.
+              </span>
             </span>
+          </div>
+          <div className="af-actions">
+            {state.other && (
+              <button className="af-quiet" onClick={() => zepper.send({ type: 'autofill.passkeyOther' })}>
+                Use another device…
+              </button>
+            )}
+            <span className="af-spacer" />
+            <button onClick={() => zepper.send({ type: 'autofill.dismiss' })}>Cancel</button>
+            <button className="af-primary" onClick={() => zepper.send({ type: 'autofill.passkeyCreate' })}>
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+      {state.kind === 'passkeyGet' && (
+        <div className="af-card">
+          <div className="af-head">
+            <span className="af-icon large">
+              <IconPasskey size={17} />
+            </span>
+            <span className="af-text">
+              <span className="af-name">Sign in to {state.rpId}</span>
+              <span className="af-sub">
+                {state.passkeys.length ? 'Choose a passkey saved in Zepper.' : `No passkeys for ${state.rpId} are saved in Zepper.`}
+              </span>
+            </span>
+          </div>
+          {state.passkeys.length > 0 && (
+            <div className="af-choices">
+              {state.passkeys.map((passkey) => (
+                <button key={passkey.id} className="af-row" onClick={() => zepper.send({ type: 'autofill.passkeyChoose', id: passkey.id })}>
+                  <span className="af-icon">
+                    <IconPasskey size={13} />
+                  </span>
+                  <span className="af-text">
+                    <span className="af-name">{passkey.userName || passkey.displayName || 'Passkey'}</span>
+                    {passkey.displayName && passkey.displayName !== passkey.userName && (
+                      <span className="af-sub">{passkey.displayName}</span>
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="af-actions">
+            {state.other && (
+              <button className="af-quiet" onClick={() => zepper.send({ type: 'autofill.passkeyOther' })}>
+                Use another device…
+              </button>
+            )}
+            <span className="af-spacer" />
+            <button onClick={() => zepper.send({ type: 'autofill.dismiss' })}>Cancel</button>
           </div>
         </div>
       )}
@@ -180,40 +196,30 @@ export function Autofill(): React.JSX.Element | null {
   )
 }
 
-function fill(loginId: string): void {
-  zepper.send({ type: 'autofill.fill', loginId })
-}
-
-/** Connecting to Apple Passwords: macOS shows a six-digit code, typed here once. */
-function PinEntry({ error, hint }: { error?: string; hint?: string }): React.JSX.Element {
-  const [pin, setPin] = useState('')
-  const input = useRef<HTMLInputElement>(null)
-  useEffect(() => input.current?.focus(), [])
+function ItemRow({ item }: { item: AutofillItem }): React.JSX.Element {
+  if (item.kind === 'generate') {
+    return (
+      <>
+        <span className="af-icon">
+          <IconSparkle size={13} />
+        </span>
+        <span className="af-text">
+          <span className="af-name">Use strong password</span>
+          <span className="af-sub af-mono">{item.password}</span>
+        </span>
+      </>
+    )
+  }
   return (
-    <div className="af-card">
-      <div className="af-title">Enter the code from macOS</div>
-      <div className="af-sub">{hint ?? 'macOS is showing a six-digit code. Type it here to connect Zepper to Apple Passwords.'}</div>
-      <input
-        ref={input}
-        className={cx('af-pin', error && 'invalid')}
-        value={pin}
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        spellCheck={false}
-        maxLength={6}
-        placeholder="••••••"
-        onChange={(e) => {
-          const next = e.target.value.replace(/\D/g, '').slice(0, 6)
-          // Sent once complete; the field clears for another try if it's wrong.
-          setPin(next.length === 6 ? '' : next)
-          if (next.length === 6) zepper.send({ type: 'autofill.pin', pin: next })
-        }}
-      />
-      {error && <div className="af-error">{error}</div>}
-      <div className="af-actions">
-        <span className="af-spacer" />
-        <button onClick={() => zepper.send({ type: 'autofill.dismiss' })}>Cancel</button>
-      </div>
-    </div>
+    <>
+      <span className="af-icon">{item.kind === 'passkey' ? <IconPasskey size={13} /> : <IconKey size={13} />}</span>
+      <span className="af-text">
+        <span className="af-name">{item.username || 'No user name'}</span>
+        <span className="af-sub">
+          {item.kind === 'passkey' ? 'Passkey · ' : ''}
+          {item.site}
+        </span>
+      </span>
+    </>
   )
 }

@@ -61,8 +61,6 @@ import {
 import type { Hub } from './hub'
 import { PipPlayer } from './pip'
 import { AutofillController, type PageMessage } from './autofill'
-import { WebAuthnError, performWebAuthn } from './passkeys'
-import { credentialsAddon } from './native'
 import { startDebugServer } from './devtools-server'
 import { JsonFile } from './persist'
 import { parse as parseDomain } from 'tldts-experimental'
@@ -700,20 +698,9 @@ export class Browser {
           const id = this.tabByWebContents.get(wc.id)
           return Boolean(id && this.attached.has(id) && this.win.isVisible() && this.overlayMode !== 'full')
         },
-        canPickPasswords: () => credentialsAddon() !== null,
-        pickPassword: async (anchor) => {
-          const addon = credentialsAddon()
-          if (!addon) return null
-          const place = { x: anchor.x, y: anchor.y + anchor.height + 4, width: anchor.width }
-          const login = JSON.parse(await addon.pickPassword(this.win.getNativeWindowHandle(), JSON.stringify(place))) as {
-            username: string
-            password: string
-          } | null
-          return login && typeof login.password === 'string' ? login : null
-        },
-        cancelPick: () => credentialsAddon()?.cancelPick()
+        openPasswordSettings: () => this.handle({ type: 'ui.openSettings', section: 'passwords' })
       },
-      this.hub.services.passwords
+      this.hub.services.vault
     )
 
     this.overlay.webContents.once('did-finish-load', () => {
@@ -961,19 +948,23 @@ export class Browser {
     ].includes(wc.id)
   }
 
-  /** A page's passkey request (navigator.credentials): only from a tab you can see, with the system sheet on this window. */
+  /** A page's passkey request (navigator.credentials), answered by Zepper's password manager. */
   async onWebAuthn(wc: WebContents, frame: Electron.WebFrameMain | null, kind: 'create' | 'get', options: string): Promise<string> {
-    const id = this.tabByWebContents.get(wc.id)
-    try {
-      if (!frame || !id || !this.attached.has(id) || this.win.isDestroyed())
-        throw new WebAuthnError('NotAllowedError', 'The document is not focused.')
-      const result = await performWebAuthn(this.win, frame, kind, JSON.parse(options) as Record<string, unknown>)
-      return JSON.stringify({ ok: true, result })
-    } catch (error) {
-      const name = error instanceof WebAuthnError ? error.domName : 'NotAllowedError'
-      const message = error instanceof Error ? error.message : 'The operation either timed out or was not allowed.'
-      return JSON.stringify({ ok: false, name, message })
+    if (!frame || !this.tabByWebContents.has(wc.id) || this.win.isDestroyed()) {
+      return JSON.stringify({ ok: false, name: 'NotAllowedError', message: 'The document is not focused.' })
     }
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(options) as Record<string, unknown>
+    } catch {
+      return JSON.stringify({ ok: false, name: 'TypeError', message: 'Bad request.' })
+    }
+    return this.autofill.requestPasskey(wc, frame, kind, parsed)
+  }
+
+  /** The page aborted its passkey request. */
+  cancelWebAuthn(wc: WebContents): void {
+    this.autofill.cancelPasskey(wc)
   }
 
   /** Sign-in fields in this window's pages report here (see AutofillController). */
@@ -1323,7 +1314,7 @@ export class Browser {
       case 'ui.openSettings':
         this.setOverlayMode('full')
         this.overlay.webContents.focus()
-        return this.emit({ type: 'settings.open' }, 'overlay')
+        return this.emit({ type: 'settings.open', section: command.section }, 'overlay')
       case 'ui.peekSidebar':
         return this.setPeek(command.show)
       case 'ui.peekLights':

@@ -90,7 +90,7 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 - **Tidy Tabs** sorts a messy space into named folders.
 - **Tabs you haven't opened lately** get a gentle nudge to close or file them.
 
-**Passwords and passkeys from Apple.** Saved logins from Apple Passwords appear under sign-in fields, and passkeys work with Touch ID, your iPhone or a security key, all synced through iCloud Keychain. Zepper keeps no passwords of its own.
+**A password manager, built in.** Saved logins under sign-in fields, strong passwords for new accounts, and passkeys with Touch ID, all kept encrypted on your Mac. Import from Chrome, Brave, Edge, Arc and others in one click, or from Apple Passwords, Firefox, 1Password and Bitwarden exports.
 
 **Arc-style captures.** ⇧⌘2: click an element, drag a region, or take the visible screen or the whole page. It's copied straight away, with a thumbnail you can drag into other apps.
 

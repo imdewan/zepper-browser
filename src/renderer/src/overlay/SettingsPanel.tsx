@@ -1,4 +1,18 @@
 import { useEffect, useState } from 'react'
+import {
+  ArrowDownToLine,
+  Hand,
+  KeyRound,
+  Keyboard,
+  Layers,
+  Music,
+  Palette,
+  Puzzle,
+  Search,
+  Settings2,
+  ShieldCheck,
+  type LucideIcon
+} from 'lucide-react'
 import { motion } from 'motion/react'
 import {
   PINNED_CLOSE_LABELS,
@@ -16,6 +30,7 @@ import { zepper } from '../bridge'
 import { IconClose } from '../icons'
 import { cx, isMac } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
+import { PasswordsSettings } from './PasswordsSettings'
 import { Toggle } from './Toggle'
 
 /** Languages Apple's on-device translation supports. */
@@ -44,18 +59,19 @@ const TRANSLATION_LANGUAGES = [
 type Section =
   'general' | 'appearance' | 'tabs' | 'media' | 'search' | 'downloads' | 'gestures' | 'privacy' | 'passwords' | 'extensions' | 'shortcuts'
 
-const SECTIONS: { id: Section; label: string; icon: string }[] = [
-  { id: 'general', label: 'General', icon: '⚙️' },
-  { id: 'appearance', label: 'Appearance', icon: '🎨' },
-  { id: 'tabs', label: 'Tabs', icon: '🗂️' },
-  { id: 'media', label: 'Media', icon: '🎵' },
-  { id: 'search', label: 'Search', icon: '🔎' },
-  { id: 'downloads', label: 'Downloads', icon: '⬇️' },
-  { id: 'gestures', label: 'Spaces & Gestures', icon: '👆' },
-  { id: 'privacy', label: 'Privacy', icon: '🛡️' },
-  { id: 'passwords', label: 'Passwords', icon: '🔑' },
-  { id: 'extensions', label: 'Extensions', icon: '🧩' },
-  { id: 'shortcuts', label: 'Shortcuts', icon: '⌨️' }
+/** Sidebar sections, each with a Lucide glyph on a coloured square, like System Settings. */
+const SECTIONS: { id: Section; label: string; Icon: LucideIcon; color: string }[] = [
+  { id: 'general', label: 'General', Icon: Settings2, color: '#8e8e93' },
+  { id: 'appearance', label: 'Appearance', Icon: Palette, color: '#5e5ce6' },
+  { id: 'tabs', label: 'Tabs', Icon: Layers, color: '#ff9f0a' },
+  { id: 'media', label: 'Media', Icon: Music, color: '#ff375f' },
+  { id: 'search', label: 'Search', Icon: Search, color: '#0a84ff' },
+  { id: 'downloads', label: 'Downloads', Icon: ArrowDownToLine, color: '#30b0c7' },
+  { id: 'gestures', label: 'Spaces & Gestures', Icon: Hand, color: '#bf5af2' },
+  { id: 'privacy', label: 'Privacy', Icon: ShieldCheck, color: '#34c759' },
+  { id: 'passwords', label: 'Passwords', Icon: KeyRound, color: '#636366' },
+  { id: 'extensions', label: 'Extensions', Icon: Puzzle, color: '#ff453a' },
+  { id: 'shortcuts', label: 'Shortcuts', Icon: Keyboard, color: '#48484a' }
 ]
 
 const SHORTCUTS: [string, string][] = [
@@ -96,6 +112,8 @@ interface SettingsPanelProps {
   tidy: Snapshot['tidy']
   defaultBrowser: boolean
   intelligence: IntelligenceStatus
+  /** The section to open on (e.g. "passwords" from the passwords popup). */
+  initialSection?: string
   onClose: () => void
 }
 
@@ -117,8 +135,16 @@ function widevineHint(status: WidevineStatus): string {
 }
 
 /** Settings sheet: every change applies immediately. */
-export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, intelligence, onClose }: SettingsPanelProps): React.JSX.Element {
-  const [section, setSection] = useState<Section>('general')
+export function SettingsPanel({
+  settings,
+  widevine,
+  tidy,
+  defaultBrowser,
+  intelligence,
+  initialSection,
+  onClose
+}: SettingsPanelProps): React.JSX.Element {
+  const [section, setSection] = useState<Section>(() => SECTIONS.find((s) => s.id === initialSection)?.id ?? 'general')
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
 
   useEffect(() => {
@@ -148,7 +174,9 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, intell
           <div className="settings-title">Settings</div>
           {SECTIONS.map((s) => (
             <button key={s.id} className={cx('settings-nav-item', section === s.id && 'active')} onClick={() => setSection(s.id)}>
-              <span className="settings-nav-icon">{s.icon}</span>
+              <span className="settings-nav-icon" style={{ background: s.color }}>
+                <s.Icon size={12} strokeWidth={2.4} />
+              </span>
               {s.label}
             </button>
           ))}
@@ -595,43 +623,7 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, intell
               </>
             )}
 
-            {section === 'passwords' && (
-              <>
-                <h2>Passwords</h2>
-                <Row
-                  label="Fill and save passwords"
-                  hint="Uses Apple Passwords, so your logins sync through iCloud Keychain with your iPhone, iPad and other Macs. Zepper keeps no passwords of its own."
-                >
-                  <Toggle checked={settings.passwords} onChange={(passwords) => set({ passwords })} />
-                </Row>
-                <Row label="Your passwords" hint="See, edit and share them, and check for weak or leaked ones.">
-                  <button className="panel-button" onClick={() => zepper.send({ type: 'autofill.openPasswords' })}>
-                    Open Passwords
-                  </button>
-                </Row>
-                {settings.neverSavePasswords.length > 0 && (
-                  <div className="settings-row settings-row-stacked">
-                    <div className="settings-row-text">
-                      <div className="settings-row-label">Never saved for</div>
-                      <div className="settings-row-hint">Zepper doesn’t offer to save passwords on these sites.</div>
-                    </div>
-                    <div className="site-chips">
-                      {settings.neverSavePasswords.map((domain) => (
-                        <span key={domain} className="site-chip">
-                          {domain}
-                          <button
-                            title={`Offer to save passwords on ${domain} again`}
-                            onClick={() => set({ neverSavePasswords: settings.neverSavePasswords.filter((d) => d !== domain) })}
-                          >
-                            <IconClose size={9} />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+            {section === 'passwords' && <PasswordsSettings settings={settings} />}
 
             {section === 'extensions' && <ExtensionsSettings settings={settings} />}
 

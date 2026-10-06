@@ -170,26 +170,22 @@
   color: var(--text);
 }
 
-.af-pin {
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 8px;
-  outline: none;
-  background: var(--element);
-  font:
-    600 20px/1 ui-monospace,
-    'SF Mono',
-    monospace;
-  letter-spacing: 0.5em;
-  text-align: center;
-  box-shadow: inset 0 0 0 1px transparent;
+.af-mono {
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 
-.af-pin:focus {
-  box-shadow: inset 0 0 0 2px var(--accent);
+.af-head strong {
+  font-weight: 600;
+  color: var(--text);
 }
 
-.af-pin.invalid {
-  box-shadow: inset 0 0 0 2px #e5484d;
+/* Passkeys to choose from in the sign-in sheet. */
+.af-choices {
+  margin: -2px -6px 0;
+}
+
+.af-choices .af-row:hover {
+  background: var(--hover);
 }

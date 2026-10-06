@@ -73,10 +73,11 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 ## Passwords and passkeys
 
-- **Apple Passwords, built in.** Your saved logins appear under sign-in fields; pick one (or use ↓ and Return) to fill it. When you sign in with a new password, macOS asks whether to save it in Apple Passwords, which syncs through iCloud Keychain. Zepper keeps no passwords of its own. Connecting takes a six-digit code that macOS shows, once each time Zepper opens.
-- **Passkeys and security keys** go through macOS: passkeys saved in Apple Passwords, a phone nearby (QR code), and USB or NFC security keys, with the system's own sheets.
-- Both need a build signed with Apple's browser entitlement (see [Architecture](ARCHITECTURE.md#passwords-and-passkeys)). Other builds fill from Apple Passwords through macOS's own picker: choose **Apple Passwords…** under a sign-in field, then **Passwords…**.
-- Settings → Passwords turns it off, opens the Passwords app, and lists sites where you chose never to save.
+- **A password manager, built in.** Saved logins appear under sign-in fields (↓ and Return work too); other pages of the same site get them as well. After you sign in with a new or changed password, Zepper offers to save it. Everything stays on your Mac, encrypted with a key kept in your Keychain.
+- **Strong passwords:** sign-up and change-password fields offer a generated one (in Apple's style, like `xetbaz-fikmo4-Rykgub`), filled into both boxes and saved once you sign up.
+- **Passkeys:** sites can create and use passkeys saved in Zepper, confirmed with Touch ID or your Mac's password, and passkey autofill under username fields works too. Builds signed with Apple's browser entitlement can also hand a request to macOS for iCloud Keychain, a phone nearby or a security key.
+- **Import** straight from Chrome, Brave, Edge, Arc, Vivaldi, Opera, Helium or Chromium on this Mac, or from a CSV export from Apple Passwords and Safari, Firefox, 1Password, Bitwarden, LastPass, Proton Pass and others. **Export** as CSV.
+- **Settings → Passwords:** search, show (after Touch ID), copy, edit and delete passwords; delete passkeys; and the sites where you chose never to save.
 
 ## Apple Intelligence (on the Mac)
 
