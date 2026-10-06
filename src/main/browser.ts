@@ -446,6 +446,9 @@ export class Browser {
   private showingPrompt: number | null = null
   private lastFindText = ''
   private peeking = false
+  /** The mode the overlay itself last asked for (it knows what it's showing). */
+  private overlayReported: OverlayMode = 'hidden'
+  private peekCheck: NodeJS.Timeout | null = null
   /** Horizontal offset applied to the active view while a swipe gesture is in progress. */
   private swipeOffset = 0
   private swipeAnimation: NodeJS.Timeout | null = null
@@ -711,7 +714,10 @@ export class Browser {
       const restore = this.restoreTabId && this.tab(this.restoreTabId)
       if (initialUrl) this.openTab(initialUrl)
       else if (restore) this.activateTab(restore.id)
+      // Reloaded later (or after a crash), the overlay starts empty: nothing of it may stay over the window.
+      this.overlay.webContents.on('did-finish-load', () => this.resetOverlay())
     })
+    this.overlay.webContents.on('render-process-gone', () => this.resetOverlay())
 
     this.applySettings(this.settings, null)
     this.disposers.push(this.settingsStore.onChange((next, prev) => this.applySettings(next, prev)))
@@ -1170,6 +1176,10 @@ export class Browser {
       case 'ui.closePalette':
         return this.closePalette(command.refocus)
       case 'ui.overlayMode':
+        this.overlayReported = command.mode
+        // The overlay isn't showing the peek card (it may never have heard about it): stop peeking,
+        // or an invisible overlay would keep covering the sidebar's edge.
+        if (this.peeking && command.mode !== 'peek' && command.mode !== 'full') this.endPeek()
         return this.setOverlayMode(command.mode)
       case 'ui.openPopover':
         this.setOverlayMode('full')
@@ -3384,6 +3394,23 @@ export class Browser {
     this.win.setWindowButtonPosition({ x: TRAFFIC_LIGHTS.x + inset, y: TRAFFIC_LIGHTS.y + inset })
   }
 
+  private endPeek(): void {
+    if (this.peekCheck) clearTimeout(this.peekCheck)
+    this.peekCheck = null
+    this.peeking = false
+    this.showTrafficLights(!this.compact)
+  }
+
+  /** The overlay starts over (reloaded, or its renderer went away): nothing stays open or covering. */
+  private resetOverlay(): void {
+    if (this.windowClosed) return
+    this.endPeek()
+    this.paletteOpen = false
+    this.overlayReported = 'hidden'
+    this.setOverlayMode('hidden')
+    this.broadcast()
+  }
+
   /** Compact mode: float the sidebar over the page while the pointer is at the window edge. */
   private setPeek(show: boolean): void {
     if (!this.compact || !this.settings.compactRevealOnHover) show = false
@@ -3395,6 +3422,14 @@ export class Browser {
     if (show) {
       this.setOverlayMode('peek')
       this.emit({ type: 'peek.show' }, 'overlay')
+      // If the overlay doesn't take it up, don't leave its (invisible) view over the sidebar's edge.
+      if (this.peekCheck) clearTimeout(this.peekCheck)
+      this.peekCheck = setTimeout(() => {
+        this.peekCheck = null
+        if (!this.peeking || this.overlayReported === 'peek' || this.overlayReported === 'full') return
+        this.endPeek()
+        if (this.overlayMode === 'peek') this.setOverlayMode('hidden')
+      }, 800)
     } else if (this.overlayMode === 'peek') {
       this.setOverlayMode('hidden')
     }

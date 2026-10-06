@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
 import type { Snapshot } from '@shared/types'
 import { zepper } from '../bridge'
@@ -6,6 +6,7 @@ import { Background } from '../chrome/App'
 import { Sidebar } from '../chrome/Sidebar'
 
 const HIDE_DELAY_MS = 250
+const NEVER_ENTERED_MS = 1500
 
 interface PeekProps {
   snapshot: Snapshot
@@ -23,6 +24,17 @@ interface PeekProps {
  */
 export function Peek({ snapshot, onHide, onShow }: PeekProps): React.JSX.Element {
   const timer = useRef(0)
+  // Shown because the pointer touched the edge, but it never came onto the card (it went off the
+  // window, say): it leaves on its own rather than staying open.
+  const hide = useRef(onHide)
+  hide.current = onHide
+  useEffect(() => {
+    timer.current = window.setTimeout(() => {
+      zepper.send({ type: 'ui.peekLights', visible: false })
+      hide.current()
+    }, NEVER_ENTERED_MS)
+    return () => window.clearTimeout(timer.current)
+  }, [])
   const right = snapshot.settings.sidebarPosition === 'right'
   const space = snapshot.spaces.find((s) => s.id === snapshot.activeSpaceId) ?? snapshot.spaces[0]
   const offscreen = right ? '110%' : '-110%'
