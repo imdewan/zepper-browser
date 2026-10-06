@@ -455,6 +455,39 @@ button.site-button.insecure:hover {
   margin-right: 0;
 }
 
+/* Translate: always visible when offered (it's the cue that the page is in another language). */
+.url-pill-translate {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease;
+}
+
+.url-pill-translate:hover {
+  background: var(--press);
+  color: var(--text);
+}
+
+.url-pill-translate.on {
+  color: var(--accent);
+}
+
+.url-pill-translate.working {
+  animation: translate-pulse 1s ease-in-out infinite;
+}
+
+@keyframes translate-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
 /* ---- Essentials ---------------------------------------------------------- */
 
 .essentials {

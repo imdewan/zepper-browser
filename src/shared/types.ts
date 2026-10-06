@@ -14,7 +14,7 @@ export interface PinnedInfo {
 export interface Tab {
   id: string
   kind: TabKind
-  /** Owning space; null for Essentials, which are shared by every space. */
+  /** The space the tab belongs to (Essentials too). */
   spaceId: string | null
   url: string
   title: string
@@ -33,6 +33,10 @@ export interface Tab {
   media: MediaInfo | null
   /** When the tab last started or stopped making sound; the most recent media gets the now-playing card. */
   audibleAt: number
+  /** The page's language when it isn't yours and can be translated on the Mac (e.g. "ja"). */
+  language: string | null
+  /** The page is being translated, or shows a translation. */
+  translation: 'working' | 'on' | null
 }
 
 export interface MediaInfo {
@@ -369,6 +373,9 @@ export type Command =
   | { type: 'widevine.respond'; host: string; choice: 'install' | 'later' | 'never' }
   | { type: 'app.relaunch' }
   | { type: 'app.makeDefaultBrowser' }
+  /** Translate the page into your language, or back to the original. */
+  | { type: 'page.translate'; tabId: string }
+  | { type: 'app.openTranslationSettings' }
   /** Summarise the current page, or answer a question about it (with earlier questions and answers). */
   | { type: 'ui.openAssistant'; anchor?: Rect }
   | { type: 'assistant.run'; requestId: string; question?: string; history?: [string, string][] }

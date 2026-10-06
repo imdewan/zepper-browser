@@ -137,6 +137,8 @@ function makeTab(fields: Partial<Tab> & Pick<Tab, 'kind' | 'url'>): Tab {
     blockedCount: 0,
     media: null,
     audibleAt: 0,
+    language: null,
+    translation: null,
     ...fields
   }
 }
@@ -214,6 +216,151 @@ const PAGE_TEXT_SCRIPT = `(() => {
   const description = document.querySelector('meta[name="description"], meta[property="og:description"]')?.content || ''
   return { title: document.title, text: description && !text.includes(description) ? description + '\\n\\n' + text : text }
 })()`
+
+/**
+ * In-page translation (in Zepper's isolated world). Text is translated a paragraph at a time
+ * (headings, list items, cells…), each text node a tagged segment, so links and formatting
+ * survive: in place when the translation keeps the word order, else the paragraph's inline
+ * markup is rebuilt in the new order. Visible paragraphs go first; text added later joins the
+ * queue; the original comes back exactly.
+ */
+const TRANSLATOR_SCRIPT = `(() => {
+  if (window.__zepperTranslator) return true
+  const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE', 'TEXTAREA', 'KBD', 'SAMP', 'VAR', 'SVG', 'MATH', 'INPUT', 'SELECT', 'OPTION', 'TEMPLATE'])
+  const BLOCK = new Set(['P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TD', 'TH', 'DT', 'DD', 'BLOCKQUOTE', 'FIGCAPTION', 'CAPTION', 'LEGEND', 'SUMMARY', 'BUTTON', 'LABEL', 'DIV', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'MAIN', 'FORM', 'TABLE', 'TR', 'UL', 'OL', 'DL', 'BODY'])
+  const INLINE = new Set(['A', 'ABBR', 'B', 'BDI', 'BDO', 'BR', 'CITE', 'DATA', 'DFN', 'EM', 'FONT', 'I', 'IMG', 'INS', 'DEL', 'MARK', 'Q', 'S', 'SMALL', 'SPAN', 'STRONG', 'SUB', 'SUP', 'TIME', 'U', 'WBR'])
+  const units = []
+  const unitOf = new Map()
+  const seen = new WeakSet()
+  let added = []
+  let observer = null
+  const accept = (node) => {
+    if (seen.has(node) || !/\\p{L}/u.test(node.nodeValue || '')) return false
+    for (let el = node.parentElement; el; el = el.parentElement) {
+      if (SKIP.has(el.tagName) || el.isContentEditable || el.getAttribute('translate') === 'no' || el.classList.contains('notranslate')) return false
+    }
+    return true
+  }
+  const blockOf = (node) => {
+    let el = node.parentElement
+    while (el && !BLOCK.has(el.tagName)) el = el.parentElement
+    return el || document.body
+  }
+  const take = (root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node && units.length < 12000; node = walker.nextNode()) {
+      if (!accept(node)) continue
+      seen.add(node)
+      const block = blockOf(node)
+      let unit = unitOf.get(block)
+      if (!unit || unit.state !== 0) {
+        unit = { block, nodes: [], original: [], state: 0, saved: null, shared: !!unit }
+        unitOf.set(block, unit)
+        units.push(unit)
+      }
+      unit.nodes.push(node)
+      unit.original.push(node.nodeValue)
+    }
+  }
+  const plain = (unit) => {
+    if (unit.shared) return false
+    for (const el of unit.block.querySelectorAll('*')) if (!INLINE.has(el.tagName)) return false
+    return true
+  }
+  window.__zepperTranslator = {
+    collect: () => (take(document.body), units.length),
+    next: (maxUnits, maxChars) => {
+      const height = innerHeight
+      const waiting = []
+      units.forEach((unit, u) => {
+        if (unit.state !== 0 || !unit.block.isConnected) return
+        const box = unit.block.getBoundingClientRect()
+        if (box.width === 0 && box.height === 0) return
+        const size = unit.nodes.reduce((n, node) => n + node.nodeValue.length, 0)
+        waiting.push([u, box.bottom < 0 ? -box.bottom + height : box.top > height ? box.top - height : 0, size])
+      })
+      // On screen, the longest paragraphs first (that's the reading, not the menus); off screen, nearest first.
+      waiting.sort((a, b) => a[1] - b[1] || b[2] - a[2])
+      const batch = []
+      let chars = 0
+      for (const [u] of waiting) {
+        const segments = units[u].nodes.map((node) => node.nodeValue)
+        const size = segments.join('').length
+        if (batch.length >= maxUnits || (batch.length > 0 && chars + size > maxChars)) break
+        units[u].state = 1
+        chars += size
+        batch.push({ u, segments })
+      }
+      return batch
+    },
+    apply: (results) => {
+      for (const [u, runs] of results) {
+        const unit = units[u]
+        if (!unit) continue
+        unit.state = 2
+        const pieces = []
+        for (const [k, text] of runs) {
+          const segment = k >= 0 && k < unit.nodes.length ? k : pieces.length ? pieces[pieces.length - 1][0] : 0
+          if (pieces.length && pieces[pieces.length - 1][0] === segment) pieces[pieces.length - 1][1] += text
+          else pieces.push([segment, text])
+        }
+        const inOrder = pieces.every((piece, i) => i === 0 || piece[0] > pieces[i - 1][0])
+        if (inOrder) {
+          // Same order: each text node gets its piece (with the translation's own spacing).
+          const texts = unit.nodes.map(() => '')
+          for (const [k, text] of pieces) texts[k] = text
+          unit.nodes.forEach((node, k) => node.isConnected && (node.nodeValue = texts[k]))
+          continue
+        }
+        if (!plain(unit)) {
+          // Reordered, with more than links and formatting inside: the whole sentence goes in the
+          // first text node, so it reads right (links in it lose their text).
+          unit.nodes.forEach((node, k) => node.isConnected && (node.nodeValue = k === 0 ? pieces.map((piece) => piece[1]).join('') : ''))
+          continue
+        }
+        unit.saved = [...unit.block.childNodes]
+        const fragment = document.createDocumentFragment()
+        for (const [k, text] of pieces) {
+          let piece = document.createTextNode(text)
+          for (let el = unit.nodes[k].parentElement; el && el !== unit.block; el = el.parentElement) {
+            const wrapper = el.cloneNode(false)
+            wrapper.appendChild(piece)
+            piece = wrapper
+          }
+          fragment.appendChild(piece)
+        }
+        unit.block.replaceChildren(fragment)
+      }
+    },
+    watch: () => {
+      observer = observer || new MutationObserver((records) => {
+        for (const record of records) for (const node of record.addedNodes) added.push(node)
+      })
+      observer.observe(document.body, { childList: true, subtree: true })
+    },
+    collectAdded: () => {
+      const roots = added.filter((node) => node.isConnected)
+      added = []
+      for (const root of roots) if (root.nodeType === 1) take(root)
+      else if (root.nodeType === 3 && root.parentElement) take(root.parentElement)
+    },
+    restore: () => {
+      observer?.disconnect()
+      observer = null
+      added = []
+      for (const unit of units) {
+        if (unit.saved) unit.block.replaceChildren(...unit.saved)
+        else if (unit.state === 2) unit.nodes.forEach((node, k) => node.isConnected && (node.nodeValue = unit.original[k]))
+        unit.saved = null
+        unit.state = 0
+      }
+    }
+  }
+  return true
+})()`
+
+/** The page's declared language, and a sample of its text to check. */
+const LANGUAGE_SCRIPT = `({ lang: document.documentElement.lang || '', sample: (document.body ? document.body.innerText : '').slice(0, 800) })`
 
 /** Pauses every playing video and audio element. */
 const MEDIA_PAUSE_SCRIPT = `(() => {
@@ -309,6 +456,8 @@ export class Browser {
   private readonly mediaTipShown = new Set<string>()
   /** Folders in spaces' pinned areas (the tree itself is space.pinnedItems and folder.items). */
   private folders: Folder[] = []
+  /** Tabs showing a translation (each run has its own token, so a stopped one ends). */
+  private readonly translating = new Map<string, symbol>()
   /** Typed addresses tried over HTTPS first (see did-fail-load). */
   private readonly httpsFirst = new Set<string>()
   /** Tabs with a "not responding" question open. */
@@ -362,7 +511,7 @@ export class Browser {
       const { restoreTabs, keepEssentials } = hub.services.settings.get()
       this.tabs = saved.tabs
         .filter((t) => (t.kind !== 'normal' || restoreTabs) && (t.kind !== 'essential' || keepEssentials))
-        .map((t) => makeTab(t))
+        .map((t) => makeTab({ ...t, language: null, translation: null }))
       // Essentials used to be shared by every space; now each space has its own, starting with a copy.
       const shared = this.tabs.filter((t) => t.kind === 'essential' && !t.spaceId)
       if (shared.length > 0) {
@@ -976,6 +1125,10 @@ export class Browser {
         return this.hub.relaunch()
       case 'app.makeDefaultBrowser':
         return this.hub.makeDefaultBrowser()
+      case 'page.translate':
+        return void this.translatePage(command.tabId)
+      case 'app.openTranslationSettings':
+        return void shell.openExternal('x-apple.systempreferences:com.apple.Localization-Settings.extension')
       case 'ui.openAssistant':
         return this.openAssistant(command.anchor)
       case 'assistant.run':
@@ -2177,6 +2330,113 @@ export class Browser {
     if (Math.abs(wc.getZoomFactor() - factor) > 0.001) wc.setZoomFactor(factor)
   }
 
+  /** The language pages are translated into: the chosen one, or the Mac's. */
+  private translationTarget(): string {
+    return (this.settings.translateTo || app.getPreferredSystemLanguages()[0] || 'en').split(/[-_]/)[0].toLowerCase()
+  }
+
+  /** Offers translation when a page isn't in your language (and this Mac can translate). */
+  private async detectLanguage(tabId: string, wc: WebContents): Promise<void> {
+    if (!this.settings.offerTranslation || !this.hub.aiStatus.translation || !/^https?:/.test(wc.getURL())) return
+    const page = await wc.executeJavaScriptInIsolatedWorld(ZEPPER_WORLD, [{ code: LANGUAGE_SCRIPT }]).catch(() => null)
+    if (!page || wc.isDestroyed()) return
+    let language = String(page.lang).split(/[-_]/)[0].toLowerCase()
+    // Pages often leave lang unset or wrong: check the text itself.
+    if (page.sample.trim().length > 80) {
+      const detected = await intelligence.request<{ language: string }>('detect', { text: page.sample }).catch(() => null)
+      if (detected?.language) language = detected.language.split(/[-_]/)[0].toLowerCase()
+    }
+    const tab = this.tab(tabId)
+    if (!tab || !language || language === this.translationTarget() || tab.language === language) return
+    tab.language = language
+    this.broadcast()
+  }
+
+  /** Translates the page into your language, or shows the original again. */
+  private async translatePage(tabId: string): Promise<void> {
+    const tab = this.tab(tabId)
+    const wc = this.views.get(tabId)?.webContents
+    if (!tab || !wc || wc.isDestroyed()) return
+    const run = <T>(code: string): Promise<T> => wc.executeJavaScriptInIsolatedWorld(ZEPPER_WORLD, [{ code }])
+    if (tab.translation) {
+      this.stopTranslating(tabId)
+      await run('window.__zepperTranslator && window.__zepperTranslator.restore()').catch(() => {})
+      tab.translation = null
+      return this.broadcast()
+    }
+    let from = tab.language ?? ''
+    const to = this.translationTarget()
+    tab.translation = 'working'
+    this.broadcast()
+    const session = Symbol(tabId)
+    this.translating.set(tabId, session)
+    try {
+      await run(TRANSLATOR_SCRIPT)
+      await run('window.__zepperTranslator.collect()')
+      await run('window.__zepperTranslator.watch()')
+      // Translates what's on screen first, then outward from wherever you've scrolled to, as long as
+      // the translation is showing. Apple's model takes a moment per line, so long pages fill in over time.
+      let first = true
+      while (this.translating.get(tabId) === session && !wc.isDestroyed()) {
+        await run('window.__zepperTranslator.collectAdded()')
+        const batch = await run<{ u: number; segments: string[] }[]>(
+          `window.__zepperTranslator.next(${first ? 4 : 16}, ${first ? 900 : 3500})`
+        )
+        if (batch.length === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1200))
+          continue
+        }
+        const result = await intelligence.request<{ from: string; units: [number, string][][] }>('translateRich', {
+          from,
+          to,
+          units: batch.map((unit) => unit.segments)
+        })
+        from ||= result.from
+        if (this.translating.get(tabId) !== session) break
+        await run(`window.__zepperTranslator.apply(${JSON.stringify(batch.map((unit, k) => [unit.u, result.units[k] ?? []]))})`)
+        if (first && this.tab(tabId)) {
+          first = false
+          this.tab(tabId)!.translation = 'on'
+          this.broadcast()
+        }
+      }
+    } catch (error) {
+      // Stopped meanwhile (you went to another page, or showed the original): nothing to report.
+      if (this.translating.get(tabId) !== session) return
+      this.stopTranslating(tabId)
+      if (this.tab(tabId)) tab.translation = null
+      this.broadcast()
+      const code = error instanceof AiError ? error.code : undefined
+      const name = (language: string): string => {
+        try {
+          return (language && new Intl.DisplayNames(['en'], { type: 'language' }).of(language)) || 'the languages'
+        } catch {
+          return language
+        }
+      }
+      if (code === 'notInstalled') {
+        this.toast({
+          id: 'translate',
+          message: `Download ${name(from)} and ${name(to)} to translate`,
+          description: 'System Settings › General › Language & Region › Translation Languages',
+          action: { label: 'Open', command: { type: 'app.openTranslationSettings' } },
+          timeout: 8000
+        })
+      } else {
+        this.toast({
+          id: 'translate',
+          message: 'Couldn’t translate this page',
+          description: error instanceof Error ? error.message : undefined,
+          timeout: 4000
+        })
+      }
+    }
+  }
+
+  private stopTranslating(tabId: string): void {
+    this.translating.delete(tabId)
+  }
+
   /** Remembers what a page is about, for searching history by meaning (not in private windows). */
   private notePage(wc: WebContents): void {
     const url = wc.getURL()
@@ -2468,7 +2728,11 @@ export class Browser {
     })
     // Dialogs belong to the page that asked; a new page (or a closed tab) cancels them.
     wc.on('did-start-navigation', (details) => {
-      if (details.isMainFrame && !details.isSameDocument) this.dropDialogs(tabId)
+      if (!details.isMainFrame || details.isSameDocument) return
+      this.dropDialogs(tabId)
+      // A new page: its language is checked again once it loads, untranslated.
+      this.stopTranslating(tabId)
+      if (this.tab(tabId)?.language || this.tab(tabId)?.translation) update({ language: null, translation: null })
     })
     wc.once('destroyed', () => this.dropDialogs(tabId))
     wc.on('did-start-loading', () => update({ loading: true }))
@@ -2559,6 +2823,7 @@ export class Browser {
     wc.on('did-finish-load', () => {
       void wc.setVisualZoomLevelLimits(1, 3).catch(() => {})
       this.notePage(wc)
+      void this.detectLanguage(tabId, wc)
     })
     wc.on('found-in-page', (_event, result) => {
       if (tabId !== this.activeTabId) return
@@ -3728,6 +3993,16 @@ export class Browser {
         { label: 'Reload', click: () => this.reloadPage(wc) },
         { type: 'separator' },
         ...(this.hub.aiStatus.ai ? [{ label: 'Summarise Page', click: () => this.openAssistant() }] : []),
+        ...(tab?.translation
+          ? [{ label: 'Show Original', click: () => void this.translatePage(tabId) }]
+          : this.hub.aiStatus.translation && /^https?:/.test(wc.getURL())
+            ? [
+                {
+                  label: `Translate to ${new Intl.DisplayNames(['en'], { type: 'language' }).of(this.translationTarget()) ?? 'Your Language'}`,
+                  click: () => void this.translatePage(tabId)
+                }
+              ]
+            : []),
         { label: 'Save Page As…', click: () => void this.savePageAs() },
         { label: 'Print…', click: () => wc.print({}, () => {}) },
         {

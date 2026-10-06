@@ -18,7 +18,8 @@ import {
   IconReload,
   IconSearch,
   IconSettings,
-  IconSparkle
+  IconSparkle,
+  IconTranslate
 } from '../icons'
 import { useSnapshot, useUiEvents } from '../useSnapshot'
 import { cx, hostOf, rectOf } from '../util'
@@ -118,6 +119,15 @@ function TopRow({ tab, isPrivate, extensionsRow }: { tab: Tab | null; isPrivate:
   )
 }
 
+/** "Japanese" for "ja". */
+function languageName(code: string | null): string {
+  try {
+    return (code && new Intl.DisplayNames([navigator.language], { type: 'language' }).of(code)) || 'another language'
+  } catch {
+    return 'another language'
+  }
+}
+
 function UrlPill({ tab, ai }: { tab: Tab | null; ai: boolean }): React.JSX.Element {
   const secure = tab?.url.startsWith('https://')
   // Plain HTTP: an open padlock (with "Not secure" in its tooltip and the site panel), not a word that crowds the address.
@@ -153,6 +163,18 @@ function UrlPill({ tab, ai }: { tab: Tab | null; ai: boolean }): React.JSX.Eleme
             {secure ? <IconLock size={12} /> : insecure ? <IconLockOpen size={12} /> : <IconGlobe size={12} />}
           </button>
           <span className="url-pill-host">{hostOf(tab.url)}</span>
+          {(tab.language || tab.translation) && (
+            <button
+              className={cx('url-pill-translate', tab.translation && 'on', tab.translation === 'working' && 'working')}
+              title={tab.translation ? 'Show the original page' : `Translate this page (${languageName(tab.language)})`}
+              onClick={(e) => {
+                e.stopPropagation()
+                zepper.send({ type: 'page.translate', tabId: tab.id })
+              }}
+            >
+              <IconTranslate size={13} />
+            </button>
+          )}
           {ai && /^https?:/.test(tab.url) && (
             <button
               className="url-pill-copy url-pill-ask"

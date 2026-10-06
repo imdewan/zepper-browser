@@ -30,6 +30,8 @@ function createMock(): ZepperApi {
     blockedCount: 12,
     media: null,
     audibleAt: 0,
+    language: null,
+    translation: null,
     ...fields
   })
   const spaces: Space[] = [

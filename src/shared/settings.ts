@@ -66,6 +66,10 @@ export interface Settings {
   keepEssentials: boolean
   /** Suggest closing tabs you haven't opened for this many days (0: never). */
   staleTabDays: number
+  /** Offer to translate pages that aren't in your language (on-device). */
+  offerTranslation: boolean
+  /** Translate pages into this language (a code like "en"); empty: your Mac's language. */
+  translateTo: string
   /** Show the Tidy button beside Clear. */
   showTidy: boolean
   // Media
@@ -149,6 +153,8 @@ export const DEFAULT_SETTINGS: Settings = {
   restoreTabs: true,
   keepEssentials: true,
   staleTabDays: 3,
+  offerTranslation: true,
+  translateTo: '',
   showTidy: true,
   autoPictureInPicture: true,
   pipSize: 'medium',

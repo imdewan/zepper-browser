@@ -18,6 +18,29 @@ import { cx, isMac } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
 import { Toggle } from './Toggle'
 
+/** Languages Apple's on-device translation supports. */
+const TRANSLATION_LANGUAGES = [
+  'ar',
+  'zh',
+  'nl',
+  'en',
+  'fr',
+  'de',
+  'hi',
+  'id',
+  'it',
+  'ja',
+  'ko',
+  'pl',
+  'pt',
+  'ru',
+  'es',
+  'th',
+  'tr',
+  'uk',
+  'vi'
+]
+
 type Section = 'general' | 'appearance' | 'tabs' | 'media' | 'search' | 'downloads' | 'gestures' | 'privacy' | 'extensions' | 'shortcuts'
 
 const SECTIONS: { id: Section; label: string; icon: string }[] = [
@@ -155,6 +178,22 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, onClos
                       Make Default
                     </button>
                   )}
+                </Row>
+                <Row
+                  label="Offer to translate pages"
+                  hint="When a page isn’t in your language, a translate button appears in the address bar. Translation runs on your Mac."
+                >
+                  <Toggle checked={settings.offerTranslation} onChange={(offerTranslation) => set({ offerTranslation })} />
+                </Row>
+                <Row label="Translate into" hint="Your Mac’s language, or another one.">
+                  <select value={settings.translateTo} onChange={(e) => set({ translateTo: e.target.value })}>
+                    <option value="">My Mac’s language</option>
+                    {TRANSLATION_LANGUAGES.map((code) => (
+                      <option key={code} value={code}>
+                        {new Intl.DisplayNames([navigator.language], { type: 'language' }).of(code)}
+                      </option>
+                    ))}
+                  </select>
                 </Row>
                 <Row
                   label="New windows open"

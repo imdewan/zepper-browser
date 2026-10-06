@@ -13,6 +13,7 @@
 //   rank       {query, items: [{title, host, text}]}          → {order: [index]}
 //   detect     {text}                                         → {language}
 //   translate  {from?, to, texts: [string]}                   → {from, translations: [string]}
+//   translateRich {from?, to, units: [[segment]]}             → {from, units: [[[segment index, text]]]}
 import Foundation
 import FoundationModels
 import NaturalLanguage
@@ -340,12 +341,18 @@ func translate(_ body: [String: Any]) async throws -> [String: Any] {
     guard !from.isEmpty else { throw Failure("Couldn't tell which language this page is in.", code: "unknownLanguage") }
     let source = Locale.Language(identifier: from)
     let target = Locale.Language(identifier: to)
-    switch await LanguageAvailability().status(from: source, to: target) {
-    case .unsupported: throw Failure("Translating from this language isn't supported.", code: "unsupported")
-    case .supported: throw Failure("The languages for this translation aren't downloaded yet.", code: "notInstalled")
-    default: break
+    // Pages need speed over polish: the low-latency model is faster, when it's downloaded.
+    let fast = await LanguageAvailability(preferredStrategy: .lowLatency).status(from: source, to: target) == .installed
+    if !fast {
+        switch await LanguageAvailability().status(from: source, to: target) {
+        case .unsupported: throw Failure("Translating from this language isn't supported.", code: "unsupported")
+        case .supported: throw Failure("The languages for this translation aren't downloaded yet.", code: "notInstalled")
+        default: break
+        }
     }
-    let session = TranslationSession(installedSource: source, target: target)
+    let session = fast
+        ? TranslationSession(installedSource: source, target: target, preferredStrategy: .lowLatency)
+        : TranslationSession(installedSource: source, target: target)
     let requests = texts.enumerated().map { TranslationSession.Request(sourceText: $0.element, clientIdentifier: String($0.offset)) }
     let responses = try await session.translations(from: requests)
     var translations = texts
@@ -353,6 +360,64 @@ func translate(_ body: [String: Any]) async throws -> [String: Any] {
         if let index = response.clientIdentifier.flatMap(Int.init), index < translations.count { translations[index] = response.targetText }
     }
     return ["from": from, "translations": translations]
+}
+
+/// Paragraph-level translation that keeps track of where each piece went: every unit is a list of
+/// segments (a paragraph's text nodes); each segment becomes a tagged run of an AttributedString, and
+/// the translation comes back as runs saying which segment each piece of the translation belongs to
+/// (word order changes between languages, so a segment can move or split).
+func translateRich(_ body: [String: Any]) async throws -> [String: Any] {
+    guard #available(macOS 26.4, *) else { throw Failure("Translating pages needs macOS 26.4 or later.", code: "unsupported") }
+    let units = (body["units"] as? [[String]]) ?? []
+    guard let to = body["to"] as? String, !units.isEmpty else { return ["units": []] }
+    var from = body["from"] as? String ?? ""
+    if from.isEmpty {
+        from = detect(["text": units.flatMap { $0 }.joined(separator: " ")])["language"] as? String ?? ""
+    }
+    guard !from.isEmpty else { throw Failure("Couldn't tell which language this page is in.", code: "unknownLanguage") }
+    let session = try await translationSession(from: from, to: to)
+    var results: [[[Any]]] = Array(repeating: [], count: units.count)
+    // Single-piece units (headings, buttons, menu items) go through the batch API as plain text…
+    let simple = units.indices.filter { units[$0].count == 1 }
+    if !simple.isEmpty {
+        let requests = simple.map { TranslationSession.Request(sourceText: units[$0][0], clientIdentifier: String($0)) }
+        for response in try await session.translations(from: requests) {
+            if let index = response.clientIdentifier.flatMap(Int.init), index < units.count { results[index] = [[0, response.targetText]] }
+        }
+    }
+    // …and paragraphs with links or formatting one by one as tagged runs (the batch API drops the tags).
+    for index in units.indices where units[index].count > 1 {
+        var text = AttributedString()
+        for (k, segment) in units[index].enumerated() {
+            var run = AttributedString(segment)
+            run.link = URL(string: "zepper://s/\(k)")
+            text += run
+        }
+        let response = try await session.translate(text)
+        if let attributed = response.attributedTargetText {
+            results[index] = attributed.runs.map { run in
+                [run.link.flatMap { Int($0.lastPathComponent) } ?? -1, String(attributed[run.range].characters)]
+            }
+        } else {
+            results[index] = [[0, response.targetText]]
+        }
+    }
+    return ["from": from, "units": results]
+}
+
+/// A session for a language pair: the faster model when it's downloaded, else the standard one.
+@available(macOS 26.4, *)
+func translationSession(from: String, to: String) async throws -> TranslationSession {
+    let source = Locale.Language(identifier: from)
+    let target = Locale.Language(identifier: to)
+    if await LanguageAvailability(preferredStrategy: .lowLatency).status(from: source, to: target) == .installed {
+        return TranslationSession(installedSource: source, target: target, preferredStrategy: .lowLatency)
+    }
+    switch await LanguageAvailability().status(from: source, to: target) {
+    case .unsupported: throw Failure("Translating from this language isn't supported.", code: "unsupported")
+    case .supported: throw Failure("The languages for this translation aren't downloaded yet.", code: "notInstalled")
+    default: return TranslationSession(installedSource: source, target: target)
+    }
 }
 
 func handle(id: Int, op: String, body: [String: Any]) async {
@@ -367,6 +432,7 @@ func handle(id: Int, op: String, body: [String: Any]) async {
         case "rank": result = try await rank(body)
         case "detect": result = detect(body)
         case "translate": result = try await translate(body)
+        case "translateRich": result = try await translateRich(body)
         default: throw Failure("Unknown operation \(op)")
         }
         output.send(["id": id, "result": result])
