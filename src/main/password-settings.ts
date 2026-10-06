@@ -3,7 +3,8 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { VaultReplies, VaultRequest } from '@shared/types'
 import type { History } from './history'
-import { entriesFromCsv, importFromBrowser, importHistory, importSources } from './importers'
+import { entriesFromCsv, importFromBrowser, importHistory, importOpenTabs, importSources } from './importers'
+import type { ImportedSession } from './session-import'
 import { verifyOwner } from './native'
 import type { SettingsStore } from './settings-store'
 import type { Vault } from './vault'
@@ -35,7 +36,9 @@ export async function handleVaultRequest(
   history: History,
   settings: SettingsStore,
   win: BrowserWindow,
-  request: VaultRequest
+  request: VaultRequest,
+  /** Puts imported tabs into the window that asked (its spaces). */
+  importSession: (session: ImportedSession, browserName: string) => { tabs: number; spaces: number }
 ): Promise<VaultReplies[VaultRequest['type']]> {
   switch (request.type) {
     case 'list':
@@ -85,6 +88,16 @@ export async function handleVaultRequest(
     case 'importHistory': {
       try {
         return history.importVisits(await importHistory(String(request.source), String(request.profile)))
+      } catch (error) {
+        return { error: message(error) }
+      }
+    }
+    case 'importTabs': {
+      try {
+        const { session, name } = importOpenTabs(String(request.source), String(request.profile))
+        if (session.groups.every((g) => g.tabs.length + g.pinned.length === 0) && session.essentials.length === 0)
+          return { error: `${name} has no open tabs to bring over.` }
+        return importSession(session, name)
       } catch (error) {
         return { error: message(error) }
       }

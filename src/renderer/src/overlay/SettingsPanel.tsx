@@ -248,12 +248,12 @@ export function SettingsPanel({
                 </Row>
                 <Row
                   label="New windows open"
-                  hint="⌘N. On this space: the same space and sign-ins in a window of its own, without its tabs."
+                  hint="⌘N. With your spaces: every space, with its sign-ins and Essentials, starting on the one you're in (pinned and open tabs stay in your main window)."
                 >
                   <Segmented
                     value={settings.newWindowSpace}
                     options={[
-                      ['current', 'On this space'],
+                      ['current', 'With your spaces'],
                       ['empty', 'Empty']
                     ]}
                     onChange={(newWindowSpace) => set({ newWindowSpace })}
@@ -265,6 +265,14 @@ export function SettingsPanel({
                   hint="Zepper looks for a new version every few hours and gets it ready; an Update button then appears in the sidebar."
                 >
                   <Toggle checked={settings.autoUpdate} disabled={update.state === 'off'} onChange={(autoUpdate) => set({ autoUpdate })} />
+                </Row>
+                <Row
+                  label="Import from another browser"
+                  hint="Open tabs (Arc’s spaces too), history and passwords from Chrome, Arc, Brave, Edge, Firefox, Safari and others."
+                >
+                  <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openOnboarding', step: 'import' })}>
+                    Import…
+                  </button>
                 </Row>
                 <Row label="Welcome and setup" hint="Import from other browsers, pick a look and see what Zepper can do.">
                   <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openOnboarding' })}>

@@ -4,8 +4,9 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 ## Welcome and setup
 
-- On first launch, a short setup: import history and passwords from other browsers on this Mac, choose a look for your first space, review the privacy protections, turn on-device intelligence on or off, and make Zepper your default browser.
-- Every step can be skipped. Settings → General → Welcome and setup shows it again.
+- On first launch, a short setup: bring over your open tabs, history and passwords from other browsers on this Mac, choose a look for your first space, review the privacy protections, turn on-device intelligence on or off, and make Zepper your default browser.
+- **Open tabs** come from Chrome, Brave, Edge, Arc, Vivaldi, Opera, Helium, Chromium and Firefox. A browser's first window joins the space you're in and other windows get spaces of their own; pinned tabs stay pinned. From Arc you get its spaces (with their emoji), pinned tabs and folders, today's tabs, and its favourites as Essentials. Tabs load when you open them.
+- Every step can be skipped. Settings → General → Import from another browser opens the import step again, and Welcome and setup the whole thing.
 
 ## Window and sidebar
 
@@ -14,7 +15,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - Address pill with the site's lock (certificate, permissions, cookies, per-site ad blocking) and a copy button on hover
 - Bottom bar: settings, space switcher (with a "+" for new spaces), downloads with a progress ring
 - Compact mode (⌘S): the sidebar hides and floats back in when you reach the window edge
-- The main window remembers its size and position
+- New windows (⌘N) open with all your spaces (their sign-ins and Essentials, not their pinned or open tabs), starting on the one you're in, at your window's size; or empty, if you prefer (Settings → General)
 - New windows (⌘N) open on the space you're in, with no tabs, at your window's size
 - Default browser: links and files opened from other apps open in Zepper (Settings → General)
 - Print (⌘P), Save Page As (⇧⌘S), Export as PDF, Open File (⌘O), View Source (⌥⌘U), and Chromium's PDF viewer

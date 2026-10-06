@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import type { ImportKind, ImportSource } from '@shared/types'
 import { readKeychain } from './native'
 import type { ImportEntry } from './vault'
+import { importTabs, type ImportedSession } from './session-import'
 
 /**
  * Bringing your things into Zepper. Passwords: straight from Chromium-based browsers on this Mac
@@ -110,13 +111,13 @@ export function importSources(): ImportSource[] {
   if (process.platform !== 'darwin') return []
   const sources: ImportSource[] = CHROMIUM_BROWSERS.flatMap((browser) => {
     const found = profiles(browser)
-    const kinds: ImportKind[] = ['history', 'passwords']
+    const kinds: ImportKind[] = ['history', 'passwords', 'tabs']
     if (found === 'blocked') return [{ id: browser.id, name: browser.name, profiles: [], kinds, blocked: true }]
     return found.length ? [{ id: browser.id, name: browser.name, profiles: found, kinds }] : []
   })
   const firefox = firefoxProfiles()
-  if (firefox === 'blocked') sources.push({ id: 'firefox', name: 'Firefox', profiles: [], kinds: ['history'], blocked: true })
-  else if (firefox.length) sources.push({ id: 'firefox', name: 'Firefox', profiles: firefox, kinds: ['history'] })
+  if (firefox === 'blocked') sources.push({ id: 'firefox', name: 'Firefox', profiles: [], kinds: ['history', 'tabs'], blocked: true })
+  else if (firefox.length) sources.push({ id: 'firefox', name: 'Firefox', profiles: firefox, kinds: ['history', 'tabs'] })
   if (existsSync(SAFARI_HISTORY())) {
     sources.push({
       id: 'safari',
@@ -375,4 +376,28 @@ export function entriesFromCsv(text: string): ImportEntry[] {
       }
     ]
   })
+}
+
+/** A browser's open tabs (Arc: its spaces), with the browser's name for spaces made from its windows. */
+export function importOpenTabs(sourceId: string, profileDir: string): { session: ImportedSession; name: string } {
+  if (sourceId === 'firefox') {
+    try {
+      return { session: importTabs('firefox', profileDir), name: 'Firefox' }
+    } catch (error) {
+      if (blocked(error)) throw new Error(blockedMessage('Firefox'), { cause: error })
+      throw error
+    }
+  }
+  const browser = CHROMIUM_BROWSERS.find((b) => b.id === sourceId)
+  if (!browser) throw new Error('Zepper can’t import open tabs from that browser')
+  const root = join(supportDir(), browser.dir)
+  try {
+    return {
+      session: importTabs(sourceId === 'arc' ? 'arc' : 'chromium', profileDir === '.' ? root : join(root, profileDir)),
+      name: browser.name
+    }
+  } catch (error) {
+    if (blocked(error)) throw new Error(blockedMessage(browser.name), { cause: error })
+    throw error
+  }
 }

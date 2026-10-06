@@ -384,7 +384,7 @@ export interface PasskeySummary {
   lastUsed: number | null
 }
 
-export type ImportKind = 'history' | 'passwords'
+export type ImportKind = 'history' | 'passwords' | 'tabs'
 
 /** A browser on this Mac whose history or passwords can be imported. */
 export interface ImportSource {
@@ -418,6 +418,8 @@ export type VaultRequest =
   | { type: 'sources' }
   | { type: 'importBrowser'; source: string; profile: string }
   | { type: 'importHistory'; source: string; profile: string }
+  /** The browser's open tabs (windows, or Arc's spaces), into spaces here. */
+  | { type: 'importTabs'; source: string; profile: string }
   | { type: 'importFile' }
   | { type: 'export' }
   | { type: 'openPrivacySettings' }
@@ -432,6 +434,7 @@ export interface VaultReplies {
   sources: ImportSource[]
   importBrowser: ImportResult | { error: string }
   importHistory: { added: number; updated: number } | { error: string }
+  importTabs: { tabs: number; spaces: number } | { error: string }
   /** null: you closed the file dialog. */
   importFile: ImportResult | { error: string } | null
   export: { saved: string | null; error?: string }
@@ -575,7 +578,8 @@ export type Command =
   | { type: 'settings.update'; patch: Partial<Settings> }
   | { type: 'ui.openSettings'; section?: string }
   /** The welcome and setup (it opens by itself on first launch; Settings › General shows it again). */
-  | { type: 'ui.openOnboarding' }
+  /** The welcome and setup; `step: 'import'` opens it at bringing things over from other browsers. */
+  | { type: 'ui.openOnboarding'; step?: 'import' }
   /** The size of what the overlay shows in the window's corner (toasts, find bar), so only that takes clicks. */
   | { type: 'ui.overlayCorner'; width: number; height: number }
   | { type: 'ui.peekSidebar'; show: boolean }
@@ -613,7 +617,7 @@ export type UiEvent =
   | { type: 'find.open' }
   | { type: 'find.result'; result: FindResult }
   | { type: 'settings.open'; section?: string }
-  | { type: 'onboarding.open' }
+  | { type: 'onboarding.open'; step?: 'import' }
   /** Open the emoji picker for an Essential's icon (the sidebar knows where its tile is). */
   | { type: 'essential.pickIcon'; tabId: string }
   /** A page wants to share your screen: choose a tab, window or screen. */

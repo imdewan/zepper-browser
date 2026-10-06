@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Cookie, Fingerprint, Globe, Languages, Link2, Lock, ScanSearch, ShieldCheck, Sparkles, Wand2, type LucideIcon } from 'lucide-react'
 import type { Settings } from '@shared/settings'
 import { THEME_PRESETS, themeBackground } from '@shared/theme'
-import type { ImportSource, Snapshot } from '@shared/types'
+import type { ImportKind, ImportSource, Snapshot } from '@shared/types'
 import logo from '../assets/logo.png'
 import { zepper } from '../bridge'
 import { IconCheck } from '../icons'
@@ -26,8 +26,17 @@ const SLIDE = {
   exit: (direction: number) => ({ opacity: 0, x: -24 * direction, transition: { duration: 0.12 } })
 }
 
-export function Onboarding({ snapshot, onClose }: { snapshot: Snapshot; onClose: () => void }): React.JSX.Element {
-  const [index, setIndex] = useState(0)
+export function Onboarding({
+  snapshot,
+  startAt,
+  onClose
+}: {
+  snapshot: Snapshot
+  /** Open at a step (Settings opens it at importing from other browsers). */
+  startAt?: Step
+  onClose: () => void
+}): React.JSX.Element {
+  const [index, setIndex] = useState(() => Math.max(0, STEPS.indexOf(startAt ?? 'welcome')))
   const [direction, setDirection] = useState(1)
   const step: Step = STEPS[index]
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
@@ -141,9 +150,13 @@ function Welcome(): React.JSX.Element {
   )
 }
 
-type Pick = { history: boolean; passwords: boolean; profile: string }
+type Pick = { history: boolean; passwords: boolean; tabs: boolean; profile: string }
 
-/** History and passwords from the browsers on this Mac. */
+const KIND_LABELS: Record<ImportKind, string> = { tabs: 'Open tabs', history: 'History', passwords: 'Passwords' }
+/** Tabs first (quick), passwords last (macOS asks about the Keychain for those). */
+const KIND_ORDER: ImportKind[] = ['tabs', 'history', 'passwords']
+
+/** Open tabs, history and passwords from the browsers on this Mac. */
 function ImportStep(): React.JSX.Element {
   const [sources, setSources] = useState<ImportSource[] | null>(null)
   const [picks, setPicks] = useState<Record<string, Pick>>({})
@@ -157,36 +170,60 @@ function ImportStep(): React.JSX.Element {
         Object.fromEntries(
           list.map((s) => [
             s.id,
-            { history: s.kinds.includes('history'), passwords: s.kinds.includes('passwords'), profile: s.profiles[0]?.dir ?? '.' }
+            {
+              tabs: s.kinds.includes('tabs'),
+              history: s.kinds.includes('history'),
+              passwords: s.kinds.includes('passwords'),
+              profile: s.profiles[0]?.dir ?? '.'
+            }
           ])
         )
       )
     })
   }, [])
 
+  const chosen = (pick: Pick | undefined): boolean => !!pick && (pick.tabs || pick.history || pick.passwords)
+  const runnable = (sources ?? []).filter((s) => !s.blocked && chosen(picks[s.id]) && !(results[s.id] && !results[s.id].error))
+
   const run = async (source: ImportSource): Promise<void> => {
     const pick = picks[source.id]
-    if (!pick || (!pick.history && !pick.passwords)) return
+    if (!chosen(pick)) return
     setBusy(source.id)
     const parts: string[] = []
-    let failed = false
-    if (pick.history) {
-      const reply = await zepper.vault({ type: 'importHistory', source: source.id, profile: pick.profile })
-      if ('error' in reply) {
-        parts.push(reply.error)
-        failed = true
-      } else parts.push(`${(reply.added + reply.updated).toLocaleString()} pages`)
+    const errors: string[] = []
+    for (const kind of KIND_ORDER) {
+      if (!pick[kind] || !source.kinds.includes(kind)) continue
+      if (kind === 'tabs') {
+        const reply = await zepper.vault({ type: 'importTabs', source: source.id, profile: pick.profile })
+        if ('error' in reply) errors.push(reply.error)
+        else
+          parts.push(
+            `${reply.tabs.toLocaleString()} tab${reply.tabs === 1 ? '' : 's'}` +
+              (reply.spaces ? ` in ${reply.spaces} new space${reply.spaces === 1 ? '' : 's'}` : '')
+          )
+      } else if (kind === 'history') {
+        const reply = await zepper.vault({ type: 'importHistory', source: source.id, profile: pick.profile })
+        if ('error' in reply) errors.push(reply.error)
+        else parts.push(`${(reply.added + reply.updated).toLocaleString()} pages`)
+      } else {
+        // macOS asks to allow access to the browser's key in the Keychain here.
+        const reply = await zepper.vault({ type: 'importBrowser', source: source.id, profile: pick.profile })
+        if ('error' in reply) errors.push(reply.error)
+        else parts.push(`${reply.added.toLocaleString()} password${reply.added === 1 ? '' : 's'}`)
+      }
     }
-    if (pick.passwords && !failed) {
-      // macOS asks to allow access to the browser's key in the Keychain here.
-      const reply = await zepper.vault({ type: 'importBrowser', source: source.id, profile: pick.profile })
-      if ('error' in reply) {
-        parts.push(reply.error)
-        failed = true
-      } else parts.push(`${reply.added.toLocaleString()} password${reply.added === 1 ? '' : 's'}`)
-    }
-    setResults((r) => ({ ...r, [source.id]: { text: failed ? parts.join(' ') : `Imported ${parts.join(' and ')}.`, error: failed } }))
+    const done = parts.length
+      ? `Imported ${parts.slice(0, -1).join(', ')}${parts.length > 1 ? ' and ' : ''}${parts[parts.length - 1]}.`
+      : ''
+    setResults((r) => ({
+      ...r,
+      [source.id]: { text: [done, ...errors].filter(Boolean).join(' '), error: errors.length > 0 && !parts.length }
+    }))
     setBusy(null)
+  }
+
+  const runAll = async (): Promise<void> => {
+    for (const source of runnable) await run(source)
   }
 
   const fromFile = async (): Promise<void> => {
@@ -200,11 +237,20 @@ function ImportStep(): React.JSX.Element {
     }))
   }
 
-  const toggle = (id: string, key: 'history' | 'passwords'): void => setPicks((p) => ({ ...p, [id]: { ...p[id], [key]: !p[id][key] } }))
+  const toggle = (id: string, key: ImportKind): void => setPicks((p) => ({ ...p, [id]: { ...p[id], [key]: !p[id][key] } }))
 
   return (
     <div>
-      <Heading title="Bring your things">Import history and passwords from the browsers you use now. They stay on this Mac.</Heading>
+      <div className="ob-heading-row">
+        <Heading title="Bring your things">
+          Your open tabs, history and passwords from the browsers you use now. Everything stays on this Mac.
+        </Heading>
+        {runnable.length > 1 && (
+          <button className="ob-secondary small" disabled={busy !== null} onClick={() => void runAll()}>
+            {busy && busy !== 'file' ? 'Importing…' : 'Import All'}
+          </button>
+        )}
+      </div>
       <div className="ob-sources">
         {sources === null && <p className="ob-note">Looking for browsers…</p>}
         {sources?.length === 0 && <p className="ob-note">No other browsers found on this Mac.</p>}
@@ -221,10 +267,10 @@ function ImportStep(): React.JSX.Element {
                   <span className={cx('ob-source-detail', result.error ? 'error' : 'done')}>{result.text}</span>
                 ) : (
                   <span className="ob-source-kinds">
-                    {source.kinds.map((kind) => (
+                    {KIND_ORDER.filter((kind) => source.kinds.includes(kind)).map((kind) => (
                       <label key={kind} className="ob-check">
                         <input type="checkbox" checked={pick?.[kind] ?? false} onChange={() => toggle(source.id, kind)} />
-                        {kind === 'history' ? 'History' : 'Passwords'}
+                        {kind === 'tabs' && source.id === 'arc' ? 'Spaces & tabs' : KIND_LABELS[kind]}
                       </label>
                     ))}
                     {source.profiles.length > 1 && (
@@ -251,11 +297,7 @@ function ImportStep(): React.JSX.Element {
                   <IconCheck size={14} />
                 </span>
               ) : (
-                <button
-                  className="ob-secondary small"
-                  disabled={busy !== null || !pick || (!pick.history && !pick.passwords)}
-                  onClick={() => void run(source)}
-                >
+                <button className="ob-secondary small" disabled={busy !== null || !chosen(pick)} onClick={() => void run(source)}>
                   {busy === source.id ? 'Importing…' : result?.error ? 'Try again' : 'Import'}
                 </button>
               )}
@@ -264,8 +306,9 @@ function ImportStep(): React.JSX.Element {
         })}
       </div>
       <p className="ob-note">
-        {sources?.some((s) => s.blocked) && 'Allow… opens Privacy & Security: turn on Zepper there and reopen it. '}
-        Passwords in Apple Passwords, Safari or Firefox?{' '}
+        Open tabs come in as tabs in your space (other windows get spaces of their own, and Arc&rsquo;s spaces stay spaces); they load when
+        you open them. {sources?.some((s) => s.blocked) && 'Allow… opens Privacy & Security: turn on Zepper there and reopen it. '}
+        Passwords in Apple Passwords or Safari?{' '}
         <button className="ob-link" disabled={busy !== null} onClick={() => void fromFile()}>
           Import a passwords file
         </button>

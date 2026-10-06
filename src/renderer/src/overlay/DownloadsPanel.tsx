@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { motion } from 'motion/react'
 import type { Command, DownloadEntry } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconClose, IconFolder, IconPause, IconPlay, IconTrash } from '../icons'
+import { IconClose, IconDownload, IconFolder, IconPause, IconPlay, IconTrash } from '../icons'
 import { cx, hostOf } from '../util'
 
 const units = ['B', 'KB', 'MB', 'GB']
@@ -55,7 +55,6 @@ const send = (id: string, action: Extract<Command, { type: 'download.action' }>[
 
 /** Downloads (⌥⌘L or the bottom bar's button): what's downloading and what you downloaded recently. */
 export function DownloadsPanel({ downloads, onClose }: { downloads: DownloadEntry[]; onClose: () => void }): React.JSX.Element {
-  const finished = downloads.some((d) => d.state !== 'progressing' && d.state !== 'paused')
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -85,7 +84,13 @@ export function DownloadsPanel({ downloads, onClose }: { downloads: DownloadEntr
           </button>
         </header>
         {downloads.length === 0 ? (
-          <p className="downloads-empty">Files you download appear here.</p>
+          <div className="downloads-empty">
+            <span className="downloads-empty-icon">
+              <IconDownload size={20} />
+            </span>
+            <span className="downloads-empty-title">No downloads yet</span>
+            <span className="downloads-empty-hint">Files you download show up here, with where they came from.</span>
+          </div>
         ) : (
           <div className="downloads-list">
             {downloads.map((d) => {
@@ -129,23 +134,16 @@ export function DownloadsPanel({ downloads, onClose }: { downloads: DownloadEntr
                         <IconTrash size={13} />
                       </button>
                     )}
-                    <button
-                      className="download-action"
-                      title={running ? 'Cancel' : 'Remove from list'}
-                      onClick={() => send(d.id, running ? 'cancel' : 'remove')}
-                    >
-                      <IconClose size={11} />
-                    </button>
+                    {running && (
+                      <button className="download-action" title="Cancel" onClick={() => send(d.id, 'cancel')}>
+                        <IconClose size={11} />
+                      </button>
+                    )}
                   </span>
                 </div>
               )
             })}
           </div>
-        )}
-        {finished && (
-          <button className="downloads-clear" onClick={() => zepper.send({ type: 'downloads.clear' })}>
-            Clear list
-          </button>
         )}
       </motion.div>
     </motion.div>

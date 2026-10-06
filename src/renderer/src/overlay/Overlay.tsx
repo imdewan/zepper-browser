@@ -39,6 +39,7 @@ export function Overlay(): React.JSX.Element | null {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsSection, setSettingsSection] = useState<string | undefined>(undefined)
   const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [onboardingStep, setOnboardingStep] = useState<'import' | undefined>(undefined)
   const [share, setShare] = useState<ShareRequest | null>(null)
   // The open picker, for answering it when the overlay is dismissed some other way.
   const shareId = useRef<number | null>(null)
@@ -89,6 +90,7 @@ export function Overlay(): React.JSX.Element | null {
         setHistoryOpen(false)
         setDownloadsOpen(false)
         setAbout(null)
+        setOnboardingStep(event.step)
         setOnboardingOpen(true)
       } else if (event.type === 'share.open') {
         setPalette(null)
@@ -280,7 +282,7 @@ export function Overlay(): React.JSX.Element | null {
             onClose={closeSettings}
           />
         )}
-        {onboardingOpen && <Onboarding key="onboarding" snapshot={snapshot} onClose={closeOnboarding} />}
+        {onboardingOpen && <Onboarding key="onboarding" snapshot={snapshot} startAt={onboardingStep} onClose={closeOnboarding} />}
         {share && (
           <SharePicker key={`share-${share.id}`} request={share} onDone={(sourceId, audio) => answerShare(share.id, sourceId, audio)} />
         )}

@@ -6,6 +6,15 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Added
 
+- Bring over your open tabs from Chrome and other Chromium browsers, Firefox and Arc (its spaces, pinned tabs, folders and favourites), in setup or from Settings → General → Import from another browser. Import All brings everything over in one go.
+- New windows open with all your spaces and their Essentials, starting on the one you're in.
+
+### Changed
+
+- The downloads panel no longer has Clear list or Remove from list (Move to Trash and Cancel stay), and shows a clearer empty state.
+
+### Added
+
 - Starting a download shows which file is downloading and from which site, with a button to open Downloads.
 - Downloads can be moved to the Trash from the downloads panel, whose buttons are now always shown; each download lists the site it came from.
 

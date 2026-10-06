@@ -75,6 +75,7 @@ import { startDebugServer } from './devtools-server'
 import { JsonFile } from './persist'
 import { parse as parseDomain } from 'tldts-experimental'
 import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
+import { isFolder, type ImportedItem, type ImportedSession } from './session-import'
 import { suggest } from './suggest'
 import { BROWSING_PARTITION } from './extensions'
 import { tidyGroups } from './tidy'
@@ -446,7 +447,10 @@ export interface WindowSeed {
   bounds: Rectangle
   sidebarWidth: number
   compact: boolean
-  space?: Space
+  /** Copies of your spaces (and their Essentials), starting on the one you were in. */
+  spaces?: Space[]
+  activeSpaceId?: string
+  essentials?: Tab[]
 }
 
 export class Browser {
@@ -621,10 +625,10 @@ export class Browser {
       this.activeSpaceId = space.id
       this.sidebarWidth = DEFAULT_SIDEBAR
       this.compact = false
-    } else if (kind === 'blank' && seed?.space) {
-      this.spaces = [seed.space]
-      this.tabs = []
-      this.activeSpaceId = seed.space.id
+    } else if (kind === 'blank' && seed?.spaces?.length) {
+      this.spaces = seed.spaces
+      this.tabs = seed.essentials ?? []
+      this.activeSpaceId = seed.activeSpaceId ?? seed.spaces[0].id
       this.sidebarWidth = seed.sidebarWidth
       this.compact = seed.compact
     } else if (kind === 'blank') {
@@ -1173,13 +1177,28 @@ export class Browser {
   }
 
   /** What a new window opened from this one starts with (see WindowSeed). */
-  seedForNewWindow(includeSpace: boolean): WindowSeed {
+  seedForNewWindow(includeSpaces: boolean): WindowSeed {
     const bounds = this.win.getNormalBounds()
     const base = { bounds, sidebarWidth: this.sidebarWidth, compact: this.compact }
-    const current = this.space(this.activeSpaceId)
-    if (!includeSpace || !current) return base
-    // The same space in a window of its own: its look and sign-ins, but none of its tabs.
-    return { ...base, space: { ...current, id: randomUUID(), lastTabId: null, pinnedItems: [], collapsedPins: false } }
+    if (!includeSpaces || this.spaces.length === 0) return base
+    // Every space, with its look, sign-ins and Essentials, but not its pinned or open tabs (those
+    // belong to this window, the one Zepper keeps); the new window starts on the space you're in.
+    const ids = new Map(this.spaces.map((s) => [s.id, randomUUID()]))
+    const spaces = this.spaces.map((s) => ({ ...s, id: ids.get(s.id)!, lastTabId: null, pinnedItems: [], collapsedPins: false }))
+    const essentials = this.tabs
+      .filter((t) => t.kind === 'essential' && t.spaceId && ids.has(t.spaceId))
+      .map((t) =>
+        makeTab({
+          kind: 'essential',
+          url: t.pinned?.url ?? t.url,
+          title: t.pinned?.title ?? t.title,
+          favicon: t.pinned?.favicon ?? t.favicon,
+          pinned: t.pinned ?? { url: t.url, title: t.title, favicon: t.favicon },
+          spaceId: ids.get(t.spaceId!)!,
+          emoji: t.emoji
+        })
+      )
+    return { ...base, spaces, activeSpaceId: ids.get(this.activeSpaceId) ?? spaces[0].id, essentials }
   }
 
   session(): Session {
@@ -1457,7 +1476,7 @@ export class Browser {
       case 'ui.openOnboarding':
         this.setOverlayMode('full')
         this.overlay.webContents.focus()
-        return this.emit({ type: 'onboarding.open' }, 'overlay')
+        return this.emit({ type: 'onboarding.open', step: command.step }, 'overlay')
       case 'ui.peekSidebar':
         return this.setPeek(command.show)
       case 'ui.peekLights':
@@ -1923,6 +1942,84 @@ export class Browser {
   /** A space's Essentials, in order. */
   private essentialsOf(spaceId: string | null): Tab[] {
     return this.tabs.filter((t) => t.kind === 'essential' && t.spaceId === spaceId)
+  }
+
+  /**
+   * Tabs brought over from another browser. Each window (or Arc space) becomes a space here: an Arc
+   * space joins one with the same name, the first fills the space you're in when that's empty (a
+   * fresh start) or is a window, and the rest get spaces of their own (sharing your sign-ins).
+   * Pinned tabs and folders stay pinned, and Arc's favourites become this space's Essentials.
+   * Tabs load when you open them.
+   */
+  importSession(session: ImportedSession, browserName: string): { tabs: number; spaces: number } {
+    const current = this.space(this.activeSpaceId) ?? this.spaces[0]
+    const empty = (space: Space): boolean => space.pinnedItems.length === 0 && !this.tabs.some((t) => t.spaceId === space.id)
+    const startedEmpty = empty(current)
+    let tabs = 0
+    let spaces = 0
+    session.groups.forEach((group, i) => {
+      if (group.pinned.length + group.tabs.length === 0) return
+      let space = group.name ? this.spaces.find((s) => s.name.toLowerCase() === group.name!.toLowerCase()) : undefined
+      if (!space && i === 0 && (startedEmpty || !group.name)) {
+        space = current
+        if (group.name && startedEmpty) {
+          current.name = group.name
+          if (group.icon) current.icon = group.icon
+        }
+      }
+      if (!space) {
+        space = makeSpace(group.name ?? `${browserName} ${i + 1}`, group.icon ?? '🪟', DEFAULT_THEME, DEFAULT_PROFILE)
+        this.spaces.push(space)
+        spaces++
+      }
+      tabs += this.addImportedPinned(space, null, group.pinned)
+      for (const page of group.tabs) {
+        this.tabs.push(makeTab({ kind: 'normal', url: page.url, title: page.title, spaceId: space.id }))
+        tabs++
+      }
+    })
+    const essentials = this.essentialsOf(current.id)
+    for (const page of session.essentials) {
+      if (essentials.length >= MAX_ESSENTIALS) break
+      if (essentials.some((e) => (e.pinned?.url ?? e.url) === page.url)) continue
+      const tab = makeTab({
+        kind: 'essential',
+        url: page.url,
+        title: page.title,
+        spaceId: current.id,
+        pinned: { url: page.url, title: page.title, favicon: null }
+      })
+      this.tabs.push(tab)
+      essentials.push(tab)
+      tabs++
+    }
+    this.syncPinnedOrder()
+    this.broadcast()
+    return { tabs, spaces }
+  }
+
+  private addImportedPinned(space: Space, parent: Folder | null, items: ImportedItem[]): number {
+    let count = 0
+    for (const item of items) {
+      if (isFolder(item)) {
+        const folder: Folder = { id: randomUUID(), spaceId: space.id, name: item.title, collapsed: true, items: [] }
+        this.folders.push(folder)
+        ;(parent ? parent.items : space.pinnedItems).push(folder.id)
+        count += this.addImportedPinned(space, folder, item.items)
+      } else {
+        const tab = makeTab({
+          kind: 'pinned',
+          url: item.url,
+          title: item.title,
+          spaceId: space.id,
+          pinned: { url: item.url, title: item.title, favicon: null }
+        })
+        this.tabs.push(tab)
+        ;(parent ? parent.items : space.pinnedItems).push(tab.id)
+        count++
+      }
+    }
+    return count
   }
 
   /** An Essential's own icon (only Essentials have one). */
