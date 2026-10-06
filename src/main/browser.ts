@@ -911,6 +911,15 @@ export class Browser {
         return this.createFolder(command.spaceId, command.parentId, command.tabIds)
       case 'folder.update':
         return this.updateFolder(command.folderId, command.patch)
+      case 'tabs.closeStale':
+        return this.closeStale(command.spaceId, command.tabIds)
+      case 'tabs.folderStale':
+        return this.folderStale(command.spaceId, command.tabIds)
+      case 'space.dismissStale': {
+        const space = this.space(command.spaceId)
+        if (space) space.staleDismissedAt = Date.now()
+        return this.broadcast()
+      }
       case 'space.tidy':
         return void this.tidySpace(command.spaceId)
       case 'space.untidy':
@@ -1765,6 +1774,46 @@ export class Browser {
         this.rehome(tab)
       }
     }
+  }
+
+  /** The space's normal tabs among `ids` (they may have moved or closed since the suggestion). */
+  private staleTabs(spaceId: string, ids: string[]): Tab[] {
+    return ids.flatMap((id) => {
+      const tab = this.tab(id)
+      return tab && tab.kind === 'normal' && tab.spaceId === spaceId && tab.id !== this.activeTabId ? [tab] : []
+    })
+  }
+
+  /** Closes tabs you haven't opened lately, as one batch: a single ⇧⌘T brings them all back. */
+  private closeStale(spaceId: string, ids: string[]): void {
+    const tabs = this.staleTabs(spaceId, ids)
+    if (tabs.length === 0) return
+    const batch = ++this.closeBatch
+    for (const tab of tabs) {
+      this.closed.push({ ...tab, batch })
+      this.removeTab(tab)
+    }
+    this.toast({
+      id: 'stale',
+      message: `Closed ${tabs.length} ${tabs.length === 1 ? 'tab' : 'tabs'}`,
+      action: { label: 'Undo', command: { type: 'tab.reopenClosed' } },
+      timeout: 6000
+    })
+  }
+
+  /** Sets tabs you haven't opened lately aside in a dated folder in the pinned area. */
+  private folderStale(spaceId: string, ids: string[]): void {
+    const space = this.space(spaceId)
+    const tabs = this.staleTabs(spaceId, ids)
+    if (!space || tabs.length === 0) return
+    const name = `Set aside ${new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(new Date())}`
+    const folder: Folder = { id: randomUUID(), spaceId, name, collapsed: true, items: [] }
+    this.folders.push(folder)
+    space.pinnedItems.push(folder.id)
+    for (const tab of tabs) this.dropTab(tab.id, { zone: 'pinned', spaceId, parentId: folder.id, index: folder.items.length })
+    this.syncPinnedOrder()
+    this.broadcast()
+    this.toast({ id: 'stale', message: `Moved ${tabs.length} tabs to “${name}”`, timeout: 4000 })
   }
 
   /** Tidy Tabs: related normal tabs go into named folders in the pinned area, with Undo. */

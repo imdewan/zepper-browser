@@ -8,6 +8,7 @@ import { SplitRow } from './SplitRow'
 import { useDragging, useDrop } from './dnd'
 import { Essentials } from './Essentials'
 import { FolderRow } from './FolderRow'
+import { StaleTabs } from './StaleTabs'
 import { TabRow, type RowPlace } from './TabRow'
 
 /** Tab rows for a section, with each split collapsed into one grouped row at its first member. */
@@ -317,6 +318,7 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
             folders={snapshot.folders}
             newTabAtBottom={snapshot.settings.newTabPosition === 'bottom'}
             tidy={snapshot.settings.showTidy ? snapshot.tidy : null}
+            staleDays={snapshot.settings.staleTabDays}
             renaming={renamingId === space.id}
             onRenameDone={onRenameDone}
             onStartRename={() => onStartRename(space.id)}
@@ -336,6 +338,8 @@ interface SpaceViewProps {
   newTabAtBottom: boolean
   /** How Tidy works here, or null when its button is turned off. */
   tidy: Snapshot['tidy'] | null
+  /** Suggest closing tabs not opened for this many days (0: never). */
+  staleDays: number
   renaming: boolean
   onRenameDone: () => void
   onStartRename: () => void
@@ -351,7 +355,8 @@ function SpaceView({
   tidy,
   renaming,
   onRenameDone,
-  onStartRename
+  onStartRename,
+  staleDays
 }: SpaceViewProps): React.JSX.Element {
   const pinned = tabs.filter((t) => t.kind === 'pinned' && t.spaceId === space.id)
   const normal = tabs.filter((t) => t.kind === 'normal' && t.spaceId === space.id)
@@ -415,6 +420,16 @@ function SpaceView({
           </button>
         </div>
 
+        <AnimatePresence initial={false}>
+          <StaleTabs
+            key="stale"
+            space={space}
+            tabs={normal}
+            activeTabId={activeTabId}
+            busy={new Set(splits.flatMap((s) => s.tabIds))}
+            days={staleDays}
+          />
+        </AnimatePresence>
         {!newTabAtBottom && <NewTabRow spaceId={space.id} index={0} />}
         <AnimatePresence initial={false}>{renderRows(normal, tabs, splits, activeTabId, normalPlace)}</AnimatePresence>
         {newTabAtBottom && <NewTabRow spaceId={space.id} index={normal.length} />}

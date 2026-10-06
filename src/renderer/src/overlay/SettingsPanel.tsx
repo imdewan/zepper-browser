@@ -290,6 +290,18 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, onClos
                 <Row label="Keep Essentials" hint="Essentials stay between launches. Turn off to start each launch with none.">
                   <Toggle checked={settings.keepEssentials} onChange={(keepEssentials) => set({ keepEssentials })} />
                 </Row>
+                <Row
+                  label="Suggest closing tabs you haven’t opened in"
+                  hint="A card above your tabs offers to close them or put them in a folder."
+                >
+                  <select value={settings.staleTabDays} onChange={(e) => set({ staleTabDays: Number(e.target.value) })}>
+                    <option value={1}>A day</option>
+                    <option value={3}>3 days</option>
+                    <option value={7}>A week</option>
+                    <option value={14}>Two weeks</option>
+                    <option value={0}>Never</option>
+                  </select>
+                </Row>
                 <Row label="After closing a tab, go to the most recently used tab" hint="Otherwise the tab next to it.">
                   <Toggle checked={settings.closeSelectsRecent} onChange={(closeSelectsRecent) => set({ closeSelectsRecent })} />
                 </Row>

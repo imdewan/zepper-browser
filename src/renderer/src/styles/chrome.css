@@ -1805,3 +1805,75 @@ button.site-button.insecure:hover {
 [data-density='compact'] .split-row {
   height: 30px;
 }
+
+/* ---- Tabs you haven't opened lately --------------------------------------------------- */
+
+.stale-tabs {
+  flex: none;
+  overflow: hidden;
+  margin: 2px 2px 6px;
+  padding: 9px 10px 10px;
+  border-radius: 12px;
+  background: var(--element);
+}
+
+.stale-tabs-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stale-tabs-icons {
+  display: flex;
+  flex: none;
+}
+
+.stale-tabs-icons > * + * {
+  margin-left: -4px;
+}
+
+.stale-tabs-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+
+.stale-tabs-dismiss {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+}
+
+.stale-tabs-dismiss:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.stale-tabs-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.stale-tabs-actions button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--element-hover);
+}
+
+.stale-tabs-actions button:hover {
+  background: var(--press);
+}

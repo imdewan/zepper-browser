@@ -71,6 +71,8 @@ export interface Space {
    * 'default' (shared with Essentials and extensions) or its own store. History is shared.
    */
   profile: string
+  /** When you last dismissed the "tabs you haven't opened lately" suggestion here. */
+  staleDismissedAt?: number
 }
 
 /** A folder in a space's pinned area; folders nest. `items` are tab and folder ids in order. */
@@ -339,6 +341,10 @@ export type Command =
   | { type: 'folder.contextMenu'; folderId: string }
   /** Group a space's normal tabs into folders (Apple Intelligence where available). */
   | { type: 'space.tidy'; spaceId: string }
+  /** Tabs you haven't opened lately: close them (one ⇧⌘T brings them back), set them aside in a folder, or not now. */
+  | { type: 'tabs.closeStale'; spaceId: string; tabIds: string[] }
+  | { type: 'tabs.folderStale'; spaceId: string; tabIds: string[] }
+  | { type: 'space.dismissStale'; spaceId: string }
   | { type: 'space.untidy'; token: number }
   | {
       type: 'space.update'

@@ -64,6 +64,8 @@ export interface Settings {
   restoreTabs: boolean
   /** Keep Essentials between launches. */
   keepEssentials: boolean
+  /** Suggest closing tabs you haven't opened for this many days (0: never). */
+  staleTabDays: number
   /** Show the Tidy button beside Clear. */
   showTidy: boolean
   // Media
@@ -146,6 +148,7 @@ export const DEFAULT_SETTINGS: Settings = {
   closeSelectsRecent: true,
   restoreTabs: true,
   keepEssentials: true,
+  staleTabDays: 3,
   showTidy: true,
   autoPictureInPicture: true,
   pipSize: 'medium',
