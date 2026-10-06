@@ -478,6 +478,8 @@ export class Browser {
   private readonly httpsFirst = new Set<string>()
   /** Tabs with a "not responding" question open. */
   private readonly hungTabs = new Set<string>()
+  /** Pages whose permission prompts are dropped when they go away. */
+  private readonly promptWatched = new WeakSet<WebContents>()
   /** Pages showing the system print dialog (they're waiting on it, not hung). */
   private readonly printing = new Set<number>()
   /** Tabs closing once their page agrees (a "Leave site?" question may be open). */
@@ -814,7 +816,9 @@ export class Browser {
       webContentsId: wc.id,
       callback
     })
-    if (this.prompts.filter((p) => p.webContentsId === wc.id).length === 1) {
+    // Once per page (not per round of prompts, which would pile listeners up on sites that keep asking).
+    if (!this.promptWatched.has(wc)) {
+      this.promptWatched.add(wc)
       const id = wc.id
       wc.once('destroyed', () => this.dropPrompts((p) => p.webContentsId === id))
     }
