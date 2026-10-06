@@ -54,7 +54,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 - ⌘T / ⌘L: search, enter an address, or switch to an open tab. An empty bar lists recent tabs and the sites you visit most
 - **Top hit:** start typing a site you visit and it completes in the field (`you` → `you|tube.com`); Return goes there (or switches to its tab), → or Tab accepts it, Delete keeps just what you typed
-- **Popular sites** you haven't visited yet complete and appear too, from a built-in list of about 330 (one address each: no youtu.be or country copies), matched by address or name (`gmail`, `twitter`); shown with a globe, so typing doesn't tell those sites anything
+- **Popular sites** you haven't visited yet complete and appear too, from a built-in list of about 330 (one address each: no youtu.be or country copies; no adult, gambling, piracy or scam-prone sites), matched by address or name (`gmail`, `twitter`); shown with a globe, so typing doesn't tell those sites anything
 - History matches, ranked by how often and how recently you visited (pages that look the same show once)
 - Search engine choice and suggestions
 - DuckDuckGo bangs resolved locally (`!yt cats`, `cats !w`, `!gh`), with completions as you type

@@ -2,7 +2,8 @@
  * Popular sites, so the command bar can suggest (and complete) them before they're in your history:
  * "yout" → youtube.com. Hand-picked from the most visited sites people go to on purpose: one address
  * per service (no youtu.be, t.co or country copies), no infrastructure domains (CDNs, APIs, ad
- * servers), nothing adult. Most popular first, which is the order matches are offered in. A name can
+ * servers). Nothing a browser shouldn't be recommending: no adult, gambling or piracy sites, and none
+ * known for scams, malware or adware. Most popular first, which is the order matches are offered in. A name can
  * carry other words people type for the site ("X (Twitter)").
  */
 const SITES: [domain: string, name: string][] = [
@@ -86,12 +87,9 @@ const SITES: [domain: string, name: string][] = [
   ['paramountplus.com', 'Paramount+ (Paramount Plus)'],
   ['peacocktv.com', 'Peacock'],
   ['dailymotion.com', 'Dailymotion'],
-  ['kick.com', 'Kick'],
-  ['rumble.com', 'Rumble'],
   ['bilibili.com', 'Bilibili'],
   ['etsy.com', 'Etsy'],
   ['aliexpress.com', 'AliExpress'],
-  ['temu.com', 'Temu'],
   ['shein.com', 'Shein'],
   ['target.com', 'Target'],
   ['bestbuy.com', 'Best Buy'],
@@ -212,7 +210,6 @@ const SITES: [domain: string, name: string][] = [
   ['vanguard.com', 'Vanguard'],
   ['robinhood.com', 'Robinhood'],
   ['coinbase.com', 'Coinbase'],
-  ['binance.com', 'Binance'],
   ['venmo.com', 'Venmo'],
   ['wise.com', 'Wise'],
   ['revolut.com', 'Revolut'],
@@ -330,7 +327,6 @@ const SITES: [domain: string, name: string][] = [
   ['qq.com', 'QQ'],
   ['taobao.com', 'Taobao'],
   ['jd.com', 'JD.com'],
-  ['mail.ru', 'Mail.ru'],
   ['ok.ru', 'Odnoklassniki (OK)'],
   ['avito.ru', 'Avito'],
   ['globo.com', 'Globo'],
