@@ -36,35 +36,119 @@ interface PageConfig {
   blockedPermissions: string[]
 }
 
-/** navigator.userAgentData names the browser brand the request headers do (runs in the page's world). */
-function brandShim(name: string, major: string, full: string): void {
-  const proto = (globalThis as unknown as { NavigatorUAData?: { prototype: object } }).NavigatorUAData?.prototype
-  if (!proto) return
-  const brands = Object.getOwnPropertyDescriptor(proto, 'brands')
-  if (brands?.get) {
-    const original = brands.get
-    Object.defineProperty(proto, 'brands', {
-      ...brands,
-      get(this: object) {
-        const list = original.call(this) as { brand: string; version: string }[]
-        return list.some((b) => b.brand === name) ? list : [{ brand: name, version: major }, ...list]
-      }
-    })
+/**
+ * Runs in the page's main world when presenting as Chrome or Edge: the page sees that browser, not
+ * Electron. navigator.userAgentData names it (brands, toJSON, high-entropy values, matching the
+ * request headers), and window.chrome has what Chrome's has (loadTimes, csi, app; Electron leaves it
+ * empty, which bot checks read as an automated browser). Blank frames a script makes never run
+ * Zepper's page script, so they're patched the moment the page reaches into one; patched functions
+ * are Proxies of the originals, so they still look native.
+ */
+function chromeIdentityShim(name: string, major: string, full: string): void {
+  type Brand = { brand: string; version: string }
+  type Realm = Window & {
+    NavigatorUAData?: { prototype: object }
+    HTMLIFrameElement: typeof HTMLIFrameElement
+    chrome?: Record<string, unknown>
   }
-  const high = Object.getOwnPropertyDescriptor(proto, 'getHighEntropyValues')
-  if (typeof high?.value === 'function') {
-    const original = high.value as (hints: string[]) => Promise<Record<string, unknown>>
-    Object.defineProperty(proto, 'getHighEntropyValues', {
-      ...high,
-      value(this: object, hints: string[]) {
-        return original.call(this, hints).then((values) => {
-          const add = (list: unknown, version: string): unknown =>
-            Array.isArray(list) && !list.some((b) => b.brand === name) ? [{ brand: name, version }, ...list] : list
-          return { ...values, brands: add(values.brands, major), fullVersionList: add(values.fullVersionList, full) }
+  const patched = new WeakSet<object>()
+  const withBrand = (list: unknown, version: string): unknown =>
+    Array.isArray(list) && !list.some((b: Brand) => b.brand === name) ? [{ brand: name, version }, ...list] : list
+  const wrap = <T extends object>(target: T, apply: (call: () => unknown) => unknown): T =>
+    new Proxy(target, { apply: (fn, self, args) => apply(() => Reflect.apply(fn as (...a: unknown[]) => unknown, self, args)) })
+
+  const patch = (realm: Realm): void => {
+    if (patched.has(realm)) return
+    patched.add(realm)
+    const proto = realm.NavigatorUAData?.prototype
+    if (proto) {
+      const brands = Object.getOwnPropertyDescriptor(proto, 'brands')
+      if (brands?.get) Object.defineProperty(proto, 'brands', { ...brands, get: wrap(brands.get, (call) => withBrand(call(), major)) })
+      const high = Object.getOwnPropertyDescriptor(proto, 'getHighEntropyValues')
+      if (typeof high?.value === 'function') {
+        Object.defineProperty(proto, 'getHighEntropyValues', {
+          ...high,
+          value: wrap(high.value as object, (call) =>
+            (call() as Promise<Record<string, unknown>>).then((values) => ({
+              ...values,
+              brands: withBrand(values.brands, major),
+              fullVersionList: withBrand(values.fullVersionList, full)
+            }))
+          )
         })
       }
-    })
+      const json = Object.getOwnPropertyDescriptor(proto, 'toJSON')
+      if (typeof json?.value === 'function') {
+        Object.defineProperty(proto, 'toJSON', {
+          ...json,
+          value: wrap(json.value as object, (call) => {
+            const value = call() as Record<string, unknown> | null
+            return value && typeof value === 'object' ? { ...value, brands: withBrand(value.brands, major) } : value
+          })
+        })
+      }
+    }
+
+    const native = <T extends (...args: never[]) => unknown>(fnName: string, fn: T): T => {
+      Object.defineProperty(fn, 'name', { value: fnName })
+      Object.defineProperty(fn, 'toString', { value: () => `function ${fnName}() { [native code] }` })
+      return fn
+    }
+    const origin = realm.performance.timeOrigin / 1000
+    const chrome = realm.chrome ?? {}
+    chrome.loadTimes ??= native('loadTimes', () => ({
+      requestTime: origin,
+      startLoadTime: origin,
+      commitLoadTime: origin + 0.1,
+      finishDocumentLoadTime: origin + 0.3,
+      finishLoadTime: origin + 0.4,
+      firstPaintTime: origin + 0.2,
+      firstPaintAfterLoadTime: 0,
+      navigationType: 'Other',
+      wasFetchedViaSpdy: true,
+      wasNpnNegotiated: true,
+      npnNegotiatedProtocol: 'h2',
+      wasAlternateProtocolAvailable: false,
+      connectionInfo: 'h2'
+    }))
+    chrome.csi ??= native('csi', () => ({ startE: origin * 1000, onloadT: origin * 1000 + 300, pageT: realm.performance.now(), tran: 15 }))
+    chrome.app ??= {
+      isInstalled: false,
+      InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+      RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' },
+      getDetails: native('getDetails', () => null),
+      getIsInstalled: native('getIsInstalled', () => false),
+      runningState: native('runningState', () => 'cannot_run')
+    }
+    if (!realm.chrome) Object.defineProperty(realm, 'chrome', { value: chrome, configurable: true, writable: true })
+
+    // Blank frames made in this realm get the same, as soon as the page reaches into one.
+    const reach = (frame: unknown): void => {
+      try {
+        const child = frame as Realm | null
+        if (child && child.location.href === 'about:blank') patch(child)
+      } catch {
+        // Another origin: its own page script patches it.
+      }
+    }
+    const frameProto = realm.HTMLIFrameElement?.prototype
+    for (const [key, windowOf] of [
+      ['contentWindow', (v: unknown) => v],
+      ['contentDocument', (v: unknown) => (v as Document | null)?.defaultView]
+    ] as const) {
+      const descriptor = frameProto && Object.getOwnPropertyDescriptor(frameProto, key)
+      if (!descriptor?.get) continue
+      Object.defineProperty(frameProto, key, {
+        ...descriptor,
+        get: wrap(descriptor.get, (call) => {
+          const value = call()
+          reach(windowOf(value))
+          return value
+        })
+      })
+    }
   }
+  patch(window as Realm)
 }
 
 /**
@@ -369,49 +453,7 @@ function hideChromiumShim(vendor: string): void {
 }
 
 /** Runs in the page's main world: makes `window.chrome` look like real Chrome's and hides passkeys. */
-/**
- * Runs in the page's main world when presenting as Chrome or Edge: \`window.chrome\` as Chrome has it
- * (app, csi, loadTimes). Electron leaves it empty, which bot checks (X's sign-in, Google's) read
- * as an automated browser.
- */
-function chromeObjectShim(): void {
-  const native = <T extends (...args: never[]) => unknown>(name: string, fn: T): T => {
-    const source = `function ${name}() { [native code] }`
-    Object.defineProperty(fn, 'name', { value: name })
-    Object.defineProperty(fn, 'toString', { value: () => source })
-    return fn
-  }
-  const origin = performance.timeOrigin / 1000
-  const w = window as unknown as { chrome?: Record<string, unknown> }
-  const chrome = w.chrome ?? {}
-  chrome.loadTimes ??= native('loadTimes', () => ({
-    requestTime: origin,
-    startLoadTime: origin,
-    commitLoadTime: origin + 0.1,
-    finishDocumentLoadTime: origin + 0.3,
-    finishLoadTime: origin + 0.4,
-    firstPaintTime: origin + 0.2,
-    firstPaintAfterLoadTime: 0,
-    navigationType: 'Other',
-    wasFetchedViaSpdy: true,
-    wasNpnNegotiated: true,
-    npnNegotiatedProtocol: 'h2',
-    wasAlternateProtocolAvailable: false,
-    connectionInfo: 'h2'
-  }))
-  chrome.csi ??= native('csi', () => ({ startE: origin * 1000, onloadT: origin * 1000 + 300, pageT: performance.now(), tran: 15 }))
-  chrome.app ??= {
-    isInstalled: false,
-    InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
-    RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' },
-    getDetails: native('getDetails', () => null),
-    getIsInstalled: native('getIsInstalled', () => false),
-    runningState: native('runningState', () => 'cannot_run')
-  }
-  if (!w.chrome) Object.defineProperty(window, 'chrome', { value: chrome, configurable: true, writable: true })
-}
-
-/** Runs in the page's main world on Google's sign-in page (after chromeObjectShim): passkeys hidden when they can't work. */
+/** Runs in the page's main world on Google's sign-in page (after chromeIdentityShim): passkeys hidden when they can't work. */
 function signInPageShim(keepPasskeys: boolean): void {
   const w = window as unknown as { PublicKeyCredential?: unknown }
   // Without the system's passkeys, Google would offer one that can't work; hide them.
@@ -493,7 +535,9 @@ function hideSwitchToChrome(): void {
 }
 
 function applyCompat(): void {
-  if (!/^https?:/.test(location.href)) return
+  // Web pages, and the blank and srcdoc frames they make (which share their origin, and are where
+  // fingerprinters look for an unpatched browser).
+  if (!/^https?:/.test(location.href) && !(window !== window.top && /^about:(blank|srcdoc)$/.test(location.href))) return
   if (location.hostname === 'chromewebstore.google.com') hideSwitchToChrome()
   try {
     const config = ipcRenderer.sendSync(PAGE_CONFIG_CHANNEL) as PageConfig
@@ -504,10 +548,8 @@ function applyCompat(): void {
     contextBridge.executeInMainWorld({ func: captureShim, args: [captureEvent] })
     if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
     if (config.globalPrivacyControl) contextBridge.executeInMainWorld({ func: privacyControlShim })
-    if (config.brand) {
-      contextBridge.executeInMainWorld({ func: brandShim, args: [config.brand.name, config.brand.major, config.brand.full] })
-      contextBridge.executeInMainWorld({ func: chromeObjectShim })
-    }
+    if (config.brand)
+      contextBridge.executeInMainWorld({ func: chromeIdentityShim, args: [config.brand.name, config.brand.major, config.brand.full] })
     if (config.fingerprintSeed !== null) contextBridge.executeInMainWorld({ func: fingerprintShim, args: [config.fingerprintSeed] })
     if (config.signInCompat && location.hostname === 'accounts.google.com')
       contextBridge.executeInMainWorld({ func: signInPageShim, args: [config.passkeys] })

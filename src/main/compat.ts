@@ -74,22 +74,21 @@ export function clientHintHeaders(headers: Record<string, string>, ua: string): 
     for (const [key, value] of Object.entries(headers)) if (!/^sec-ch-ua/i.test(key)) next[key] = value
     return next
   }
-  const edge = / Edg\/(\d+)/.exec(ua)
-  if (!edge) {
-    // Presenting as Chrome: the brand list says Google Chrome, as Chrome's does (Electron's says only Chromium).
-    const major = /Chrome\/(\d+)/.exec(ua)?.[1]
-    const next = { ...headers }
-    for (const key of Object.keys(next)) {
-      if (key.toLowerCase() === 'sec-ch-ua' && major)
-        next[key] = `"Google Chrome";v="${major}", "Chromium";v="${major}", "Not?A_Brand";v="24"`
-    }
-    return next
-  }
+  // The brand lists name Google Chrome (or Microsoft Edge) as that browser's do: Electron's say only
+  // Chromium. Both the short list and the full-version one a site can ask for, so they agree.
+  const major = /Chrome\/(\d+)/.exec(ua)?.[1]
+  if (!major) return headers
+  const full = process.versions.chrome
+  const edge = / Edg\/(\d+)/.test(ua)
+  const brands = (version: string, grease: string): string =>
+    edge
+      ? `"Chromium";v="${version}", "Microsoft Edge";v="${version}", "Not)A;Brand";v="${grease}"`
+      : `"Google Chrome";v="${version}", "Chromium";v="${version}", "Not?A_Brand";v="${grease}"`
   const next = { ...headers }
   for (const key of Object.keys(next)) {
-    if (key.toLowerCase() === 'sec-ch-ua') {
-      next[key] = `"Chromium";v="${edge[1]}", "Microsoft Edge";v="${edge[1]}", "Not)A;Brand";v="24"`
-    }
+    const name = key.toLowerCase()
+    if (name === 'sec-ch-ua') next[key] = brands(major, '24')
+    else if (name === 'sec-ch-ua-full-version-list') next[key] = brands(full, '24.0.0.0')
   }
   return next
 }
