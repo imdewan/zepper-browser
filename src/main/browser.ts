@@ -700,8 +700,10 @@ export class Browser {
     }
 
     const load = (wc: WebContents, page: string): void => {
-      if (rendererUrl) void wc.loadURL(`${rendererUrl}/${page}`)
-      else void wc.loadFile(join(rendererDir, page))
+      if (rendererUrl) return void wc.loadURL(`${rendererUrl}/${page}`)
+      // Packaged: loadFile takes the query separately (in the path, "?tab=…" would be part of the file name).
+      const [file, search] = page.split('?')
+      void wc.loadFile(join(rendererDir, file), search ? { search } : undefined)
     }
     load(this.win.webContents, 'chrome.html')
     load(this.overlay.webContents, 'overlay.html')
