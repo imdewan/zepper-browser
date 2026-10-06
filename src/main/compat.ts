@@ -33,6 +33,8 @@ export interface PageConfig {
   fingerprintSeed: number | null
   /** The browser brand pages see in navigator.userAgentData, matching the headers (null: leave as is). */
   brand: { name: string; major: string; full: string } | null
+  /** Route WebAuthn (passkeys, security keys) to macOS: top-level secure pages, when Zepper may. */
+  passkeys: boolean
 }
 
 const FIREFOX_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0'
@@ -89,11 +91,18 @@ export function clientHintHeaders(headers: Record<string, string>, ua: string): 
   return next
 }
 
-export function servePageConfig(settings: SettingsStore, currentUa: () => string, protects: (pageUrl: string) => boolean): void {
+export function servePageConfig(
+  settings: SettingsStore,
+  currentUa: () => string,
+  protects: (pageUrl: string) => boolean,
+  passkeys: () => boolean
+): void {
   ipcMain.on(PAGE_CONFIG_CHANNEL, (event) => {
     let pageUrl = ''
+    let topLevel = false
     try {
       pageUrl = event.senderFrame?.url ?? ''
+      topLevel = event.senderFrame?.parent === null
     } catch {
       // The frame went away.
     }
@@ -114,7 +123,8 @@ export function servePageConfig(settings: SettingsStore, currentUa: () => string
             major: /Chrome\/(\d+)/.exec(ua)?.[1] ?? process.versions.chrome.split('.')[0],
             full: process.versions.chrome
           }
-        : null
+        : null,
+      passkeys: topLevel && /^https:|^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(pageUrl) && passkeys()
     }
     event.returnValue = config
   })

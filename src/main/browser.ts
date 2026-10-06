@@ -60,6 +60,9 @@ import {
 } from '@shared/types'
 import type { Hub } from './hub'
 import { PipPlayer } from './pip'
+import { AutofillController, type PageMessage } from './autofill'
+import { WebAuthnError, performWebAuthn } from './passkeys'
+import { credentialsAddon } from './native'
 import { startDebugServer } from './devtools-server'
 import { JsonFile } from './persist'
 import { parse as parseDomain } from 'tldts-experimental'
@@ -454,6 +457,7 @@ export class Browser {
   private swipeCooldown: { tabId: string; until: number } | null = null
   private layoutAnimation: NodeJS.Timeout | null = null
   private pip!: PipPlayer
+  private autofill!: AutofillController
   private readonly disposers: (() => void)[] = []
   /** Tabs we already offered to pause other media for, so the tip never nags. */
   private readonly mediaTipShown = new Set<string>()
@@ -680,6 +684,38 @@ export class Browser {
       onClosed: () => this.broadcast()
     })
 
+    this.autofill = new AutofillController(
+      {
+        win: this.win,
+        uiPreferences: uiPrefs,
+        load,
+        settings: () => this.settings,
+        updateSettings: (patch) => this.settingsStore.update(patch),
+        pageBounds: (wc) => {
+          const id = this.tabByWebContents.get(wc.id)
+          const view = id && this.attached.has(id) ? this.views.get(id) : undefined
+          return view ? view.getBounds() : null
+        },
+        ownsVisiblePage: (wc) => {
+          const id = this.tabByWebContents.get(wc.id)
+          return Boolean(id && this.attached.has(id) && this.win.isVisible() && this.overlayMode !== 'full')
+        },
+        canPickPasswords: () => credentialsAddon() !== null,
+        pickPassword: async (anchor) => {
+          const addon = credentialsAddon()
+          if (!addon) return null
+          const place = { x: anchor.x, y: anchor.y + anchor.height + 4, width: anchor.width }
+          const login = JSON.parse(await addon.pickPassword(this.win.getNativeWindowHandle(), JSON.stringify(place))) as {
+            username: string
+            password: string
+          } | null
+          return login && typeof login.password === 'string' ? login : null
+        },
+        cancelPick: () => credentialsAddon()?.cancelPick()
+      },
+      this.hub.services.passwords
+    )
+
     this.overlay.webContents.once('did-finish-load', () => {
       const restore = this.restoreTabId && this.tab(this.restoreTabId)
       if (initialUrl) this.openTab(initialUrl)
@@ -702,6 +738,8 @@ export class Browser {
         if (this.overlayMode !== 'hidden') {
           layers.push({ name: 'overlay', webContents: this.overlay.webContents, bounds: this.overlay.getBounds() })
         }
+        const autofill = this.autofill.visible()
+        if (autofill) layers.push({ name: 'autofill', webContents: autofill.webContents, bounds: autofill.bounds })
         return layers
       },
       handle: (command) => this.handle(command),
@@ -849,6 +887,7 @@ export class Browser {
       id === this.win.webContents.id ||
       id === this.overlay.webContents.id ||
       id === this.pip?.controlsWebContents()?.id ||
+      id === this.autofill?.webContents()?.id ||
       this.tabByWebContents.has(id) ||
       this.popupWindow(id) !== undefined
     )
@@ -914,7 +953,32 @@ export class Browser {
 
   /** The window's own UI (sidebar, overlay, picture-in-picture controls), as opposed to web pages. */
   isUi(wc: WebContents): boolean {
-    return [this.win.webContents.id, this.overlay.webContents.id, this.pip.controlsWebContents()?.id].includes(wc.id)
+    return [
+      this.win.webContents.id,
+      this.overlay.webContents.id,
+      this.pip.controlsWebContents()?.id,
+      this.autofill.webContents()?.id
+    ].includes(wc.id)
+  }
+
+  /** A page's passkey request (navigator.credentials): only from a tab you can see, with the system sheet on this window. */
+  async onWebAuthn(wc: WebContents, frame: Electron.WebFrameMain | null, kind: 'create' | 'get', options: string): Promise<string> {
+    const id = this.tabByWebContents.get(wc.id)
+    try {
+      if (!frame || !id || !this.attached.has(id) || this.win.isDestroyed())
+        throw new WebAuthnError('NotAllowedError', 'The document is not focused.')
+      const result = await performWebAuthn(this.win, frame, kind, JSON.parse(options) as Record<string, unknown>)
+      return JSON.stringify({ ok: true, result })
+    } catch (error) {
+      const name = error instanceof WebAuthnError ? error.domName : 'NotAllowedError'
+      const message = error instanceof Error ? error.message : 'The operation either timed out or was not allowed.'
+      return JSON.stringify({ ok: false, name, message })
+    }
+  }
+
+  /** Sign-in fields in this window's pages report here (see AutofillController). */
+  onPasswordsMessage(wc: WebContents, frame: Electron.WebFrameMain | null, message: PageMessage): void {
+    if (this.tabByWebContents.has(wc.id)) this.autofill.onPageMessage(wc, frame, message)
   }
 
   activateByWebContents(wc: WebContents): void {
@@ -955,6 +1019,7 @@ export class Browser {
     this.windowClosed = true
     this.persistNow()
     this.pip?.exit()
+    this.autofill?.destroy()
     for (const dispose of this.disposers) dispose()
     for (const view of this.views.values()) {
       if (!view.webContents.isDestroyed()) view.webContents.close()
@@ -1147,6 +1212,14 @@ export class Browser {
       case 'capture.drag':
       case 'capture.dismiss':
         return this.captureCommand(command)
+      case 'autofill.fill':
+      case 'autofill.connect':
+      case 'autofill.pin':
+      case 'autofill.save':
+      case 'autofill.dismiss':
+      case 'autofill.resize':
+      case 'autofill.openPasswords':
+        return this.autofill.handle(command)
       case 'page.translate':
         return void this.translatePage(command.tabId)
       case 'app.openTranslationSettings':
@@ -1401,6 +1474,7 @@ export class Browser {
       this.swipeOffset = 0
     }
     this.activeTabId = id
+    if (previousId !== id) this.autofill?.hide()
     const view = this.ensureView(tab)
     this.syncAttachedViews()
     // Only once the old tab is off screen can its video float.
@@ -3257,6 +3331,7 @@ export class Browser {
   }
 
   private setOverlayMode(mode: OverlayMode): void {
+    if (mode === 'full') this.autofill?.hide()
     if (mode !== 'peek' && this.peeking && mode !== 'hidden') {
       this.peeking = false
       this.showTrafficLights(!this.compact)

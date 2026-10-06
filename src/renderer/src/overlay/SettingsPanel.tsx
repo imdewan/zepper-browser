@@ -41,7 +41,8 @@ const TRANSLATION_LANGUAGES = [
   'vi'
 ]
 
-type Section = 'general' | 'appearance' | 'tabs' | 'media' | 'search' | 'downloads' | 'gestures' | 'privacy' | 'extensions' | 'shortcuts'
+type Section =
+  'general' | 'appearance' | 'tabs' | 'media' | 'search' | 'downloads' | 'gestures' | 'privacy' | 'passwords' | 'extensions' | 'shortcuts'
 
 const SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: 'general', label: 'General', icon: '⚙️' },
@@ -52,6 +53,7 @@ const SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: 'downloads', label: 'Downloads', icon: '⬇️' },
   { id: 'gestures', label: 'Spaces & Gestures', icon: '👆' },
   { id: 'privacy', label: 'Privacy', icon: '🛡️' },
+  { id: 'passwords', label: 'Passwords', icon: '🔑' },
   { id: 'extensions', label: 'Extensions', icon: '🧩' },
   { id: 'shortcuts', label: 'Shortcuts', icon: '⌨️' }
 ]
@@ -590,6 +592,44 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, intell
                 >
                   <Toggle checked={settings.googleSignInCompat} onChange={(googleSignInCompat) => set({ googleSignInCompat })} />
                 </Row>
+              </>
+            )}
+
+            {section === 'passwords' && (
+              <>
+                <h2>Passwords</h2>
+                <Row
+                  label="Fill and save passwords"
+                  hint="Uses Apple Passwords, so your logins sync through iCloud Keychain with your iPhone, iPad and other Macs. Zepper keeps no passwords of its own."
+                >
+                  <Toggle checked={settings.passwords} onChange={(passwords) => set({ passwords })} />
+                </Row>
+                <Row label="Your passwords" hint="See, edit and share them, and check for weak or leaked ones.">
+                  <button className="panel-button" onClick={() => zepper.send({ type: 'autofill.openPasswords' })}>
+                    Open Passwords
+                  </button>
+                </Row>
+                {settings.neverSavePasswords.length > 0 && (
+                  <div className="settings-row settings-row-stacked">
+                    <div className="settings-row-text">
+                      <div className="settings-row-label">Never saved for</div>
+                      <div className="settings-row-hint">Zepper doesn’t offer to save passwords on these sites.</div>
+                    </div>
+                    <div className="site-chips">
+                      {settings.neverSavePasswords.map((domain) => (
+                        <span key={domain} className="site-chip">
+                          {domain}
+                          <button
+                            title={`Offer to save passwords on ${domain} again`}
+                            onClick={() => set({ neverSavePasswords: settings.neverSavePasswords.filter((d) => d !== domain) })}
+                          >
+                            <IconClose size={9} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 

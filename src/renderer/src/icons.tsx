@@ -108,6 +108,12 @@ export const IconLock = (p: IconProps): React.JSX.Element => (
     <path d="M8 11V8a4 4 0 0 1 8 0v3" />
   </Icon>
 )
+export const IconKey = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <circle cx="8" cy="15" r="4" />
+    <path d="M10.8 12.2L20 3M16.5 6.5l2.5 2.5M14 9l2 2" />
+  </Icon>
+)
 export const IconGlobe = (p: IconProps): React.JSX.Element => (
   <Icon {...p}>
     <circle cx="12" cy="12" r="9" />

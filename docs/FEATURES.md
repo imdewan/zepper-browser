@@ -71,6 +71,13 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - **Site panel:** certificate viewer, permissions, and cookies and site data per domain.
 - **Page dialogs** name the site asking, block spam, and include HTTP sign-in.
 
+## Passwords and passkeys
+
+- **Apple Passwords, built in.** Your saved logins appear under sign-in fields; pick one (or use ↓ and Return) to fill it. When you sign in with a new password, macOS asks whether to save it in Apple Passwords, which syncs through iCloud Keychain. Zepper keeps no passwords of its own. Connecting takes a six-digit code that macOS shows, once each time Zepper opens.
+- **Passkeys and security keys** go through macOS: passkeys saved in Apple Passwords, a phone nearby (QR code), and USB or NFC security keys, with the system's own sheets.
+- Both need a build signed with Apple's browser entitlement (see [Architecture](ARCHITECTURE.md#passwords-and-passkeys)). Other builds fill from Apple Passwords through macOS's own picker: choose **Apple Passwords…** under a sign-in field, then **Passwords…**.
+- Settings → Passwords turns it off, opens the Passwords app, and lists sites where you chose never to save.
+
 ## Apple Intelligence (on the Mac)
 
 Everything here runs on your Mac with Apple's on-device models (macOS 26 and later); nothing is sent anywhere.

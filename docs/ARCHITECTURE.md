@@ -36,6 +36,8 @@ The **main process owns all state**. Renderers never change it directly:
 | `site.ts`                                | Per-site permissions and captured certificate chains                                                                                                                                   |
 | `ai.ts`, `tidy.ts`, `semantic.ts`        | The on-device intelligence helper (started on demand, stopped when idle), Tidy Tabs, and history search by meaning                                                                     |
 | `shields.ts`, `zoom.ts`, `capture.ts`    | Privacy protections (link cleaning, HTTPS upgrades, fingerprinting seeds), per-site zoom, and screen captures                                                                          |
+| `autofill.ts`, `passwords.ts`            | The passwords dropdown under sign-in fields and save offers, and the Apple Passwords client                                                                                            |
+| `passkeys.ts`, `native.ts`               | WebAuthn requests run through macOS by the credentials addon (`native/credentials`)                                                                                                    |
 | `persist.ts`, `settings-store.ts`        | Atomic, debounced JSON files under the user data folder                                                                                                                                |
 | `devtools-server.ts`                     | Development-only debug endpoint (see below)                                                                                                                                            |
 
@@ -62,10 +64,12 @@ This runs in every frame of every page before the page's own scripts:
 - **Cosmetic filtering.** Hiding rules and scriptlets are fetched synchronously, so they apply at document start (that's what defeats YouTube's ads). Generic rules follow as the page renders.
 - **Compatibility.**
   - Hides Chromium-only APIs when presenting as Firefox or Safari.
-  - On Google's sign-in page, fills in `window.chrome` and hides passkeys.
+  - On Google's sign-in page, fills in `window.chrome` (and hides passkeys when the system's can't be used).
   - Refuses Widevine while it's turned off, and notices which sites ask for it.
 - **Dialogs.** `alert`, `confirm` and `prompt` are routed to Zepper's own dialog through a synchronous IPC call that main answers when you respond.
 - **Swipes.** Two-finger horizontal swipes are classified (vertical scroll, horizontal scroller, page-handled, or a swipe) and reported for back/forward.
+- **Sign-in fields.** Focus on a username or password field is reported (with the field's position) so Zepper can show the passwords dropdown; the chosen login is filled through the native value setter, so frameworks notice. A sent password is reported only so Zepper can offer to save it.
+- **Passkeys.** When Zepper can use the system's passkeys, `navigator.credentials.create()` and `get()` for public-key credentials are routed to it (`src/preload/webauthn.ts`), returning real `PublicKeyCredential` objects.
 
 Code run in the page's main world goes through `contextBridge.executeInMainWorld` and must be self-contained.
 
@@ -78,6 +82,16 @@ Code run in the page's main world goes through `contextBridge.executeInMainWorld
 - **Translation** for translating pages, a paragraph at a time as attributed text, so each translated piece maps back to the text node (and link) it came from.
 
 Everything runs on the Mac. Where Apple Intelligence isn't available, Tidy Tabs groups by site and the other features stay hidden.
+
+## Passwords and passkeys
+
+macOS lets only approved browsers use Apple Passwords and the system's passkeys: the app must be signed with `com.apple.developer.web-browser.public-key-credential`, which Apple grants on request and delivers in a Developer ID provisioning profile. `npm run dist:browser` builds with it (see Packaging).
+
+- **Apple Passwords** (`passwords.ts`) talks to the helper macOS ships for browser extensions (`PasswordManagerBrowserExtensionHelper`): Chrome-style native messaging over stdin and stdout, an SRP-6a pairing with the code macOS shows, then AES-GCM sealed requests to list logins for a site, read one, or save one (macOS confirms saves itself). The pairing lives as long as the helper runs, so it's kept for the whole session. macOS stops the helper at launch if Zepper isn't signed with the entitlement; `status()` then reports it unavailable.
+- **Without the entitlement**, the dropdown offers macOS's own picker instead: `native/credentials/picker.mm` shows a small panel with native username and password fields, macOS offers its AutoFill **Passwords…** button there, and the login you pick is passed back and filled into the page.
+- **The dropdown** (`autofill.ts`, `src/renderer/src/autofill`) is a small borderless child window, so it has a real shadow and never takes focus from the page; arrow keys and Return are passed on from the page while it's open. Logins are only filled when you choose one, only into the frame they were listed for, and only on HTTPS (or local development) pages.
+- **Passkeys** (`passkeys.ts`, `native/credentials/passkeys.mm`) use AuthenticationServices from the main process, the one holding the entitlement, with sheets anchored to the window. Main checks the request itself: the origin comes from the frame, the relying party must be that site or a parent domain (never a public suffix), and only a visible tab's top frame may ask.
+- In development, `ZEPPER_FAKE_PASSWORDS=1` swaps in an in-memory store (code 123456) for working on the UI.
 
 ## Protected video
 
@@ -98,6 +112,8 @@ Zepper uses castLabs' Electron build. Widevine is opt-in: while it's off, `compo
 ## Packaging
 
 `npm run dist` builds the app with electron-builder. Its `afterPack` hook (`scripts/after-pack.cjs`) flips Electron's fuses (no running as Node, no Node debugging flags, app code only from the integrity-checked asar, cookies encrypted on disk) and then VMP-signs, in that order, because the signature covers the framework binary the fuses change. Hardened-runtime entitlements (`build/entitlements.mac.plist`) allow JIT, the Widevine library, and the camera, microphone and location for sites you allow. The app registers for `http`/`https` links and web page files, so it can be the default browser.
+
+`npm run dist:browser` (with `ZEPPER_PROVISIONING_PROFILE` pointing at the Developer ID profile Apple issues with the browser entitlement) adds the app identity and `com.apple.developer.web-browser.public-key-credential` to the main app's entitlements only. Electron's helper apps have no profile, and macOS stops any process claiming a restricted entitlement without one.
 
 ## License
 

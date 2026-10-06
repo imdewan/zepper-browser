@@ -308,6 +308,27 @@ export type PopoverSpec =
   | { kind: 'auth'; anchor: Rect; auth: AuthSpec }
   | { kind: 'assistant'; anchor: Rect; title: string; host: string }
 
+/** A saved login offered under a sign-in field. Never carries the password itself. */
+export interface SavedLogin {
+  id: string
+  username: string
+  /** The site it was saved for, as Apple Passwords shows it. */
+  site: string
+}
+
+/** What the passwords dropdown under a sign-in field (or the save prompt) shows. */
+export type AutofillState =
+  | { kind: 'logins'; host: string; logins: SavedLogin[] }
+  /** Apple Passwords isn't connected yet. */
+  | { kind: 'connect'; host: string; error?: string }
+  /** Connecting: macOS shows a code to type here (hint: where it comes from, if not macOS). */
+  | { kind: 'pin'; host: string; error?: string; hint?: string }
+  /** After signing in with a new or changed password. */
+  | { kind: 'save'; host: string; username: string; update: boolean }
+  | { kind: 'unavailable'; reason: string }
+  /** Without Apple's browser entitlement: pick a login with macOS's own Passwords picker. */
+  | { kind: 'picker'; host: string }
+
 export interface FindResult {
   active: number
   matches: number
@@ -383,6 +404,14 @@ export type Command =
   | { type: 'capture.retake' }
   | { type: 'capture.drag' }
   | { type: 'capture.dismiss' }
+  | { type: 'autofill.fill'; loginId: string }
+  | { type: 'autofill.pick' }
+  | { type: 'autofill.connect' }
+  | { type: 'autofill.pin'; pin: string }
+  | { type: 'autofill.save'; choice: 'save' | 'later' | 'never' }
+  | { type: 'autofill.dismiss' }
+  | { type: 'autofill.resize'; height: number }
+  | { type: 'autofill.openPasswords' }
   /** Translate the page into your language, or back to the original. */
   | { type: 'page.translate'; tabId: string }
   | { type: 'app.openTranslationSettings' }
@@ -441,6 +470,9 @@ export type UiEvent =
   | { type: 'capture.start'; page: Rect; targets: Rect[]; scrolls: boolean }
   /** A capture is done: a thumbnail, its size, and where it was saved (if it was). */
   | { type: 'capture.result'; thumbnail: string; width: number; height: number; saved: string | null }
+  | { type: 'autofill.show'; state: AutofillState; dark: boolean }
+  /** Arrow keys and Return pressed in the page's sign-in field while the dropdown is open. */
+  | { type: 'autofill.key'; key: 'ArrowDown' | 'ArrowUp' | 'Enter' }
   /** A summary or answer about the page, as it streams in. */
   | { type: 'assistant.text'; requestId: string; text: string; done: boolean; error?: string }
   | { type: 'toast'; toast: ToastSpec }

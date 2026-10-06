@@ -7,3 +7,5 @@ dist/
 *.tsbuildinfo
 .evs/
 build/bin/
+native/credentials/build/
+build/entitlements.browser.plist

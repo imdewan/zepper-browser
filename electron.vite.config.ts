@@ -30,6 +30,7 @@ export default defineConfig({
         input: {
           chrome: resolve(__dirname, 'src/renderer/chrome.html'),
           overlay: resolve(__dirname, 'src/renderer/overlay.html'),
+          autofill: resolve(__dirname, 'src/renderer/autofill.html'),
           pip: resolve(__dirname, 'src/renderer/pip.html')
         }
       }

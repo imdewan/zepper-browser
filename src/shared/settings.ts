@@ -109,6 +109,10 @@ export interface Settings {
   siteExceptions: Record<string, Protection[]>
   /** DNS over HTTPS: off, automatic (when your DNS provider supports it), or a provider. */
   secureDns: SecureDns
+  /** Offer and save passwords from Apple Passwords in sign-in forms. */
+  passwords: boolean
+  /** Sites (registrable domains) where Zepper never offers to save passwords. */
+  neverSavePasswords: string[]
   /** Where downloads are saved ('' means the Downloads folder). */
   downloadPath: string
   /** Ask where to save each download. */
@@ -171,6 +175,8 @@ export const DEFAULT_SETTINGS: Settings = {
   paletteRecents: true,
   newWindowSpace: 'current',
   secureDns: 'automatic',
+  passwords: true,
+  neverSavePasswords: [],
   hideCookieBanners: true,
   blockFingerprinting: true,
   blockCrossSiteCookies: true,

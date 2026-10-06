@@ -27,6 +27,12 @@ import type { History } from './history'
 import type { SemanticHistory } from './semantic'
 import type { SettingsStore } from './settings-store'
 import { CertificateStore, SitePermissions } from './site'
+import { PASSWORDS_CHANNEL, type PageMessage, type PasswordStore } from './autofill'
+import { ApplePasswords, MemoryPasswords } from './passwords'
+import { cancelWebAuthn, passkeysAvailable } from './passkeys'
+
+const WEBAUTHN_CHANNEL = 'zepper:webauthn'
+const WEBAUTHN_CANCEL_CHANNEL = 'zepper:webauthn-cancel'
 
 export interface Services {
   history: History
@@ -38,6 +44,8 @@ export interface Services {
   permissions: SitePermissions
   certificates: CertificateStore
   extensions: Extensions | null
+  /** Saved passwords (Apple Passwords). */
+  passwords: PasswordStore
   rendererUrl: string | undefined
   rendererDir: string
 }
@@ -81,8 +89,14 @@ export class Hub {
   private readonly widevineInstallableNow: boolean
   private widevineInstall: Promise<void> | null = null
 
-  constructor(services: Omit<Services, 'extensions' | 'certificates' | 'permissions'>) {
-    this.services = { ...services, permissions: new SitePermissions(), certificates: new CertificateStore(), extensions: null }
+  constructor(services: Omit<Services, 'extensions' | 'certificates' | 'permissions' | 'passwords'>) {
+    this.services = {
+      ...services,
+      permissions: new SitePermissions(),
+      certificates: new CertificateStore(),
+      extensions: null,
+      passwords: process.env['ZEPPER_FAKE_PASSWORDS'] && !app.isPackaged ? new MemoryPasswords() : new ApplePasswords()
+    }
     this.widevineInstallableNow = services.settings.get().widevine
 
     // These answer only Zepper's own UI, never web pages.
@@ -104,6 +118,10 @@ export class Hub {
       this.owner(event.sender)?.onPageSwipe(event.sender.id, phase, Number(dx) || 0, Number(peak) || 0)
     )
     ipcMain.on(IPC.pipBack, (event) => this.owner(event.sender)?.onNativePipBack(event.sender.id))
+    // Sign-in fields: the passwords dropdown, filling, and offering to save.
+    ipcMain.on(PASSWORDS_CHANNEL, (event, message: PageMessage) => {
+      if (message && typeof message === 'object') this.owner(event.sender)?.onPasswordsMessage(event.sender, event.senderFrame, message)
+    })
     ipcMain.on('zepper:drm-needed', (event, host: string) => this.owner(event.sender)?.onWidevineNeeded(event.sender, String(host)))
     // Page dialogs (alert/confirm/prompt); the page is blocked until event.returnValue is set.
     ipcMain.on('zepper:dialog', (event, kind: string, message: string, value: string) => {
@@ -121,8 +139,19 @@ export class Hub {
     servePageConfig(
       services.settings,
       () => this.userAgent,
-      (url) => services.adblock.protects(url, 'fingerprinting')
+      (url) => services.adblock.protects(url, 'fingerprinting'),
+      passkeysAvailable
     )
+    // Passkeys: pages' WebAuthn requests, run through macOS by the window showing the page.
+    ipcMain.handle(WEBAUTHN_CHANNEL, async (event, kind: string, options: string) => {
+      const browser = this.owner(event.sender)
+      if (!browser || (kind !== 'create' && kind !== 'get'))
+        return JSON.stringify({ ok: false, name: 'NotAllowedError', message: 'Not allowed.' })
+      return browser.onWebAuthn(event.sender, event.senderFrame, kind, String(options ?? '{}'))
+    })
+    ipcMain.on(WEBAUTHN_CANCEL_CHANNEL, (event) => {
+      if (this.owner(event.sender)) cancelWebAuthn()
+    })
     // Client certificates: you choose which (if any) a site gets.
     app.on('select-client-certificate', (event, wc, url, list, callback) => {
       event.preventDefault()

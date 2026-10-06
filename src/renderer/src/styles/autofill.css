@@ -1,0 +1,196 @@
+/* The passwords dropdown and save prompt (autofill.html), in a borderless window the card fills; macOS draws its shadow. */
+
+#root {
+  height: auto;
+}
+
+.autofill {
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: inset 0 0 0 0.5px var(--panel-border);
+}
+
+.af-list {
+  padding: 5px;
+  max-height: 228px;
+  overflow-y: auto;
+}
+
+.af-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.af-row.selected {
+  background: var(--accent);
+  color: #fff;
+}
+
+.af-row.selected .af-sub {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.af-row.selected .af-icon {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.af-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.af-icon.large {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.af-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.af-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.af-sub {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+
+.af-row .af-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.af-footer {
+  display: block;
+  width: 100%;
+  padding: 8px 13px 9px;
+  border-top: 0.5px solid var(--separator);
+  text-align: left;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.af-footer:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.af-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px 14px 12px;
+}
+
+.af-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.af-head .af-name {
+  white-space: normal;
+}
+
+.af-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.af-error {
+  font-size: 12px;
+  color: #e5484d;
+}
+
+.af-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.af-spacer {
+  flex: 1;
+}
+
+.af-actions button {
+  padding: 5px 11px;
+  border-radius: 6px;
+  background: var(--element);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.af-actions button:hover {
+  background: var(--element-hover);
+}
+
+.af-actions .af-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.af-actions .af-primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, #000);
+}
+
+.af-actions .af-quiet {
+  padding-left: 2px;
+  padding-right: 2px;
+  background: none;
+  color: var(--text-2);
+}
+
+.af-actions .af-quiet:hover {
+  background: none;
+  color: var(--text);
+}
+
+.af-pin {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  outline: none;
+  background: var(--element);
+  font:
+    600 20px/1 ui-monospace,
+    'SF Mono',
+    monospace;
+  letter-spacing: 0.5em;
+  text-align: center;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.af-pin:focus {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.af-pin.invalid {
+  box-shadow: inset 0 0 0 2px #e5484d;
+}

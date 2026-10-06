@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import { webauthnShim } from './webauthn'
 
 /**
  * Runs in every web page frame before the page's own scripts.
@@ -19,6 +20,8 @@ const COSMETICS_CHANNEL = 'zepper:cosmetics'
 const COSMETICS_DOM_CHANNEL = 'zepper:cosmetics-dom'
 const SWIPE_CHANNEL = 'zepper:swipe'
 const PAGE_CONFIG_CHANNEL = 'zepper:page-config'
+const WEBAUTHN_CHANNEL = 'zepper:webauthn'
+const WEBAUTHN_CANCEL_CHANNEL = 'zepper:webauthn-cancel'
 
 interface PageConfig {
   signInCompat: boolean
@@ -29,6 +32,7 @@ interface PageConfig {
   globalPrivacyControl: boolean
   fingerprintSeed: number | null
   brand: { name: string; major: string; full: string } | null
+  passkeys: boolean
 }
 
 /** navigator.userAgentData names the browser brand the request headers do (runs in the page's world). */
@@ -213,7 +217,7 @@ function hideChromiumShim(vendor: string): void {
 }
 
 /** Runs in the page's main world: makes `window.chrome` look like real Chrome's and hides passkeys. */
-function signInPageShim(): void {
+function signInPageShim(keepPasskeys: boolean): void {
   const native = <T extends (...args: never[]) => unknown>(name: string, fn: T): T => {
     const source = `function ${name}() { [native code] }`
     Object.defineProperty(fn, 'name', { value: name })
@@ -248,7 +252,8 @@ function signInPageShim(): void {
     connectionInfo: 'h2'
   }))
   if (!w.chrome) Object.defineProperty(window, 'chrome', { value: chrome, configurable: true, writable: true })
-  delete w.PublicKeyCredential
+  // Without the system's passkeys, Google would offer one that can't work; hide them.
+  if (!keepPasskeys) delete w.PublicKeyCredential
 }
 
 /**
@@ -335,7 +340,17 @@ function applyCompat(): void {
     if (config.brand)
       contextBridge.executeInMainWorld({ func: brandShim, args: [config.brand.name, config.brand.major, config.brand.full] })
     if (config.fingerprintSeed !== null) contextBridge.executeInMainWorld({ func: fingerprintShim, args: [config.fingerprintSeed] })
-    if (config.signInCompat && location.hostname === 'accounts.google.com') contextBridge.executeInMainWorld({ func: signInPageShim })
+    if (config.signInCompat && location.hostname === 'accounts.google.com')
+      contextBridge.executeInMainWorld({ func: signInPageShim, args: [config.passkeys] })
+    if (config.passkeys) {
+      contextBridge.executeInMainWorld({
+        func: webauthnShim,
+        args: [
+          (kind: string, options: string) => ipcRenderer.invoke(WEBAUTHN_CHANNEL, kind, options) as Promise<string>,
+          () => ipcRenderer.send(WEBAUTHN_CANCEL_CHANNEL)
+        ]
+      })
+    }
     if (config.blockWidevine) {
       contextBridge.executeInMainWorld({ func: widevineShim, args: [DRM_NEEDED_EVENT] })
       if (config.askForWidevine) reportWidevineNeeds()
@@ -603,3 +618,169 @@ function watchSwipes(): void {
 }
 
 watchSwipes()
+
+// ---------------------------------------------------------------------------
+// Passwords: Zepper offers saved logins under sign-in fields, fills them, and offers to save new
+// ones. The passwords themselves never pass through the page's own scripts: this runs in the
+// preload's isolated world, and fills fields directly.
+
+const PASSWORDS_CHANNEL = 'zepper:passwords'
+const PASSWORDS_FILL_CHANNEL = 'zepper:passwords-fill'
+const PASSWORDS_OPEN_CHANNEL = 'zepper:passwords-open'
+
+type CredentialField = 'username' | 'password'
+
+function credentialField(target: EventTarget | null): [HTMLInputElement, CredentialField] | null {
+  if (!(target instanceof HTMLInputElement) || target.disabled || target.readOnly) return null
+  if (target.type === 'password') return [target, 'password']
+  if (!['text', 'email', 'tel', ''].includes(target.type)) return null
+  const hint =
+    `${target.autocomplete} ${target.name} ${target.id} ${target.getAttribute('aria-label') ?? ''} ${target.placeholder}`.toLowerCase()
+  // A username field: named like one, or the text field just before a password field.
+  if (/username|email|e-mail|login|user|account|phone/.test(hint) && !/search|newsletter|subscribe|coupon/.test(hint))
+    return [target, 'username']
+  return passwordAfter(target) ? [target, 'username'] : null
+}
+
+/** The password field belonging with a username field (same form, or the next password input on the page). */
+function passwordAfter(input: HTMLInputElement): HTMLInputElement | null {
+  const scope: ParentNode = input.form ?? document
+  const fields = [...scope.querySelectorAll<HTMLInputElement>('input')]
+  const after = fields.slice(fields.indexOf(input) + 1)
+  return after.find((f) => f.type === 'password' && f.offsetParent !== null) ?? null
+}
+
+/** The username field belonging with a password field. */
+function usernameBefore(input: HTMLInputElement): HTMLInputElement | null {
+  const scope: ParentNode = input.form ?? document
+  const fields = [...scope.querySelectorAll<HTMLInputElement>('input')].filter((f) => f.offsetParent !== null)
+  const before = fields.slice(0, fields.indexOf(input)).reverse()
+  return before.find((f) => ['text', 'email', 'tel', ''].includes(f.type)) ?? null
+}
+
+/** Sets a field's value so the page's own code (React and friends) notices. */
+function setFieldValue(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  input.focus()
+  if (setter) setter.call(input, value)
+  else input.value = value
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+function watchCredentials(): void {
+  if (!/^https:|^http:\/\/(localhost|127\.0\.0\.1)/.test(location.href)) return
+  let focused: [HTMLInputElement, CredentialField] | null = null
+
+  const report = (type: 'focus' | 'blur', field?: [HTMLInputElement, CredentialField]): void => {
+    const box = field?.[0].getBoundingClientRect()
+    ipcRenderer.send(PASSWORDS_CHANNEL, {
+      type,
+      field: field?.[1],
+      rect: box ? [box.left, box.top, box.width, box.height] : null
+    })
+  }
+
+  document.addEventListener(
+    'focusin',
+    (event) => {
+      const field = credentialField(event.target)
+      if (!field) return
+      focused = field
+      report('focus', field)
+    },
+    true
+  )
+  document.addEventListener(
+    'focusout',
+    (event) => {
+      if (focused && event.target === focused[0]) report('blur')
+    },
+    true
+  )
+
+  // While the dropdown is open, the field keeps the keyboard and passes the list keys on.
+  let dropdownOpen = false
+  // Return picks a login only once you've moved into the list; otherwise it submits the form as usual.
+  let inList = false
+  ipcRenderer.on(PASSWORDS_OPEN_CHANNEL, (_event, open: boolean) => {
+    dropdownOpen = open
+    inList = false
+  })
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (!dropdownOpen || !focused || event.target !== focused[0]) return
+      if (event.key === 'Escape') {
+        dropdownOpen = false
+        report('blur')
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || (event.key === 'Enter' && inList)) {
+        inList = event.key !== 'Enter'
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        ipcRenderer.send(PASSWORDS_CHANNEL, { type: 'key', key: event.key })
+      }
+    },
+    true
+  )
+
+  // The list doesn't follow the page as it scrolls; it closes, and clicking the field brings it back.
+  document.addEventListener(
+    'scroll',
+    () => {
+      if (!dropdownOpen) return
+      dropdownOpen = false
+      report('blur')
+    },
+    { capture: true, passive: true }
+  )
+  document.addEventListener(
+    'mousedown',
+    (event) => {
+      if (!dropdownOpen && focused && event.target === focused[0]) report('focus', focused)
+    },
+    true
+  )
+
+  // Filling: Zepper sends the chosen login back.
+  ipcRenderer.on(PASSWORDS_FILL_CHANNEL, (_event, login: { username: string; password: string }) => {
+    if (!focused) return
+    const [input, kind] = focused
+    const user = kind === 'username' ? input : usernameBefore(input)
+    const pass = kind === 'password' ? input : passwordAfter(input)
+    if (user && login.username) setFieldValue(user, login.username)
+    if (pass && login.password) setFieldValue(pass, login.password)
+  })
+
+  // Saving: when a form with a typed password is submitted (or its button pressed), offer to save it.
+  let offered = ''
+  const capture = (scope: ParentNode): void => {
+    const pass = [...scope.querySelectorAll<HTMLInputElement>('input[type="password"]')].find((f) => f.value)
+    if (!pass) return
+    const user = usernameBefore(pass)
+    const key = `${user?.value ?? ''}\u0000${pass.value}`
+    if (key === offered) return
+    offered = key
+    ipcRenderer.send(PASSWORDS_CHANNEL, { type: 'submit', username: user?.value ?? '', password: pass.value })
+  }
+  document.addEventListener('submit', (event) => event.target instanceof HTMLFormElement && capture(event.target), true)
+  document.addEventListener(
+    'click',
+    (event) => {
+      const button = (event.target as Element | null)?.closest?.('button, input[type="submit"], [role="button"]')
+      if (button) capture((button as HTMLElement).closest('form') ?? document)
+    },
+    true
+  )
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key === 'Enter' && event.target instanceof HTMLInputElement && event.target.type === 'password') {
+        capture(event.target.form ?? document)
+      }
+    },
+    true
+  )
+}
+
+watchCredentials()

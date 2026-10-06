@@ -76,6 +76,8 @@ if (!app.requestSingleInstanceLock()) {
       rendererUrl: process.env['ELECTRON_RENDERER_URL'],
       rendererDir: join(__dirname, '../renderer')
     })
+    // Development: the debugger (--inspect) can reach the app's state.
+    if (process.env['ZEPPER_DEBUG_PORT'] && !app.isPackaged) Object.assign(globalThis, { zepperHub: hub })
     await hub.widevineSettled(15_000)
     hub.openWindow('main')
     for (const url of pendingUrls.splice(0)) hub.openUrl(url)
