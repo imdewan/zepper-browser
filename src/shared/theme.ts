@@ -203,7 +203,26 @@ export function prefersDarkUi(theme: SpaceTheme, systemDark: boolean): boolean {
   return contrastWhite * 1.3 > contrastBlack
 }
 
-/** The accent used for selection highlights, derived from the dominant colour. */
+/** How well white text reads on a colour (WCAG contrast ratio). */
+function contrastWithWhite(hex: string): number {
+  return 1.05 / (luminance(hexToRgb(hex)) + 0.05)
+}
+
+/**
+ * The accent for buttons, switches and highlights, in the dominant colour's hue. Pale or very dark
+ * colours are pulled to a solid, saturated tone that white text reads on, so a filled button never
+ * looks faded (or vanishes) whatever the theme. Greys use the system accent.
+ */
 export function themeAccent(theme: SpaceTheme): string | null {
-  return theme.colors[0] ?? null
+  const dominant = theme.colors[0]
+  if (!dominant) return null
+  const [hue, saturation, lightness] = hexToHsl(dominant)
+  if (saturation < 10) return null
+  // Already solid enough: keep the colour you chose.
+  if (contrastWithWhite(dominant) >= 3.3 && saturation >= 35 && lightness >= 30) return dominant
+  const s = Math.min(Math.max(saturation, 55), 80)
+  let l = Math.min(Math.max(lightness, 42), 58)
+  let accent = hslToHex(hue, s, l)
+  while (contrastWithWhite(accent) < 3.8 && l > 24) accent = hslToHex(hue, s, (l -= 2))
+  return accent
 }

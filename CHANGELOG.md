@@ -7,6 +7,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 ### Fixed
 
 - Google Meet, Zoom, Teams and other sites that check before asking said the camera and microphone were blocked instead of asking for them. Undecided permissions now read as "prompt", and allowing the camera or microphone also asks macOS for access.
+- Buttons and switches in a space's accent colour looked faded on pale themes. The accent keeps the theme's hue but is always solid enough for white text.
 
 ## [0.1.0] - 2026-10-06
 
