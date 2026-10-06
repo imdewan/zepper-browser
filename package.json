@@ -109,6 +109,10 @@
       {
         "from": "build/bin/zepper_credentials.node",
         "to": "bin/zepper_credentials.node"
+      },
+      {
+        "from": "build/Assets.car",
+        "to": "Assets.car"
       }
     ],
     "directories": {
@@ -132,7 +136,8 @@
         "NSLocationWhenInUseUsageDescription": "Websites you allow can use your location.",
         "NSLocationUsageDescription": "Websites you allow can use your location.",
         "NSBluetoothAlwaysUsageDescription": "Zepper uses Bluetooth to check your phone is nearby when you sign in with a passkey from it.",
-        "NSAudioCaptureUsageDescription": "When you share a window or your screen, Zepper can share your Mac’s audio too."
+        "NSAudioCaptureUsageDescription": "When you share a window or your screen, Zepper can share your Mac’s audio too.",
+        "CFBundleIconName": "AppIcon"
       },
       "target": [
         "dmg",

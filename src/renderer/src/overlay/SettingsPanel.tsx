@@ -288,7 +288,7 @@ export function SettingsPanel({
                     onChange={(colorScheme) => set({ colorScheme })}
                   />
                 </Row>
-                <Row label="App icon" hint="Auto follows your Mac’s appearance.">
+                <Row label="App icon" hint="Auto follows your Mac’s icon style (System Settings › Appearance), like your other apps.">
                   <Segmented
                     value={settings.appIcon}
                     options={[

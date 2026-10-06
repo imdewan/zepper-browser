@@ -4,3 +4,4 @@ node_modules
 src/main/bangs-top.json
 package-lock.json
 .evs
+build/AppIcon.icon

@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- The app icon follows your Mac's icon style (light, dark, clear or tinted) even while Zepper isn't running, instead of switching only once it opened.
+
 ## [0.1.0] - 2026-10-06
 
 The first public version.

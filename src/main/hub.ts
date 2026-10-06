@@ -550,9 +550,20 @@ export class Hub {
     for (const browser of this.browsers) browser.refresh()
   }
 
+  private appIconSet = false
+
   private applyAppIcon(): void {
     const choice = this.services.settings.get().appIcon
+    // Installed, "Auto" is the app's own icon (its asset catalog): macOS shows light, dark, clear or
+    // tinted to match your icon style, the same whether Zepper is open or not, as for every other app.
+    if (choice === 'auto' && app.isPackaged) {
+      // Only undo an icon set earlier (Light or Dark chosen this session); otherwise leave macOS's.
+      if (this.appIconSet) app.dock?.setIcon(null as unknown as string)
+      this.appIconSet = false
+      return
+    }
     const dark = choice === 'dark' || (choice === 'auto' && nativeTheme.shouldUseDarkColors)
     app.dock?.setIcon(join(__dirname, `../../resources/${dark ? 'icon-dark' : 'icon'}.png`))
+    this.appIconSet = true
   }
 }
