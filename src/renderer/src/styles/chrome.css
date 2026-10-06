@@ -597,6 +597,13 @@ button.site-button.insecure:hover {
   scale: 0.97;
 }
 
+/* An Essential's own icon, in place of the site's. */
+.essential-emoji {
+  position: relative;
+  font-size: 20px;
+  line-height: 1;
+}
+
 .essential .favicon {
   position: relative;
   z-index: 2;

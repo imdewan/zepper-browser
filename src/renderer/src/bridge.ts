@@ -33,6 +33,7 @@ function createMock(): ZepperApi {
     language: null,
     translation: null,
     capture: null,
+    emoji: null,
     ...fields
   })
   const spaces: Space[] = [

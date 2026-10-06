@@ -55,14 +55,21 @@ export function dragProps(item: DragItem): Pick<React.HTMLAttributes<HTMLElement
 interface DropOptions {
   /** Unique per drop target. */
   key: string
-  /** Where a drop at each position lands; null refuses it. */
-  target: (position: DropPosition, item: DragItem) => DropTarget | null
+  /** Where a drop at each position lands; null refuses it. The event is there for targets that work it out from the pointer. */
+  target: (position: DropPosition, item: DragItem, event: React.DragEvent<HTMLElement>) => DropTarget | null
+  /** Which element shows the indicator, when that isn't this one (a grid pointing at one of its tiles). */
+  hint?: (event: React.DragEvent<HTMLElement>) => { key: string; position: DropPosition } | null
   /** Folders accept drops into them (the middle of the row). */
   into?: boolean
   /** Split horizontally (Essentials tiles) instead of vertically. */
   horizontal?: boolean
   /** The whole element is one target (a space dot, the empty pinned area). */
   whole?: DropPosition
+}
+
+/** The indicator an element shows for a drop target that points at it (see DropOptions.hint). */
+export function useDropHint(key: string): DropPosition | null {
+  return useSyncExternalStore(subscribe, () => (hint?.key === key ? hint.position : null))
 }
 
 /** Props that make an element a drop target, and which indicator it should show. */
@@ -84,19 +91,19 @@ export function useDrop(options: DropOptions): {
       onDragOver: (e) => {
         if (!dragging || !e.dataTransfer.types.includes(MIME)) return
         const at = positionAt(e)
-        if (!options.target(at, dragging)) return
+        if (!options.target(at, dragging, e)) return
         e.preventDefault()
         e.stopPropagation()
         e.dataTransfer.dropEffect = 'move'
-        setHint({ key: options.key, position: at })
+        setHint(options.hint ? options.hint(e) : { key: options.key, position: at })
       },
       onDragLeave: (e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-        if (hint?.key === options.key) setHint(null)
+        if (hint?.key === options.key || options.hint) setHint(null)
       },
       onDrop: (e) => {
         if (!dragging) return
-        const target = options.target(positionAt(e), dragging)
+        const target = options.target(positionAt(e), dragging, e)
         e.preventDefault()
         e.stopPropagation()
         if (target) zepper.send({ type: 'item.drop', item: dragging, target })

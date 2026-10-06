@@ -171,6 +171,7 @@ function makeTab(fields: Partial<Tab> & Pick<Tab, 'kind' | 'url'>): Tab {
     language: null,
     translation: null,
     capture: null,
+    emoji: null,
     ...fields
   }
 }
@@ -1388,6 +1389,8 @@ export class Browser {
         return
       case 'site.resetPermissions':
         return this.permissions.reset(command.origin)
+      case 'tab.setEmoji':
+        return this.setEmoji(command.tabId, command.emoji)
       case 'site.clearData':
         return void this.clearSiteData(command.origin)
       case 'permission.respond':
@@ -1905,6 +1908,14 @@ export class Browser {
   /** A space's Essentials, in order. */
   private essentialsOf(spaceId: string | null): Tab[] {
     return this.tabs.filter((t) => t.kind === 'essential' && t.spaceId === spaceId)
+  }
+
+  /** An Essential's own icon (only Essentials have one). */
+  private setEmoji(id: string, emoji: string | null): void {
+    const tab = this.tab(id)
+    if (!tab || tab.kind !== 'essential') return
+    tab.emoji = emoji?.trim() || null
+    this.broadcast()
   }
 
   private addEssential(id: string): void {
@@ -4301,6 +4312,8 @@ export class Browser {
     if (tab.kind === 'normal') items.push({ label: 'Pin Tab', click: () => this.pin(id) })
     if (tab.kind === 'pinned') items.push({ label: 'Unpin Tab', click: () => this.unpin(id) })
     if (tab.kind === 'essential') {
+      items.push({ label: 'Change Icon…', click: () => this.emitToSidebars({ type: 'essential.pickIcon', tabId: id }) })
+      if (tab.emoji) items.push({ label: 'Use Site Icon', click: () => this.setEmoji(id, null) })
       items.push({ label: 'Remove from Essentials', click: () => this.removeEssential(id) })
     } else {
       items.push({ label: 'Add to Essentials', enabled: !essentialsFull, click: () => this.addEssential(id) })
@@ -4883,7 +4896,7 @@ export class Browser {
     return {
       version: 1,
       spaces: this.spaces,
-      tabs: this.tabs.map(({ id, kind, spaceId, url, title, favicon, pinned, lastActiveAt }) => ({
+      tabs: this.tabs.map(({ id, kind, spaceId, url, title, favicon, pinned, lastActiveAt, emoji }) => ({
         id,
         kind,
         spaceId,
@@ -4891,7 +4904,8 @@ export class Browser {
         title,
         favicon,
         pinned,
-        lastActiveAt
+        lastActiveAt,
+        ...(emoji && kind === 'essential' ? { emoji } : {})
       })),
       activeSpaceId: this.activeSpaceId,
       activeTabId: this.activeTabId,

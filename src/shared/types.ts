@@ -39,6 +39,8 @@ export interface Tab {
   translation: 'working' | 'on' | null
   /** What the page is using right now: camera, microphone, screen (null: none). */
   capture: CaptureState | null
+  /** An Essential's own icon (an emoji), shown instead of the site's. */
+  emoji: string | null
 }
 
 export interface CaptureState {
@@ -314,7 +316,8 @@ export interface PermissionPrompt {
 }
 
 export type PopoverSpec =
-  | { kind: 'emoji'; spaceId: string; anchor: Rect }
+  /** A space's icon, or with tabId an Essential's. */
+  | { kind: 'emoji'; spaceId: string; anchor: Rect; tabId?: string }
   | { kind: 'theme'; spaceId: string; anchor: Rect }
   | { kind: 'siteInfo'; anchor: Rect; info: SiteInfo }
   | { kind: 'permission'; anchor: Rect; prompt: PermissionPrompt }
@@ -544,6 +547,8 @@ export type Command =
   | { type: 'media.dismiss'; tabId: string }
   | { type: 'media.pauseOthers'; keepTabId: string }
   | { type: 'site.setPermission'; origin: string; permission: string; state: PermissionState }
+  /** An Essential's icon: an emoji, or null for the site's own. */
+  | { type: 'tab.setEmoji'; tabId: string; emoji: string | null }
   /** Forget every decision for a site (it asks again). */
   | { type: 'site.resetPermissions'; origin: string }
   | { type: 'site.clearData'; origin: string }
@@ -607,6 +612,8 @@ export type UiEvent =
   | { type: 'find.result'; result: FindResult }
   | { type: 'settings.open'; section?: string }
   | { type: 'onboarding.open' }
+  /** Open the emoji picker for an Essential's icon (the sidebar knows where its tile is). */
+  | { type: 'essential.pickIcon'; tabId: string }
   /** A page wants to share your screen: choose a tab, window or screen. */
   | { type: 'share.open'; request: ShareRequest }
   /** The page went away before you chose. */

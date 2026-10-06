@@ -43,6 +43,7 @@ export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }:
 
   const needsSpace = popover.kind === 'emoji' || popover.kind === 'theme'
   if (needsSpace && !space) return null
+  const essentialEmoji = popover.kind === 'emoji' && popover.tabId ? snapshot?.tabs.find((t) => t.id === popover.tabId)?.emoji : null
   const { anchor } = popover
   // Space pickers open beside the sidebar, the extensions panel rises from the bottom bar,
   // and site panels drop down from their anchor.
@@ -90,9 +91,10 @@ export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }:
         )}
         {popover.kind === 'emoji' && space && (
           <EmojiPicker
-            selected={space.icon}
+            selected={popover.tabId ? (essentialEmoji ?? '') : space.icon}
             onPick={(icon) => {
-              zepper.send({ type: 'space.update', spaceId: space.id, patch: { icon } })
+              if (popover.tabId) zepper.send({ type: 'tab.setEmoji', tabId: popover.tabId, emoji: icon })
+              else zepper.send({ type: 'space.update', spaceId: space.id, patch: { icon } })
               onClose()
             }}
           />

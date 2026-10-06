@@ -4,6 +4,15 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- Essentials can have an emoji instead of the site's icon (Change Icon… in their menu).
+
+### Fixed
+
+- The floating video player showed no controls and couldn't be dragged in the installed app.
+- Rearranging Essentials only worked at the start or end of the grid; drops now land wherever you point, gaps between tiles included.
+
 ## [0.1.0] - 2026-10-06
 
 The first public version.
