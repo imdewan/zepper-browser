@@ -96,7 +96,7 @@ export class Hub {
     })
     ipcMain.handle(IPC.historyMeaning, async (event, query: string) => {
       const browser = this.uiOwner(event.sender)
-      if (!browser || browser.kind === 'private') return []
+      if (!browser || browser.kind === 'private' || !services.settings.get().aiFeatures) return []
       return services.semantic.search(String(query ?? '').slice(0, 300)).catch(() => [])
     })
     ipcMain.on(IPC.command, (event, command: Command) => this.owner(event.sender)?.handleFromUi(event.sender, command))

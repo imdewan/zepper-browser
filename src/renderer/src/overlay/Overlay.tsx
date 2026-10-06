@@ -207,6 +207,7 @@ export function Overlay(): React.JSX.Element | null {
             widevine={snapshot.widevine}
             tidy={snapshot.tidy}
             defaultBrowser={snapshot.defaultBrowser}
+            intelligence={snapshot.intelligence}
             onClose={closeSettings}
           />
         )}

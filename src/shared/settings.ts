@@ -66,6 +66,8 @@ export interface Settings {
   keepEssentials: boolean
   /** Suggest closing tabs you haven't opened for this many days (0: never). */
   staleTabDays: number
+  /** Apple Intelligence features (summaries, answers, translation, history by meaning, AI Tidy). */
+  aiFeatures: boolean
   /** Offer to translate pages that aren't in your language (on-device). */
   offerTranslation: boolean
   /** Translate pages into this language (a code like "en"); empty: your Mac's language. */
@@ -153,6 +155,7 @@ export const DEFAULT_SETTINGS: Settings = {
   restoreTabs: true,
   keepEssentials: true,
   staleTabDays: 3,
+  aiFeatures: true,
   offerTranslation: true,
   translateTo: '',
   showTidy: true,

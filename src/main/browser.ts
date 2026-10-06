@@ -47,6 +47,7 @@ import {
   type AuthSpec,
   type DropTarget,
   type Folder,
+  type IntelligenceStatus,
   type JsDialogSpec,
   type PopoverSpec,
   type ProfileChoice,
@@ -1996,10 +1997,13 @@ export class Browser {
     const normals = this.tabs.filter((t) => t.kind === 'normal' && t.spaceId === spaceId)
     if (!space || normals.length < 3 || this.tidying) return
     this.tidying = true
-    const ai = this.hub.tidy.kind === 'ai'
+    const ai = this.hub.tidy.kind === 'ai' && this.settings.aiFeatures
     this.toast({ id: 'tidy', message: ai ? 'Tidying with Apple Intelligence…' : 'Tidying by site…', timeout: 30_000 })
     try {
-      const groups = await tidyGroups(normals.map((t) => ({ title: t.title, url: t.url })))
+      const groups = await tidyGroups(
+        normals.map((t) => ({ title: t.title, url: t.url })),
+        this.settings.aiFeatures
+      )
       if (this.win.isDestroyed() || !this.space(spaceId)) return
       // Tabs closed or moved meanwhile are left out.
       const usable = groups
@@ -2470,7 +2474,7 @@ export class Browser {
 
   /** Offers translation when a page isn't in your language (and this Mac can translate). */
   private async detectLanguage(tabId: string, wc: WebContents): Promise<void> {
-    if (!this.settings.offerTranslation || !this.hub.aiStatus.translation || !/^https?:/.test(wc.getURL())) return
+    if (!this.settings.offerTranslation || !this.ai.translation || !/^https?:/.test(wc.getURL())) return
     const page = await wc.executeJavaScriptInIsolatedWorld(ZEPPER_WORLD, [{ code: LANGUAGE_SCRIPT }]).catch(() => null)
     if (!page || wc.isDestroyed()) return
     let language = String(page.lang).split(/[-_]/)[0].toLowerCase()
@@ -2570,10 +2574,17 @@ export class Browser {
     this.translating.delete(tabId)
   }
 
+  /** What on-device intelligence can do here: nothing when it's turned off in Settings. */
+  private get ai(): IntelligenceStatus {
+    return this.settings.aiFeatures
+      ? this.hub.aiStatus
+      : { ai: false, reason: 'Turned off in Settings.', translation: false, embeddings: false }
+  }
+
   /** Remembers what a page is about, for searching history by meaning (not in private windows). */
   private notePage(wc: WebContents): void {
     const url = wc.getURL()
-    if (this.kind === 'private' || !/^https?:/.test(url) || this.errorPages.has(url)) return
+    if (this.kind === 'private' || !this.ai.embeddings || !/^https?:/.test(url) || this.errorPages.has(url)) return
     void wc
       .executeJavaScriptInIsolatedWorld(ZEPPER_WORLD, [{ code: PAGE_TEXT_SCRIPT }])
       .then((page: { title: string; text: string } | null) => {
@@ -2584,6 +2595,7 @@ export class Browser {
 
   /** The "Ask this page" panel: a summary of the page, and questions about it. */
   openAssistant(anchor?: Rect): void {
+    if (!this.ai.ai) return
     const tab = this.tab(this.activeTabId)
     if (!tab || !/^https?:|^file:/.test(tab.url)) return
     const bounds = this.contentBounds()
@@ -4125,10 +4137,10 @@ export class Browser {
         { label: 'Forward', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
         { label: 'Reload', click: () => this.reloadPage(wc) },
         { type: 'separator' },
-        ...(this.hub.aiStatus.ai ? [{ label: 'Summarise Page', click: () => this.openAssistant() }] : []),
+        ...(this.ai.ai ? [{ label: 'Summarise Page', click: () => this.openAssistant() }] : []),
         ...(tab?.translation
           ? [{ label: 'Show Original', click: () => void this.translatePage(tabId) }]
-          : this.hub.aiStatus.translation && /^https?:/.test(wc.getURL())
+          : this.ai.translation && /^https?:/.test(wc.getURL())
             ? [
                 {
                   label: `Translate to ${new Intl.DisplayNames(['en'], { type: 'language' }).of(this.translationTarget()) ?? 'Your Language'}`,
@@ -4349,9 +4361,9 @@ export class Browser {
       downloads: this.hub.downloads.list(this.kind === 'private'),
       paletteOpen: this.paletteOpen,
       folders: this.folders,
-      tidy: this.hub.tidy,
+      tidy: this.settings.aiFeatures ? this.hub.tidy : { kind: 'site', reason: 'Apple Intelligence features are turned off in Settings.' },
       defaultBrowser: this.hub.defaultBrowser,
-      intelligence: this.hub.aiStatus,
+      intelligence: this.ai,
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : []

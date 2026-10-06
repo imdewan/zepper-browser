@@ -11,7 +11,7 @@ import {
   type Settings,
   type UserAgentChoice
 } from '@shared/settings'
-import type { Snapshot, WidevineStatus } from '@shared/types'
+import type { IntelligenceStatus, Snapshot, WidevineStatus } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose } from '../icons'
 import { cx, isMac } from '../util'
@@ -93,6 +93,7 @@ interface SettingsPanelProps {
   widevine: WidevineStatus
   tidy: Snapshot['tidy']
   defaultBrowser: boolean
+  intelligence: IntelligenceStatus
   onClose: () => void
 }
 
@@ -114,7 +115,7 @@ function widevineHint(status: WidevineStatus): string {
 }
 
 /** Settings sheet: every change applies immediately. */
-export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, onClose }: SettingsPanelProps): React.JSX.Element {
+export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, intelligence, onClose }: SettingsPanelProps): React.JSX.Element {
   const [section, setSection] = useState<Section>('general')
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
 
@@ -180,10 +181,24 @@ export function SettingsPanel({ settings, widevine, tidy, defaultBrowser, onClos
                   )}
                 </Row>
                 <Row
+                  label="Apple Intelligence features"
+                  hint={
+                    settings.aiFeatures && !intelligence.ai && !intelligence.translation
+                      ? (intelligence.reason ?? 'Not available on this Mac.')
+                      : 'Page summaries and questions, translation, history search by meaning and Tidy Tabs. Everything runs on your Mac.'
+                  }
+                >
+                  <Toggle checked={settings.aiFeatures} onChange={(aiFeatures) => set({ aiFeatures })} />
+                </Row>
+                <Row
                   label="Offer to translate pages"
                   hint="When a page isn’t in your language, a translate button appears in the address bar. Translation runs on your Mac."
                 >
-                  <Toggle checked={settings.offerTranslation} onChange={(offerTranslation) => set({ offerTranslation })} />
+                  <Toggle
+                    checked={settings.aiFeatures && settings.offerTranslation}
+                    disabled={!settings.aiFeatures}
+                    onChange={(offerTranslation) => set({ offerTranslation })}
+                  />
                 </Row>
                 <Row label="Translate into" hint="Your Mac’s language, or another one.">
                   <select value={settings.translateTo} onChange={(e) => set({ translateTo: e.target.value })}>

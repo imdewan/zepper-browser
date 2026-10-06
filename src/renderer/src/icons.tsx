@@ -158,6 +158,12 @@ export const IconChevronDown = (p: IconProps): React.JSX.Element => (
     <path d="M6 9l6 6 6-6" />
   </Icon>
 )
+/** A pop-up selector's up-and-down chevrons (choose one of several). */
+export const IconChevronUpDown = (p: IconProps): React.JSX.Element => (
+  <Icon {...p} strokeWidth={2.2}>
+    <path d="M8 9.5l4-4 4 4M8 14.5l4 4 4-4" />
+  </Icon>
+)
 export const IconDots = (p: IconProps): React.JSX.Element => (
   <Icon {...p} strokeWidth={2.6}>
     <path d="M5 12h.01M12 12h.01M19 12h.01" />

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useMotionValue } from 'motion/react'
 import type { Folder, Snapshot, Space, Split, Tab } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconArrowDown, IconChevronDown, IconDots, IconPlus, IconSparkle } from '../icons'
+import { IconArrowDown, IconChevronDown, IconChevronUpDown, IconDots, IconPlus, IconSparkle } from '../icons'
 import { cx, rectOf } from '../util'
 import { SplitRow } from './SplitRow'
 import { useDragging, useDrop } from './dnd'
@@ -560,7 +560,7 @@ function SpaceHeader({ space, hasPinned, renaming, onRenameDone, onStartRename }
             }}
             onDoubleClick={(e) => e.stopPropagation()}
           >
-            <IconChevronDown size={12} />
+            <IconChevronUpDown size={12} />
           </button>
         </span>
       )}

@@ -26,8 +26,8 @@ export async function tidyMode(): Promise<TidyMode> {
 }
 
 /** Groups of related tabs (each at least two); tabs that fit nowhere are left out. */
-export async function tidyGroups(tabs: TidyTab[]): Promise<TidyGroup[]> {
-  if ((await tidyMode()).kind === 'ai') {
+export async function tidyGroups(tabs: TidyTab[], useAi = true): Promise<TidyGroup[]> {
+  if (useAi && (await tidyMode()).kind === 'ai') {
     try {
       const { groups } = await intelligence.request<{ groups: TidyGroup[] }>('tidy', {
         tabs: tabs.map((t) => ({ title: t.title, host: hostOf(t.url) }))
