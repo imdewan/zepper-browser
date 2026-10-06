@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import qrcode from 'qrcode-generator'
 import type { AutofillItem, AutofillState, PhoneStatus } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconCheck, IconKey, IconPasskey, IconPhone, IconSparkle } from '../icons'
+import { IconCheck, IconChevronRight, IconKey, IconPasskey, IconPhone, IconSparkle } from '../icons'
 import { cx } from '../util'
 
 /**
@@ -138,12 +138,13 @@ export function Autofill(): React.JSX.Element | null {
               </span>
             </span>
           </div>
+          <PhoneOption create />
           <div className="af-actions">
-            <OtherDevices other={state.other} />
+            {state.other && <OtherDevice />}
             <span className="af-spacer" />
             <button onClick={() => zepper.send({ type: 'autofill.dismiss' })}>Cancel</button>
             <button className="af-primary" onClick={() => zepper.send({ type: 'autofill.passkeyCreate' })}>
-              Continue
+              Save in Zepper
             </button>
           </div>
         </div>
@@ -157,7 +158,9 @@ export function Autofill(): React.JSX.Element | null {
             <span className="af-text">
               <span className="af-name">Sign in to {state.rpId}</span>
               <span className="af-sub">
-                {state.passkeys.length ? 'Choose a passkey saved in Zepper.' : `No passkeys for ${state.rpId} are saved in Zepper.`}
+                {state.passkeys.length
+                  ? 'Choose a passkey saved in Zepper.'
+                  : `There’s no passkey for ${state.rpId} in Zepper. If it’s on your phone, use it from there.`}
               </span>
             </span>
           </div>
@@ -178,8 +181,9 @@ export function Autofill(): React.JSX.Element | null {
               ))}
             </div>
           )}
+          <PhoneOption create={false} />
           <div className="af-actions">
-            <OtherDevices other={state.other} />
+            {state.other && <OtherDevice />}
             <span className="af-spacer" />
             <button onClick={() => zepper.send({ type: 'autofill.dismiss' })}>Cancel</button>
           </div>
@@ -190,19 +194,28 @@ export function Autofill(): React.JSX.Element | null {
   )
 }
 
-/** Other places a passkey can come from: a phone (QR code), or macOS's own (with Apple's browser entitlement). */
-function OtherDevices({ other }: { other: boolean }): React.JSX.Element {
+/** A phone's passkeys (iCloud Keychain, Google Password Manager), through a QR code. */
+function PhoneOption({ create }: { create: boolean }): React.JSX.Element {
   return (
-    <>
-      <button className="af-quiet" onClick={() => zepper.send({ type: 'autofill.passkeyPhone' })}>
-        Use a phone…
-      </button>
-      {other && (
-        <button className="af-quiet" onClick={() => zepper.send({ type: 'autofill.passkeyOther' })}>
-          Other device…
-        </button>
-      )}
-    </>
+    <button className="af-row af-option" onClick={() => zepper.send({ type: 'autofill.passkeyPhone' })}>
+      <span className="af-icon">
+        <IconPhone size={14} />
+      </span>
+      <span className="af-text">
+        <span className="af-name">{create ? 'Save it on a phone instead' : 'Use a phone or tablet'}</span>
+        <span className="af-sub">Scan a QR code with your phone’s camera</span>
+      </span>
+      <IconChevronRight size={13} className="af-option-chevron" />
+    </button>
+  )
+}
+
+/** macOS's own passkeys: iCloud Keychain on this Mac, or a security key (with Apple's browser entitlement). */
+function OtherDevice(): React.JSX.Element {
+  return (
+    <button className="af-quiet" onClick={() => zepper.send({ type: 'autofill.passkeyOther' })}>
+      iCloud Keychain or security key…
+    </button>
   )
 }
 

@@ -212,3 +212,19 @@
   color: var(--text-2);
   text-align: center;
 }
+
+/* Another way to answer a passkey request (a phone): a full-width row, like the choices above it. */
+.af-option {
+  margin: 0 -6px;
+  width: calc(100% + 12px);
+}
+
+.af-option:hover {
+  background: var(--hover);
+}
+
+.af-option-chevron {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-3);
+}

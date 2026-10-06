@@ -113,6 +113,11 @@ export const IconLock = (p: IconProps): React.JSX.Element => (
 export const IconKey = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
   <KeyRound size={size} strokeWidth={1.9} aria-hidden="true" {...(p as LucideProps)} />
 )
+export const IconChevronRight = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <path d="M9 6l6 6-6 6" />
+  </Icon>
+)
 export const IconPhone = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
   <Smartphone size={size} strokeWidth={1.9} aria-hidden="true" {...(p as LucideProps)} />
 )
