@@ -45,7 +45,9 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 ## Command bar and search
 
-- ⌘T / ⌘L: search, enter an address, or switch to an open tab. An empty bar lists recent tabs and sites
+- ⌘T / ⌘L: search, enter an address, or switch to an open tab. An empty bar lists recent tabs and the sites you visit most
+- **Top hit:** start typing a site you visit and it completes in the field (`you` → `you|tube.com`); Return goes there (or switches to its tab), → or Tab accepts it, Delete keeps just what you typed
+- History matches, ranked by how often and how recently you visited
 - Search engine choice and suggestions
 - DuckDuckGo bangs resolved locally (`!yt cats`, `cats !w`, `!gh`), with completions as you type
 
@@ -70,10 +72,11 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - **Browser identity:** Chrome, Edge, Firefox, Safari or custom, with matching client hints.
 - **Site panel:** certificate viewer, permissions, and cookies and site data per domain.
 - **Page dialogs** name the site asking, block spam, and include HTTP sign-in.
+- **Force Paste** in a text field's right-click menu types the clipboard in, for sites that block pasting.
 
 ## Passwords and passkeys
 
-- **A password manager, built in.** Saved logins appear under sign-in fields (↓ and Return work too); other pages of the same site get them as well. After you sign in with a new or changed password, Zepper offers to save it. Everything stays on your Mac, encrypted with a key kept in your Keychain.
+- **A password manager, built in.** Saved logins appear under sign-in fields (↓ and Return work too), including email-first sign-in steps, forms inside web components and sign-in frames embedded in a page; other pages of the same site get them as well. After you sign in with a new or changed password, Zepper offers to save it. Everything stays on your Mac, encrypted with a key kept in your Keychain.
 - **Strong passwords:** sign-up and change-password fields offer a generated one (in Apple's style, like `xetbaz-fikmo4-Rykgub`), filled into both boxes and saved once you sign up.
 - **Passkeys:** sites can create and use passkeys saved in Zepper, confirmed with Touch ID or your Mac's password, and passkey autofill under username fields works too. Builds signed with Apple's browser entitlement can also hand a request to macOS for iCloud Keychain, a phone nearby or a security key.
 - **Import** straight from Chrome, Brave, Edge, Arc, Vivaldi, Opera, Helium or Chromium on this Mac, or from a CSV export from Apple Passwords and Safari, Firefox, 1Password, Bitwarden, LastPass, Proton Pass and others. **Export** as CSV.

@@ -61,7 +61,7 @@ A space's pinned area is a tree: `space.pinnedItems` and each folder's `items` h
 
 ## Pages: `src/preload/page.ts`
 
-This runs in every frame of every page before the page's own scripts:
+This runs in every frame of every page (iframes too: `nodeIntegrationInSubFrames`, still sandboxed and isolated) before the page's own scripts. Per-site protections follow the top-level site, so an embedded frame gets that site's fingerprinting noise:
 
 - **Cosmetic filtering.** Hiding rules and scriptlets are fetched synchronously, so they apply at document start (that's what defeats YouTube's ads). Generic rules follow as the page renders.
 - **Compatibility.**

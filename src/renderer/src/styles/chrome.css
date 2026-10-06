@@ -888,17 +888,24 @@ button.site-button.insecure:hover {
   background: var(--element);
 }
 
+/* Takes no room until you hover the row (the gap before it is cancelled too), so the name gets the space. */
 .folder-chevron {
   flex: none;
-  margin-right: 6px;
+  width: 0;
+  margin-left: -9px;
   color: var(--text-3);
   opacity: 0;
   transition:
     opacity 0.12s ease,
+    width 0.15s ease,
+    margin 0.15s ease,
     transform 0.18s ease;
 }
 
 .folder-row:hover .folder-chevron {
+  width: 12px;
+  margin-left: 0;
+  margin-right: 6px;
   opacity: 1;
 }
 

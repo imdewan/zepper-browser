@@ -385,6 +385,10 @@ function dialogShim(open: (kind: string, message: string, value: string) => unkn
     const result = open('prompt', text(message), text(value))
     return typeof result === 'string' ? result : null
   })
+  // Printing goes through Zepper too, so the page waiting on the print dialog isn't mistaken for a hang.
+  define('print', () => {
+    open('print', '', '')
+  })
 }
 
 function applyDialogs(): void {
@@ -630,7 +634,14 @@ const PASSWORDS_OPEN_CHANNEL = 'zepper:passwords-open'
 
 type CredentialField = 'username' | 'password' | 'new-password'
 
-const visible = (input: HTMLInputElement): boolean => input.offsetParent !== null
+/** Shown on the page (laid out, not hidden). */
+const visible = (input: HTMLInputElement): boolean => input.getClientRects().length > 0 && getComputedStyle(input).visibility !== 'hidden'
+
+/** Where a field's form-mates are: its form, or the document (or web component) it's in. */
+const scopeOf = (input: HTMLInputElement): ParentNode => input.form ?? (input.getRootNode() as Document | ShadowRoot)
+
+/** The element an event really happened on, inside web components too. */
+const realTarget = (event: Event): EventTarget | null => event.composedPath()[0] ?? event.target
 
 /** The password fields in a form (or the page), as you'd see them. */
 function passwordFields(scope: ParentNode): HTMLInputElement[] {
@@ -645,7 +656,7 @@ function isNewPassword(input: HTMLInputElement): boolean {
   const hint = `${input.name} ${input.id} ${input.placeholder} ${input.getAttribute('aria-label') ?? ''}`.toLowerCase()
   if (/new|confirm|create|repeat|retype|verify|choose/.test(hint)) return true
   // Sign-up forms ask for the password twice.
-  return passwordFields(input.form ?? document).length >= 2
+  return passwordFields(scopeOf(input)).length >= 2
 }
 
 function credentialField(target: EventTarget | null): [HTMLInputElement, CredentialField] | null {
@@ -654,24 +665,27 @@ function credentialField(target: EventTarget | null): [HTMLInputElement, Credent
   if (!['text', 'email', 'tel', ''].includes(target.type)) return null
   const hint =
     `${target.autocomplete} ${target.name} ${target.id} ${target.getAttribute('aria-label') ?? ''} ${target.placeholder}`.toLowerCase()
-  // A username field: named like one, or the text field just before a password field.
-  if (/username|email|e-mail|login|user|account|phone/.test(hint) && !/search|newsletter|subscribe|coupon/.test(hint))
-    return [target, 'username']
+  if (/search|newsletter|subscribe|coupon|promo/.test(hint)) return null
+  // A username field: marked as one, an email field (sign-in pages that ask for the email first), named like
+  // one, or the text field just before a password field.
+  if (/username|webauthn/.test(target.autocomplete.toLowerCase())) return [target, 'username']
+  if (target.type === 'email' || target.inputMode === 'email') return [target, 'username']
+  if (/username|email|e-mail|login|user|account|phone/.test(hint)) return [target, 'username']
   return passwordAfter(target) ? [target, 'username'] : null
 }
 
 /** The password field belonging with a username field (same form, or the next password input on the page). */
 function passwordAfter(input: HTMLInputElement): HTMLInputElement | null {
-  const scope: ParentNode = input.form ?? document
+  const scope: ParentNode = scopeOf(input)
   const fields = [...scope.querySelectorAll<HTMLInputElement>('input')]
   const after = fields.slice(fields.indexOf(input) + 1)
-  return after.find((f) => f.type === 'password' && f.offsetParent !== null) ?? null
+  return after.find((f) => f.type === 'password' && visible(f)) ?? null
 }
 
 /** The username field belonging with a password field. */
 function usernameBefore(input: HTMLInputElement): HTMLInputElement | null {
-  const scope: ParentNode = input.form ?? document
-  const fields = [...scope.querySelectorAll<HTMLInputElement>('input')].filter((f) => f.offsetParent !== null)
+  const scope: ParentNode = scopeOf(input)
+  const fields = [...scope.querySelectorAll<HTMLInputElement>('input')].filter(visible)
   const before = fields.slice(0, fields.indexOf(input)).reverse()
   return before.find((f) => ['text', 'email', 'tel', ''].includes(f.type)) ?? null
 }
@@ -689,20 +703,35 @@ function setFieldValue(input: HTMLInputElement, value: string): void {
 function watchCredentials(): void {
   if (!/^https:|^http:\/\/(localhost|127\.0\.0\.1)/.test(location.href)) return
   let focused: [HTMLInputElement, CredentialField] | null = null
+  // Filling moves focus between the fields; that isn't you asking for the list again.
+  let filling = false
+  // In an iframe, where the frame sits on screen comes from the last pointer event (Zepper places the list
+  // with it); the top page's position is known already.
+  const inFrame = window.top !== window
+  let pointer: [number, number, number, number] | null = null
+  if (inFrame) {
+    const track = (event: MouseEvent): void => {
+      pointer = [event.screenX, event.screenY, event.clientX, event.clientY]
+    }
+    document.addEventListener('mousemove', track, { capture: true, passive: true })
+    document.addEventListener('mousedown', track, { capture: true, passive: true })
+  }
 
   const report = (type: 'focus' | 'blur', field?: [HTMLInputElement, CredentialField]): void => {
+    if (filling && type === 'focus') return
     const box = field?.[0].getBoundingClientRect()
     ipcRenderer.send(PASSWORDS_CHANNEL, {
       type,
       field: field?.[1],
-      rect: box ? [box.left, box.top, box.width, box.height] : null
+      rect: box ? [box.left, box.top, box.width, box.height] : null,
+      pointer: inFrame ? pointer : null
     })
   }
 
   document.addEventListener(
     'focusin',
     (event) => {
-      const field = credentialField(event.target)
+      const field = credentialField(realTarget(event))
       if (!field) return
       focused = field
       report('focus', field)
@@ -712,7 +741,7 @@ function watchCredentials(): void {
   document.addEventListener(
     'focusout',
     (event) => {
-      if (focused && event.target === focused[0]) report('blur')
+      if (focused && realTarget(event) === focused[0] && !filling) report('blur')
     },
     true
   )
@@ -728,7 +757,7 @@ function watchCredentials(): void {
   document.addEventListener(
     'keydown',
     (event) => {
-      if (!dropdownOpen || !focused || event.target !== focused[0]) return
+      if (!dropdownOpen || !focused || realTarget(event) !== focused[0]) return
       if (event.key === 'Escape') {
         dropdownOpen = false
         report('blur')
@@ -755,7 +784,7 @@ function watchCredentials(): void {
   document.addEventListener(
     'mousedown',
     (event) => {
-      if (!dropdownOpen && focused && event.target === focused[0]) report('focus', focused)
+      if (!dropdownOpen && focused && realTarget(event) === focused[0]) report('focus', focused)
     },
     true
   )
@@ -764,18 +793,24 @@ function watchCredentials(): void {
   ipcRenderer.on(PASSWORDS_FILL_CHANNEL, (_event, login: { username?: string; password: string; allPasswords?: boolean }) => {
     if (!focused) return
     const [input, kind] = focused
-    if (login.allPasswords) {
-      // A suggested password goes in every new-password field of the form (the password and its confirmation).
-      for (const field of passwordFields(input.form ?? document)) {
-        if (!field.autocomplete.toLowerCase().includes('current-password')) setFieldValue(field, login.password)
+    filling = true
+    try {
+      if (login.allPasswords) {
+        // A suggested password goes in every new-password field of the form (the password and its confirmation).
+        for (const field of passwordFields(scopeOf(input))) {
+          if (!field.autocomplete.toLowerCase().includes('current-password')) setFieldValue(field, login.password)
+        }
+        setFieldValue(input, login.password)
+        return
       }
-      setFieldValue(input, login.password)
-      return
+      const user = kind === 'username' ? input : usernameBefore(input)
+      const pass = kind === 'username' ? passwordAfter(input) : input
+      if (user && login.username) setFieldValue(user, login.username)
+      if (pass && login.password) setFieldValue(pass, login.password)
+    } finally {
+      // Focus events from filling arrive after this returns.
+      setTimeout(() => (filling = false), 100)
     }
-    const user = kind === 'username' ? input : usernameBefore(input)
-    const pass = kind === 'username' ? passwordAfter(input) : input
-    if (user && login.username) setFieldValue(user, login.username)
-    if (pass && login.password) setFieldValue(pass, login.password)
   })
 
   // Saving: when a form with a typed password is submitted (or its button pressed), offer to save it.

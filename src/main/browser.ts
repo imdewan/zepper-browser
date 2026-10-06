@@ -478,6 +478,8 @@ export class Browser {
   private readonly httpsFirst = new Set<string>()
   /** Tabs with a "not responding" question open. */
   private readonly hungTabs = new Set<string>()
+  /** Pages showing the system print dialog (they're waiting on it, not hung). */
+  private readonly printing = new Set<number>()
   /** Tabs closing once their page agrees (a "Leave site?" question may be open). */
   private readonly closingTabs = new Set<string>()
   private readonly askingToLeave = new Set<string>()
@@ -909,7 +911,7 @@ export class Browser {
           overrideBrowserWindowOptions: {
             width: 520,
             height: 700,
-            webPreferences: { sandbox: true, contextIsolation: true, safeDialogs: true, plugins: true }
+            webPreferences: { sandbox: true, contextIsolation: true, nodeIntegrationInSubFrames: true, safeDialogs: true, plugins: true }
           }
         }
       }
@@ -2700,7 +2702,18 @@ export class Browser {
   }
 
   printActive(): void {
-    this.activeWebContents()?.print({}, () => {})
+    const wc = this.activeWebContents()
+    if (wc) this.printPage(wc)
+  }
+
+  /**
+   * Prints a page with the system dialog. The page waits while the dialog is open, which isn't it
+   * hanging, so the "not responding" prompt stays away until printing is done.
+   */
+  printPage(wc: WebContents): void {
+    if (this.printing.has(wc.id) || wc.isDestroyed()) return
+    this.printing.add(wc.id)
+    wc.print({}, () => this.printing.delete(wc.id))
   }
 
   /** File › Save Page As… (complete, or HTML only). */
@@ -2782,7 +2795,7 @@ export class Browser {
 
   /** A page stopped responding: wait, or end it (it then shows the crash page with Reload). */
   private async onUnresponsive(tabId: string, wc: WebContents): Promise<void> {
-    if (this.hungTabs.has(tabId) || this.windowClosed) return
+    if (this.hungTabs.has(tabId) || this.windowClosed || this.printing.has(wc.id)) return
     this.hungTabs.add(tabId)
     const { response } = await dialog.showMessageBox(this.win, {
       type: 'warning',
@@ -2822,7 +2835,10 @@ export class Browser {
             spellcheck: true,
             // Chromium's PDF viewer.
             plugins: true,
-            // Frames Zepper's dialog shim doesn't reach (iframes) get a "stop dialogs" option.
+            // Zepper's page script runs in iframes too (still sandboxed and isolated): sign-in forms, ad
+            // filtering and privacy protections inside embedded frames.
+            nodeIntegrationInSubFrames: true,
+            // Frames Zepper's dialog shim doesn't reach get a "stop dialogs" option.
             safeDialogs: true
           }
         })
@@ -3068,7 +3084,7 @@ export class Browser {
         overrideBrowserWindowOptions: {
           width: 520,
           height: 700,
-          webPreferences: { sandbox: true, contextIsolation: true, safeDialogs: true, plugins: true }
+          webPreferences: { sandbox: true, contextIsolation: true, nodeIntegrationInSubFrames: true, safeDialogs: true, plugins: true }
         }
       }
     }
@@ -4181,6 +4197,15 @@ export class Browser {
         { role: 'cut', enabled: params.editFlags.canCut },
         { role: 'copy', enabled: params.editFlags.canCopy },
         { role: 'paste', enabled: params.editFlags.canPaste },
+        // For fields that block pasting: types the clipboard in, so the page's paste handler never sees it.
+        {
+          label: 'Force Paste',
+          enabled: params.editFlags.canPaste,
+          click: async () => {
+            const text = await clipboard.readText()
+            if (text && !wc.isDestroyed()) await wc.insertText(text)
+          }
+        },
         { role: 'selectAll' },
         { type: 'separator' }
       )
@@ -4211,7 +4236,7 @@ export class Browser {
               ]
             : []),
         { label: 'Save Page As…', click: () => void this.savePageAs() },
-        { label: 'Print…', click: () => wc.print({}, () => {}) },
+        { label: 'Print…', click: () => this.printPage(wc) },
         {
           label: 'View Page Source',
           enabled: /^(https?|file):/.test(wc.getURL()),

@@ -182,8 +182,9 @@ export interface Rect {
 export type Suggestion =
   | { kind: 'url'; url: string; title: string }
   | { kind: 'search'; query: string; url: string; fromProvider: boolean }
-  | { kind: 'tab'; tabId: string; url: string; title: string; favicon: string | null }
-  | { kind: 'history'; url: string; title: string }
+  | { kind: 'tab'; tabId: string; url: string; title: string; favicon: string | null; group?: 'recent'; completion?: string }
+  /** completion: the site this beginning of an address completes to (the top hit); group: frequently visited. */
+  | { kind: 'history'; url: string; title: string; completion?: string; group?: 'frequent' }
   /** A DuckDuckGo bang: a query to send (url set), or a completion for the bang being typed (url null). */
   | { kind: 'bang'; trigger: string; name: string; domain: string; query: string; url: string | null }
 

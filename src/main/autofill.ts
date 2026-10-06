@@ -31,7 +31,8 @@ const OPEN_CHANNEL = 'zepper:passwords-open'
 export type FieldKind = 'username' | 'password' | 'new-password'
 
 export type PageMessage =
-  | { type: 'focus'; field: FieldKind; rect: [number, number, number, number] | null }
+  /** pointer: in an iframe, the last pointer event's screen and client position (to place the list). */
+  | { type: 'focus'; field: FieldKind; rect: [number, number, number, number] | null; pointer?: [number, number, number, number] | null }
   | { type: 'blur' }
   | { type: 'key'; key: 'ArrowDown' | 'ArrowUp' | 'Enter' }
   | { type: 'submit'; username: string; password: string }
@@ -141,10 +142,10 @@ export class AutofillController {
 
   /** A message from a page's sign-in field. */
   onPageMessage(wc: WebContents, frame: WebFrameMain | null, message: PageMessage): void {
-    if (!frame || frame !== wc.mainFrame) return
+    if (!frame) return
     switch (message.type) {
       case 'focus':
-        if (message.rect) this.openFor(wc, frame, message.field, message.rect)
+        if (message.rect) this.openFor(wc, frame, message.field, message.rect, message.pointer ?? null)
         return
       case 'blur':
         return this.scheduleHide()
@@ -197,7 +198,13 @@ export class AutofillController {
   // ---------------------------------------------------------------------------
   // The dropdown
 
-  private openFor(wc: WebContents, frame: WebFrameMain, kind: FieldKind, rect: [number, number, number, number]): void {
+  private openFor(
+    wc: WebContents,
+    frame: WebFrameMain,
+    kind: FieldKind,
+    rect: [number, number, number, number],
+    pointer: [number, number, number, number] | null
+  ): void {
     if (!this.host.ownsVisiblePage(wc) || this.sheet) return
     const url = frame.url
     let parsed: URL
@@ -211,7 +218,20 @@ export class AutofillController {
     if (!bounds) return
     const zoom = wc.getZoomFactor()
     const [left, top, width, height] = rect.map((n) => Number(n) || 0)
-    const anchor = { x: bounds.x + left * zoom, y: bounds.y + top * zoom, width: width * zoom, height: height * zoom }
+    // Where the frame's viewport starts in the window: the page's own, or (for an iframe) worked out
+    // from a pointer event's screen and client positions.
+    let originX = bounds.x
+    let originY = bounds.y
+    if (frame !== wc.mainFrame) {
+      if (!pointer) return
+      const [screenX, screenY, clientX, clientY] = pointer.map((n) => Number(n) || 0)
+      const content = this.host.win.getContentBounds()
+      originX = screenX - clientX * zoom - content.x
+      originY = screenY - clientY * zoom - content.y
+      if (originX < bounds.x - 2 || originY < bounds.y - 2 || originX > bounds.x + bounds.width || originY > bounds.y + bounds.height)
+        return
+    }
+    const anchor = { x: originX + left * zoom, y: originY + top * zoom, width: width * zoom, height: height * zoom }
     // Off the visible page (scrolled away or tiny): nothing to anchor to.
     if (anchor.y + anchor.height < bounds.y || anchor.y > bounds.y + bounds.height || anchor.width < 20) return
     this.cancelHide()
@@ -224,7 +244,7 @@ export class AutofillController {
       if (passwords) items.push({ kind: 'generate', password: strongPassword() })
     } else {
       // Passkeys the page is ready to accept come first, as other browsers list them.
-      const waiting = this.conditional.get(wc)
+      const waiting = frame === wc.mainFrame ? this.conditional.get(wc) : undefined
       if (waiting && kind === 'username') {
         const allowed = (waiting.request.allowCredentials ?? []).map((d) => d.id)
         for (const passkey of this.vault.passkeysFor(waiting.request.rpId, allowed)) {
@@ -494,10 +514,11 @@ export class AutofillController {
     const popup = this.ensurePopup()
     void this.ready?.then(() => {
       if (this.state !== state || popup.isDestroyed()) return
-      // Shown once the page reports its height for this state (see 'autofill.resize').
+      // Shown once the page reports its height for this state (see 'autofill.resize'), or soon anyway at the last one.
       this.pendingShow = true
       this.send({ type: 'autofill.show', state, dark: nativeTheme.shouldUseDarkColors })
       this.setPageDropdown(state.kind === 'list')
+      setTimeout(() => this.state === state && this.pendingShow && this.position(), 150)
     })
   }
 
@@ -561,7 +582,8 @@ export class AutofillController {
       skipTaskbar: true,
       acceptFirstMouse: true,
       backgroundColor: '#00000000',
-      webPreferences: this.host.uiPreferences
+      // It's hidden between uses; it must still render then, to report its size before it's shown.
+      webPreferences: { ...this.host.uiPreferences, backgroundThrottling: false }
     })
     popup.webContents.on('will-navigate', (event) => event.preventDefault())
     popup.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))

@@ -94,10 +94,14 @@ export function clientHintHeaders(headers: Record<string, string>, ua: string): 
 export function servePageConfig(settings: SettingsStore, currentUa: () => string, protects: (pageUrl: string) => boolean): void {
   ipcMain.on(PAGE_CONFIG_CHANNEL, (event) => {
     let pageUrl = ''
+    let siteUrl = ''
     let topLevel = false
     try {
       pageUrl = event.senderFrame?.url ?? ''
       topLevel = event.senderFrame?.parent === null
+      // Protections follow the site you're on: an embedded frame gets that site's noise and switches, so a
+      // tracker embedded on many sites can't use them to recognise you.
+      siteUrl = event.senderFrame?.top?.url ?? pageUrl
     } catch {
       // The frame went away.
     }
@@ -111,7 +115,7 @@ export function servePageConfig(settings: SettingsStore, currentUa: () => string
       blockWidevine: !widevine,
       askForWidevine: !widevine && widevinePrompt,
       globalPrivacyControl,
-      fingerprintSeed: blockFingerprinting && pageUrl && protects(pageUrl) ? fingerprintSeed(pageUrl) : null,
+      fingerprintSeed: blockFingerprinting && siteUrl && protects(siteUrl) ? fingerprintSeed(siteUrl) : null,
       brand: chromium
         ? {
             name: / Edg\//.test(ua) ? 'Microsoft Edge' : 'Google Chrome',

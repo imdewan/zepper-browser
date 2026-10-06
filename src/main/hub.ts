@@ -126,6 +126,10 @@ export class Hub {
     // Page dialogs (alert/confirm/prompt); the page is blocked until event.returnValue is set.
     ipcMain.on('zepper:dialog', (event, kind: string, message: string, value: string) => {
       const browser = this.owner(event.sender)
+      if (kind === 'print') {
+        event.returnValue = null
+        return browser?.printPage(event.sender)
+      }
       if (browser) browser.onJsDialog(event, String(kind), String(message), String(value))
       else event.returnValue = kind === 'confirm' ? false : null
     })

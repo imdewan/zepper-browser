@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import type { Suggestion } from '@shared/types'
 import { zepper } from '../bridge'
@@ -29,6 +29,8 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
     results: []
   })
   const [selected, setSelected] = useState(0)
+  // After Backspace, the field shows just what you typed until you type again.
+  const [noCompletion, setNoCompletion] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const request = useRef(0)
   const list = useRef<HTMLDivElement>(null)
@@ -56,6 +58,25 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
   useEffect(() => {
     list.current?.querySelector('[data-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [selected])
+
+  // The top hit completes what you're typing in the field ("you" → "you|tube.com"), the rest selected,
+  // so Return goes there and typing on just replaces it.
+  const typed = text === currentUrl ? '' : text
+  const top = results[0]
+  const completion =
+    !noCompletion &&
+    resultsQuery === typed &&
+    typed.length > 0 &&
+    selected === 0 &&
+    (top?.kind === 'history' || top?.kind === 'tab') &&
+    top.completion &&
+    top.completion.toLowerCase().startsWith(typed.toLowerCase()) &&
+    top.completion.length > typed.length
+      ? typed + top.completion.slice(typed.length)
+      : null
+  useLayoutEffect(() => {
+    if (completion && input.current) input.current.setSelectionRange(typed.length, completion.length)
+  }, [completion, typed])
 
   const close = (): void => {
     lastTyped = { text: text === currentUrl ? '' : text, at: Date.now() }
@@ -87,6 +108,13 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
   const onKeyDown = (e: React.KeyboardEvent): void => {
     const down = e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')
     const up = e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')
+    if (e.key === 'Backspace' || e.key === 'Delete') setNoCompletion(true)
+    if (completion && (e.key === 'ArrowRight' || e.key === 'End' || e.key === 'Tab')) {
+      // Take the completion as typed.
+      e.preventDefault()
+      setText(completion)
+      return
+    }
     if (down || up) {
       e.preventDefault()
       if (results.length) setSelected((s) => (s + (down ? 1 : -1) + results.length) % results.length)
@@ -120,10 +148,15 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
           <IconSearch size={18} className="palette-input-icon" />
           <input
             ref={input}
-            value={text}
+            value={completion ?? text}
             spellCheck={false}
             placeholder={mode === 'split' ? 'Open in split view…' : mode === 'new' ? 'Search or enter address…' : 'Search or enter address'}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value
+              // Typing more (not deleting) brings the completion back.
+              if (value.length > typed.length) setNoCompletion(false)
+              setText(value)
+            }}
             onKeyDown={onKeyDown}
           />
           <button className="palette-close" title="Close (Esc)" onMouseDown={(e) => e.preventDefault()} onClick={close}>
@@ -132,17 +165,24 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
         </div>
         {results.length > 0 && (
           <div className="palette-results" ref={list}>
-            {results.map((suggestion, i) => (
-              <SuggestionRow
-                key={`${suggestion.kind}-${i}`}
-                mode={mode}
-                suggestion={suggestion}
-                selected={i === selected}
-                engineName={engineName}
-                onHover={() => setSelected(i)}
-                onChoose={() => choose(suggestion)}
-              />
-            ))}
+            {results.map((suggestion, i) => {
+              const group = 'group' in suggestion ? suggestion.group : undefined
+              const previous = results[i - 1]
+              const startsGroup = group && (!previous || !('group' in previous) || previous.group !== group)
+              return (
+                <Fragment key={`${suggestion.kind}-${i}`}>
+                  {startsGroup && <div className="palette-group">{group === 'recent' ? 'Recent tabs' : 'Frequently visited'}</div>}
+                  <SuggestionRow
+                    mode={mode}
+                    suggestion={suggestion}
+                    selected={i === selected}
+                    engineName={engineName}
+                    onHover={() => setSelected(i)}
+                    onChoose={() => choose(suggestion)}
+                  />
+                </Fragment>
+              )
+            })}
           </div>
         )}
       </motion.div>
@@ -173,7 +213,8 @@ function SuggestionRow({ mode, suggestion, selected, engineName, onHover, onChoo
       chip = mode === 'split' ? 'Split with Tab' : 'Switch to Tab'
       break
     case 'history':
-      icon = <IconClock size={16} />
+      // A site (the top hit, or one you visit often) rather than a page from your history.
+      icon = suggestion.completion || suggestion.group ? <IconGlobe size={16} /> : <IconClock size={16} />
       title = suggestion.title
       detail = hostOf(suggestion.url)
       break
