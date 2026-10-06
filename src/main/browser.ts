@@ -2128,6 +2128,18 @@ export class Browser {
     if (Math.abs(wc.getZoomFactor() - factor) > 0.001) wc.setZoomFactor(factor)
   }
 
+  /** Remembers what a page is about, for searching history by meaning (not in private windows). */
+  private notePage(wc: WebContents): void {
+    const url = wc.getURL()
+    if (this.kind === 'private' || !/^https?:/.test(url) || this.errorPages.has(url)) return
+    void wc
+      .executeJavaScriptInIsolatedWorld(ZEPPER_WORLD, [{ code: PAGE_TEXT_SCRIPT }])
+      .then((page: { title: string; text: string } | null) => {
+        if (page && !wc.isDestroyed() && wc.getURL() === url) this.hub.services.semantic.note(url, page.title, page.text.slice(0, 1500))
+      })
+      .catch(() => {})
+  }
+
   /** The "Ask this page" panel: a summary of the page, and questions about it. */
   openAssistant(anchor?: Rect): void {
     const tab = this.tab(this.activeTabId)
@@ -2495,7 +2507,10 @@ export class Browser {
     wc.on('unresponsive', () => void this.onUnresponsive(tabId, wc))
     // ⌘-scroll zooms like the menu does; pinch-to-zoom magnifies (Electron turns it off by default).
     wc.on('zoom-changed', (_event, direction) => this.zoomPage(wc, direction === 'in' ? 1 : -1))
-    wc.on('did-finish-load', () => void wc.setVisualZoomLevelLimits(1, 3).catch(() => {}))
+    wc.on('did-finish-load', () => {
+      void wc.setVisualZoomLevelLimits(1, 3).catch(() => {})
+      this.notePage(wc)
+    })
     wc.on('found-in-page', (_event, result) => {
       if (tabId !== this.activeTabId) return
       this.emit({ type: 'find.result', result: { active: result.activeMatchOrdinal, matches: result.matches } }, 'overlay')

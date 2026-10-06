@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import type { HistoryEntry } from '@shared/types'
 import { zepper } from '../bridge'
 import { Favicon } from '../Favicon'
-import { IconClose, IconSearch } from '../icons'
+import { IconClose, IconSearch, IconSparkle } from '../icons'
 import { hostOf } from '../util'
 
 const DAY = 86_400_000
@@ -27,9 +27,13 @@ function faviconFor(url: string): string | null {
 }
 
 /** ⌘Y: everything you've visited, newest first, grouped by day, searchable. */
-export function HistoryPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
+export function HistoryPanel({ meaning, onClose }: { meaning: boolean; onClose: () => void }): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
+  // Matches by meaning (on-device), for queries of a few words: "that article about…".
+  const [matches, setMatches] = useState<{ query: string; entries: HistoryEntry[] } | null>(null)
+  const meaningRequest = useRef(0)
+  const byMeaning = meaning && query.trim().split(/\s+/).length >= 2
   const [clearing, setClearing] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const request = useRef(0)
@@ -48,6 +52,20 @@ export function HistoryPanel({ onClose }: { onClose: () => void }): React.JSX.El
     const timer = setTimeout(() => load(query), query ? 120 : 0)
     return () => clearTimeout(timer)
   }, [query])
+  useEffect(() => {
+    if (!byMeaning) return
+    const id = ++meaningRequest.current
+    const text = query.trim()
+    const timer = setTimeout(() => {
+      void zepper.historyMeaning(text).then((list) => {
+        if (id === meaningRequest.current) setMatches({ query: text, entries: list })
+      })
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [query, byMeaning])
+  const shownMatches = byMeaning && matches?.query === query.trim() ? matches.entries : null
+  const searchingMeaning = byMeaning && matches?.query !== query.trim()
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -118,10 +136,34 @@ export function HistoryPanel({ onClose }: { onClose: () => void }): React.JSX.El
         </header>
         <label className="history-search">
           <IconSearch size={15} />
-          <input ref={input} value={query} spellCheck={false} placeholder="Search history" onChange={(e) => setQuery(e.target.value)} />
+          <input
+            ref={input}
+            value={query}
+            spellCheck={false}
+            placeholder={meaning ? 'Search history, or describe what you remember' : 'Search history'}
+            onChange={(e) => setQuery(e.target.value)}
+          />
         </label>
         <div className="history-list">
-          {entries !== null && entries.length === 0 && (
+          {(searchingMeaning || (shownMatches && shownMatches.length > 0)) && (
+            <section className="history-meaning">
+              <h3 className="history-day">
+                <IconSparkle size={11} /> Best matches
+              </h3>
+              {searchingMeaning && <p className="history-searching">Searching by meaning…</p>}
+              {shownMatches?.map((entry) => (
+                <div key={entry.url} role="button" className="history-row" title={entry.url} onClick={() => open(entry.url)}>
+                  <span className="history-time">
+                    {dayLabel(entry.lastVisit) === 'Today' ? timeFormat.format(entry.lastVisit) : dayLabel(entry.lastVisit).split(',')[0]}
+                  </span>
+                  <Favicon src={faviconFor(entry.url)} size={16} />
+                  <span className="history-title">{entry.title || entry.url}</span>
+                  <span className="history-host">{hostOf(entry.url)}</span>
+                </div>
+              ))}
+            </section>
+          )}
+          {entries !== null && entries.length === 0 && !(shownMatches && shownMatches.length > 0) && !searchingMeaning && (
             <p className="history-empty">{query ? 'Nothing matches that.' : 'Pages you visit will show up here.'}</p>
           )}
           {groups.map((group) => (

@@ -441,6 +441,8 @@ export interface ZepperApi {
   suggest(text: string): Promise<Suggestion[]>
   /** History page entries, newest first. */
   history(query: string): Promise<HistoryEntry[]>
+  /** History pages that match what a query means (on-device), best first. */
+  historyMeaning(query: string): Promise<HistoryEntry[]>
   /** Installed extensions (enabled and disabled). */
   extensions(): Promise<ExtensionInfo[]>
 }
@@ -484,5 +486,6 @@ export const IPC = {
   command: 'zepper:command',
   suggest: 'zepper:suggest',
   extensions: 'zepper:extensions',
-  history: 'zepper:history'
+  history: 'zepper:history',
+  historyMeaning: 'zepper:history-meaning'
 } as const

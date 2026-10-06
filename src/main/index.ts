@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { AdBlock } from './adblock'
 import { bangs } from './bangs'
 import { History } from './history'
+import { SemanticHistory } from './semantic'
 import { Hub } from './hub'
 import { buildMenu } from './menu'
 import { SettingsStore } from './settings-store'
@@ -69,6 +70,7 @@ if (!app.requestSingleInstanceLock()) {
     const adblock = new AdBlock((id) => hub?.ownerOfWebContentsId(id)?.onAdBlocked(id))
     hub = new Hub({
       history,
+      semantic: new SemanticHistory(history),
       adblock,
       settings: new SettingsStore(),
       rendererUrl: process.env['ELECTRON_RENDERER_URL'],

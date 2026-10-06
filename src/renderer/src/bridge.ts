@@ -227,6 +227,9 @@ function createMock(): ZepperApi {
     async extensions() {
       return []
     },
+    async historyMeaning(): Promise<HistoryEntry[]> {
+      return []
+    },
     async history(): Promise<HistoryEntry[]> {
       const now = Date.now()
       return [

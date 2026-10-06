@@ -24,11 +24,14 @@ import { intelligence } from './ai'
 import { ZoomLevels } from './zoom'
 import { SECURE_DNS_SERVERS } from '@shared/settings'
 import type { History } from './history'
+import type { SemanticHistory } from './semantic'
 import type { SettingsStore } from './settings-store'
 import { CertificateStore, SitePermissions } from './site'
 
 export interface Services {
   history: History
+  /** History searchable by meaning (on-device embeddings). */
+  semantic: SemanticHistory
   settings: SettingsStore
   adblock: AdBlock
   /** Remembered site permissions for normal windows. */
@@ -90,6 +93,11 @@ export class Hub {
     ipcMain.handle(IPC.history, (event, query: string) => {
       const browser = this.uiOwner(event.sender)
       return !browser || browser.kind === 'private' ? [] : services.history.list(String(query ?? ''), 2000)
+    })
+    ipcMain.handle(IPC.historyMeaning, async (event, query: string) => {
+      const browser = this.uiOwner(event.sender)
+      if (!browser || browser.kind === 'private') return []
+      return services.semantic.search(String(query ?? '').slice(0, 300)).catch(() => [])
     })
     ipcMain.on(IPC.command, (event, command: Command) => this.owner(event.sender)?.handleFromUi(event.sender, command))
     ipcMain.on(IPC.swipe, (event, phase: 'update' | 'end', dx: number, peak: number) =>
@@ -217,6 +225,7 @@ export class Hub {
   persist(): void {
     this.main?.persistNow()
     this.zoom.flush()
+    this.services.semantic.flush()
     this.downloads.flush()
     this.services.permissions.flush()
     this.services.settings.flush()

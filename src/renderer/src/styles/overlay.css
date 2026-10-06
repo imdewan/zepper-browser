@@ -2678,3 +2678,18 @@
   color: var(--text-3);
   text-align: center;
 }
+
+/* ---- History: matches by meaning --------------------------------------------------- */
+
+.history-meaning .history-day {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+}
+
+.history-searching {
+  margin: 4px 10px 8px;
+  font-size: 12px;
+  color: var(--text-3);
+}

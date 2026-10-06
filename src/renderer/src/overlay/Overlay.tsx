@@ -192,7 +192,7 @@ export function Overlay(): React.JSX.Element | null {
             onClose={closeSettings}
           />
         )}
-        {historyOpen && <HistoryPanel key="history" onClose={closeHistory} />}
+        {historyOpen && <HistoryPanel key="history" meaning={snapshot.intelligence.embeddings} onClose={closeHistory} />}
         {about && <AboutPanel key="about" info={about} onClose={closeAbout} />}
         {downloadsOpen && <DownloadsPanel key="downloads" downloads={snapshot.downloads} onClose={closeDownloads} />}
         {creatingSpace && (

@@ -13,6 +13,7 @@ const MAX_ENTRIES = 10_000
 export class History {
   private readonly file = new JsonFile<Visit[]>('history.json', 3000)
   private readonly entries = new Map<string, Visit>()
+  private readonly forgetListeners = new Set<(urls: string[]) => void>()
 
   constructor() {
     for (const visit of this.file.read() ?? []) this.entries.set(visit.url, visit)
@@ -68,14 +69,34 @@ export class History {
     return matches.sort((a, b) => b.lastVisit - a.lastVisit).slice(0, limit)
   }
 
+  has(url: string): boolean {
+    return this.entries.has(url)
+  }
+
+  get(url: string): Visit | undefined {
+    return this.entries.get(url)
+  }
+
+  /** Called with the URLs history forgets (so what's derived from them can go too). */
+  onForget(listener: (urls: string[]) => void): void {
+    this.forgetListeners.add(listener)
+  }
+
   remove(url: string): void {
     if (this.entries.delete(url)) this.save()
+    for (const listener of this.forgetListeners) listener([url])
   }
 
   /** Forgets everything visited since a time (0: all history). */
   clearSince(since: number): void {
-    for (const [url, visit] of this.entries) if (visit.lastVisit >= since) this.entries.delete(url)
+    const gone: string[] = []
+    for (const [url, visit] of this.entries) {
+      if (visit.lastVisit < since) continue
+      this.entries.delete(url)
+      gone.push(url)
+    }
     this.save()
+    for (const listener of this.forgetListeners) listener(gone)
   }
 
   flush(): void {
