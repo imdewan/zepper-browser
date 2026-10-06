@@ -4,21 +4,6 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
-### Added
-
-- Tabs show when they're using the camera, microphone or screen.
-- Settings → General shows update status, checks on demand, and can turn background downloads off.
-- Settings → Privacy lists each site's permissions (with a reset) and shows what macOS lets Zepper use.
-
-### Changed
-
-- Pop-up blocking only stops floods: windows you open are never blocked, and sites can open a couple on their own. The notice offers Always Allow, and the lock icon sets Allow, Auto or Block per site.
-
-### Fixed
-
-- Cancelling the screen-share picker left the page waiting; it now gets an answer, and the picker closes if the page goes away.
-- Choosing what to share, or answering a permission prompt, counts as a click in the page, so a call's follow-up window isn't blocked.
-
 ## [0.1.0] - 2026-10-06
 
 The first public version.
@@ -28,6 +13,9 @@ The first public version.
 - A welcome and setup on first launch: import history and passwords from other browsers, pick a look, review privacy, and set Zepper as the default browser.
 - Automatic updates: new versions download in the background, an Update button restarts into them, and quitting installs them too.
 - Screen sharing like Chrome's: choose a tab, a window or a whole screen, with the tab's sound or the Mac's (macOS 14.2 and later).
+- Tabs show when they're using the camera, microphone or screen.
+- Pop-up blocking that only stops floods: windows you open are never blocked, and sites can open a couple on their own. Always Allow from the notice, or Allow, Auto or Block per site from the lock icon.
+- Settings for updates (status, Check Now, background downloads), each site's permissions (with a reset), and what macOS lets Zepper use.
 - Spaces with gradient themes and optional separate sign-ins (profiles).
 - A vertical sidebar with Essentials, pinned tabs, nestable folders, drag and drop, split view and compact mode.
 - Tidy Tabs: groups tabs into folders with Apple Intelligence (macOS 26 and later), or by site.
