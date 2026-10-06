@@ -84,6 +84,7 @@ That produces a `.dmg` and a `.zip` in `dist/`. A few things to know:
 - **Protected video (Netflix, Spotify…):** needs your own free castLabs EVS account for VMP signing. See [Protected video](../README.md#protected-video-widevine) in the README.
 - **The intelligence helper** needs Xcode 26 to build (`npm run build:native`, which `npm run dist` runs for you).
 - **Electron fuses** are flipped in `scripts/after-pack.cjs`; leave them on unless you know why you need one off.
+- **The installer window** (the `.dmg`'s background, with its arrow and caption) is drawn from HTML in `scripts/dmg-background.cjs`. Change it, run `npx electron scripts/dmg-background.cjs`, and keep the icon positions in `package.json` (`build.dmg.contents`) lined up with the arrow.
 
 ## Licence
 

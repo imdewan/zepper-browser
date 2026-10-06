@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-06
+
 The first public version.
 
 ### Added
@@ -23,3 +25,6 @@ The first public version.
 - Private windows, history, downloads, Chrome Web Store extensions and a default-browser option.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
+
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/imdewan/zepper-browser/releases/tag/v0.1.0

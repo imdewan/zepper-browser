@@ -51,4 +51,5 @@ writeFileSync(generated, base.replace(/<\/dict>\s*<\/plist>\s*$/, `${extra}\n</p
 const run = (command, args) => execFileSync(command, args, { cwd: root, stdio: 'inherit' })
 run('npx', ['electron-vite', 'build'])
 run('npm', ['run', 'build:native'])
+run('node', ['scripts/stage-electron.mjs'])
 run('npx', ['electron-builder', '--mac', `-c.mac.entitlements=${generated}`, `-c.mac.provisioningProfile=${profile}`])

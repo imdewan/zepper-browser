@@ -23,7 +23,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "check": "npm run typecheck && npm run lint && prettier --check .",
-    "dist": "electron-vite build && npm run build:native && electron-builder --mac",
+    "dist": "electron-vite build && npm run build:native && node scripts/stage-electron.mjs && electron-builder --mac",
     "dist:browser": "node scripts/dist-browser.mjs",
     "brand:dev": "node scripts/brand-dev-runtime.mjs",
     "build:native": "mkdir -p build/bin && swiftc -O -parse-as-library -swift-version 5 -target arm64-apple-macos26.0 native/zepper-ai/main.swift -o build/bin/zepper-ai && npm run build:credentials",
@@ -69,7 +69,7 @@
   "build": {
     "appId": "app.zepper.browser",
     "productName": "Zepper",
-    "electronDist": "node_modules/electron/dist",
+    "electronDist": "node_modules/.cache/zepper-electron-dist",
     "afterPack": "scripts/after-pack.cjs",
     "protocols": [
       {
@@ -136,6 +136,29 @@
       "target": [
         "dmg",
         "zip"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "${productName}",
+      "background": "build/background.tiff",
+      "iconSize": 96,
+      "window": {
+        "width": 660,
+        "height": 428
+      },
+      "contents": [
+        {
+          "x": 180,
+          "y": 160,
+          "type": "file"
+        },
+        {
+          "x": 480,
+          "y": 160,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
   }

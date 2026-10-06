@@ -16,7 +16,7 @@ Fork it, change anything, and see it in a second. No Chromium to compile.
 [![CI](https://github.com/imdewan/zepper-browser/actions/workflows/ci.yml/badge.svg)](https://github.com/imdewan/zepper-browser/actions/workflows/ci.yml)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-34a853?style=flat-square)](CONTRIBUTING.md)
 
-[Features](#features) · [Make it yours](#make-it-yours) · [Getting started](#getting-started) · [Docs](#documentation) · [Contributing](#contributing)
+[Download](#download) · [Features](#features) · [Make it yours](#make-it-yours) · [Getting started](#getting-started) · [Docs](#documentation) · [Contributing](#contributing)
 
 <br>
 
@@ -25,6 +25,15 @@ Fork it, change anything, and see it in a second. No Chromium to compile.
 </div>
 
 <br>
+
+## Download
+
+**[Download Zepper for Mac](https://github.com/imdewan/zepper-browser/releases/latest)** (Apple silicon, macOS 14 or later)
+
+1. Open the `.dmg` and drag Zepper into Applications.
+2. Zepper isn't notarized by Apple yet, so macOS blocks it the first time you open it. Go to **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. You only need to do this once.
+
+A short setup on first launch brings over your history and passwords from the browser you use now.
 
 ## Why Zepper
 
