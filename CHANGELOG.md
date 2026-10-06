@@ -4,11 +4,17 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-06
+
 ### Added
 
 - Bring over your open tabs from Chrome and other Chromium browsers, Firefox and Arc (its spaces, pinned tabs, folders and favourites), in setup or from Settings → General → Import from another browser. Import All brings everything over in one go.
+- Memory Saver, on by default: tabs you haven't looked at for a while (15 minutes, an hour or 4 hours) give back their memory and reload when you open them; tabs playing sound, in a call or in picture-in-picture stay. Inactive tabs show Chrome's dotted ring around their icon.
+- Tabs that haven't been opened (in the background, imported) show their title and icon, fetched without loading the page, so nothing starts playing.
 - New windows open with all your spaces and their Essentials, starting on the one you're in.
 - The command bar suggests and completes popular sites you haven't visited yet (`yout` → youtube.com, `gmail`, `twitter`).
+- Starting a download shows which file is downloading and from which site, with a button to open Downloads.
+- Downloads can be moved to the Trash from the downloads panel, whose buttons are now always shown; each download lists the site it came from.
 
 ### Changed
 
@@ -22,11 +28,6 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 - Notification sounds (Discord's pings, say) put the site in the now-playing card and offered to pause your music. Only media counts now: sound that lasts, from a page that says what's playing or a real video or audio player (embedded ones too).
 - A page waiting on its own alert (Google Calendar's reminders, say) set off "Page isn't responding". Pages with a dialog open or waiting aren't checked, and the notice now closes by itself when a page recovers.
 - In the command bar, ⌘A then Delete brought back what you'd typed instead of clearing the field. Look-alike history rows (several "YouTube" pages) now show once.
-
-### Added
-
-- Starting a download shows which file is downloading and from which site, with a button to open Downloads.
-- Downloads can be moved to the Trash from the downloads panel, whose buttons are now always shown; each download lists the site it came from.
 
 ## [0.1.0] - 2026-10-06
 
@@ -57,5 +58,6 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/imdewan/zepper-browser/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/imdewan/zepper-browser/releases/tag/v0.1.0

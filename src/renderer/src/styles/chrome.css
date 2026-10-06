@@ -2028,3 +2028,56 @@ button.site-button.insecure:hover {
 .capture-screen {
   background: #9b4dd6;
 }
+
+/* ---- Inactive tabs (not loaded), as Chrome and Brave show them ----------------------------------- */
+
+.tab-inactive {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+
+/* The icon shrinks into a 14px circle inside the ring (Chromium: 250ms, ease-in). */
+.tab-inactive .favicon {
+  clip-path: circle(50%);
+  transform: scale(0.875);
+  animation: tab-inactive-icon 0.25s ease-in;
+}
+
+/* A 20px ring around the 16px icon, in the sidebar's quiet foreground; it fades in over a second. */
+.tab-inactive-ring {
+  position: absolute;
+  inset: -2px;
+  width: 20px;
+  height: 20px;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 2;
+  stroke-linecap: round;
+  animation: tab-inactive-ring 1s ease-in;
+}
+
+@keyframes tab-inactive-icon {
+  from {
+    clip-path: circle(71%);
+    transform: scale(1);
+  }
+}
+
+@keyframes tab-inactive-ring {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-inactive .favicon,
+  .tab-inactive-ring {
+    animation: none;
+  }
+}

@@ -125,6 +125,8 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
             <Favicon src={tab.favicon} className="pin-current" />
             <span className="pin-slash" />
           </button>
+        ) : !tab.loaded ? (
+          <InactiveFavicon src={tab.favicon} />
         ) : (
           <Favicon src={tab.favicon} />
         )}
@@ -205,6 +207,25 @@ export function CaptureIndicator({ capture }: { capture: CaptureState }): React.
       {capture.camera && <IconCamera size={11} className="capture-camera" />}
       {capture.microphone && !capture.camera && <IconMic size={11} className="capture-microphone" />}
       {capture.screen && <IconScreenShare size={11} className="capture-screen" />}
+    </span>
+  )
+}
+
+/**
+ * The ring Chromium draws around an inactive (not loaded) tab's icon, as Chrome and Brave show Memory
+ * Saver tabs: a long arc on the left and four short dashes (dotted_icon.cc), fading in over a second,
+ * with the icon cropped to a circle inside it.
+ */
+const INACTIVE_RING =
+  'M8.44 18.86A9 9 0 0 1 8.44 1.14M11.56 1.14A9 9 0 0 1 15.16 2.63M17.37 4.84A9 9 0 0 1 18.86 8.44M18.86 11.56A9 9 0 0 1 17.37 15.16M15.16 17.37A9 9 0 0 1 11.56 18.86'
+
+function InactiveFavicon({ src }: { src: string | null }): React.JSX.Element {
+  return (
+    <span className="tab-inactive" title="Inactive tab: it loads when you open it">
+      <Favicon src={src} />
+      <svg className="tab-inactive-ring" viewBox="0 0 20 20" aria-hidden="true">
+        <path d={INACTIVE_RING} />
+      </svg>
     </span>
   )
 }

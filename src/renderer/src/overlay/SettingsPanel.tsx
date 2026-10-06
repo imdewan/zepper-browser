@@ -382,6 +382,23 @@ export function SettingsPanel({
                     onChange={(newTabPosition) => set({ newTabPosition })}
                   />
                 </Row>
+                <Row
+                  label="Memory Saver"
+                  hint="Tabs you haven’t looked at for a while give back their memory and reload when you open them. Tabs playing sound, in a call or in picture-in-picture stay."
+                >
+                  <Toggle checked={settings.memorySaver} onChange={(memorySaver) => set({ memorySaver })} />
+                </Row>
+                <Row label="Free a tab’s memory after" hint="How long a tab has to go unseen first.">
+                  <Segmented
+                    value={String(settings.memorySaverAfter) as '15' | '60' | '240'}
+                    options={[
+                      ['15', '15 min'],
+                      ['60', '1 hour'],
+                      ['240', '4 hours']
+                    ]}
+                    onChange={(value) => set({ memorySaverAfter: Number(value) as 15 | 60 | 240 })}
+                  />
+                </Row>
                 <Row label="Closing a pinned tab" hint="What ⌘W does on pinned tabs and Essentials.">
                   <select
                     value={settings.pinnedCloseBehavior}

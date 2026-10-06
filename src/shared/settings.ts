@@ -64,6 +64,10 @@ export interface Settings {
   transparency: number
   // Tabs
   newTabPosition: 'top' | 'bottom'
+  /** Memory Saver: tabs you haven't looked at for a while give back their memory (they reload when opened). */
+  memorySaver: boolean
+  /** After how many minutes unseen (15, 60 or 240). */
+  memorySaverAfter: 15 | 60 | 240
   pinnedCloseBehavior: PinnedCloseBehavior
   closeSelectsRecent: boolean
   /** Reopen last session's open (unpinned) tabs when Zepper starts. */
@@ -166,6 +170,8 @@ export const DEFAULT_SETTINGS: Settings = {
   appIcon: 'auto',
   transparency: 0.5,
   newTabPosition: 'top',
+  memorySaver: true,
+  memorySaverAfter: 60,
   pinnedCloseBehavior: 'reset-unload-switch',
   closeSelectsRecent: true,
   restoreTabs: true,

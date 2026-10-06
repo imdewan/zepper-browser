@@ -76,6 +76,7 @@ import { JsonFile } from './persist'
 import { parse as parseDomain } from 'tldts-experimental'
 import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
 import { isFolder, type ImportedItem, type ImportedSession } from './session-import'
+import { fetchPageMeta } from './page-meta'
 import { suggest } from './suggest'
 import { BROWSING_PARTITION } from './extensions'
 import { tidyGroups } from './tidy'
@@ -242,6 +243,10 @@ const MIN_REVEAL_EDGE = 4
 
 /** How long a playing tab must stay out of view before its video floats. */
 const PIP_DELAY_MS = 250
+/** How often Memory Saver looks for tabs to unload. */
+const MEMORY_SAVER_CHECK_MS = 60_000
+/** Title-and-icon fetches for unopened tabs at once. */
+const META_FETCHES = 3
 /** window.open's name for a page's floating call window (see documentPipShim in the page preload). */
 const DOCUMENT_PIP_FRAME = 'zepper-document-pip'
 /** Calls the page's "enterpictureinpicture" handler (Meet's own floating call window), as Chrome does on leaving a call. */
@@ -553,6 +558,10 @@ export class Browser {
   private readonly popups = new Map<BrowserWindow, string>()
   /** When each tab's page last had a click or key press (for pop-up blocking). */
   private readonly lastInput = new Map<number, number>()
+  /** Tabs waiting for their title and icon (never opened, so they'd show an address), and how many are being fetched. */
+  private readonly metaQueue: string[] = []
+  private metaFetching = 0
+  private readonly metaTried = new Set<string>()
   /** Pages' floating call windows (Document Picture-in-Picture), by the tab that opened each. */
   private readonly docPips = new Map<string, BrowserWindow>()
   /** Tabs whose floating call window Zepper asked for when you left them: it closes when you come back. */
@@ -795,6 +804,10 @@ export class Browser {
 
     this.applySettings(this.settings, null)
     this.disposers.push(this.settingsStore.onChange((next, prev) => this.applySettings(next, prev)))
+    const memorySaver = setInterval(() => this.saveMemory(), MEMORY_SAVER_CHECK_MS)
+    this.disposers.push(() => clearInterval(memorySaver))
+    // Tabs that were never opened (last time) still show their name and icon.
+    for (const tab of this.tabs) this.fillTabMeta(tab)
     this.showTrafficLights(!this.compact)
     this.layout()
 
@@ -1583,6 +1596,7 @@ export class Browser {
     const tab = makeTab({ kind: 'normal', url, spaceId: options.spaceId ?? this.activeSpaceId })
     this.insertNormalTab(tab, options.afterTabId)
     if (options.background) {
+      this.fillTabMeta(tab)
       this.broadcast()
     } else {
       this.activateTab(tab.id)
@@ -2009,7 +2023,9 @@ export class Browser {
       }
       tabs += this.addImportedPinned(space, null, group.pinned)
       for (const page of group.tabs) {
-        this.tabs.push(makeTab({ kind: 'normal', url: page.url, title: page.title, spaceId: space.id }))
+        const tab = makeTab({ kind: 'normal', url: page.url, title: page.title, spaceId: space.id })
+        this.tabs.push(tab)
+        this.fillTabMeta(tab)
         tabs++
       }
     })
@@ -2055,6 +2071,64 @@ export class Browser {
       }
     }
     return count
+  }
+
+  /**
+   * Memory Saver (as in Chrome and Brave): tabs you haven't looked at for a while give back their memory.
+   * They keep their place, title and icon (shown with Chrome's inactive ring) and reload when you open
+   * them. Tabs on screen, playing (or lately), in a call or floating stay.
+   */
+  private saveMemory(): void {
+    if (!this.settings.memorySaver || this.windowClosed) return
+    const limit = this.settings.memorySaverAfter * 60_000
+    const now = Date.now()
+    let unloaded = false
+    for (const tab of this.tabs) {
+      if (!tab.loaded || tab.id === this.activeTabId || this.attached.has(tab.id)) continue
+      if (now - tab.lastActiveAt < limit) continue
+      const inUse =
+        tab.audible ||
+        now - tab.audibleAt < limit ||
+        tab.capture ||
+        this.pip.activeTabId === tab.id ||
+        this.docPips.has(tab.id) ||
+        this.nativePipTabs.has(tab.id)
+      if (inUse) continue
+      this.destroyView(tab)
+      unloaded = true
+    }
+    if (unloaded) this.broadcast()
+  }
+
+  /**
+   * A tab that hasn't been opened shows its address and a globe; this fetches just its title and icon
+   * (the start of the page, with the tab's sign-ins), without loading it, so nothing plays.
+   */
+  private fillTabMeta(tab: Tab): void {
+    const needs = !tab.loaded && /^https?:/.test(tab.url) && (!tab.title || tab.title === tab.url || !tab.favicon)
+    if (!needs || this.metaTried.has(tab.id)) return
+    this.metaTried.add(tab.id)
+    this.metaQueue.push(tab.id)
+    this.nextTabMeta()
+  }
+
+  private nextTabMeta(): void {
+    while (this.metaFetching < META_FETCHES && this.metaQueue.length > 0) {
+      const tab = this.tab(this.metaQueue.shift())
+      if (!tab || tab.loaded) continue
+      this.metaFetching++
+      const url = tab.url
+      void fetchPageMeta(this.sessionFor(tab), url).then((meta) => {
+        this.metaFetching--
+        // Opened (or gone somewhere else) meanwhile: the page itself says.
+        if (meta && !tab.loaded && tab.url === url && this.tab(tab.id)) {
+          if (meta.title && (!tab.title || tab.title === tab.url)) tab.title = meta.title
+          if (meta.favicon && !tab.favicon) tab.favicon = meta.favicon
+          this.broadcast()
+        }
+        this.nextTabMeta()
+      })
+    }
   }
 
   /** An Essential's own icon (only Essentials have one). */
@@ -3480,8 +3554,10 @@ export class Browser {
       // A link from an Essential into a space with its own sign-ins: open it in that space's
       // profile, where the tab lives, rather than carrying the Essential's session along.
       this.insertNormalTab(probe, undefined)
-      if (details.disposition === 'background-tab') this.broadcast()
-      else this.activateTab(probe.id)
+      if (details.disposition === 'background-tab') {
+        this.fillTabMeta(probe)
+        this.broadcast()
+      } else this.activateTab(probe.id)
       return { action: 'deny' }
     }
     return {

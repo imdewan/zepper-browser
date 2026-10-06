@@ -38,6 +38,8 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - **Essentials:** a grid of most-used sites per space, using that space's sign-ins; drag them into any order (dropping between tiles works too) or to another space, and give one an emoji instead of the site's icon (Change Icon… in its menu).
 - **Pinned tabs** per space, saved across restarts; ⌘W resets and unloads them.
 - **Restored on restart:** open tabs and Essentials come back (both can be turned off in Settings → Tabs).
+- **Memory Saver** (on by default, Settings → Tabs): tabs you haven't looked at for 15 minutes, an hour or 4 hours give back their memory and reload when you open them. Tabs playing sound, in a call or in picture-in-picture stay. Inactive tabs show Chrome's dotted ring around their icon.
+- **Unopened tabs** (opened in the background, imported) show their real title and icon, read from the page without loading it.
 - **Folders** in the pinned area, nestable: collapse, rename, ungroup or delete with their tabs.
 - **Drag and drop:**
   - reorder tabs and folders, and drop into folders;
