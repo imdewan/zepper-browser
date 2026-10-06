@@ -2693,3 +2693,194 @@
   font-size: 12px;
   color: var(--text-3);
 }
+
+/* ---- Capture (⇧⌘2) ---------------------------------------------------------------- */
+
+.capture {
+  pointer-events: auto;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  cursor: crosshair;
+  outline: none;
+}
+
+.capture-page {
+  position: absolute;
+  overflow: hidden;
+  border-radius: var(--content-radius, 10px);
+}
+
+.capture-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+/* The selection: clear, with the rest of the page dimmed around it. */
+.capture-spot {
+  position: absolute;
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.38),
+    0 0 0 1.5px var(--accent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+  transition:
+    left 0.08s ease,
+    top 0.08s ease,
+    width 0.08s ease,
+    height 0.08s ease;
+}
+
+.capture-spot.dragging {
+  transition: none;
+  border-radius: 2px;
+}
+
+.capture-size {
+  position: absolute;
+  left: 0;
+  bottom: -26px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(20, 20, 24, 0.85);
+  color: #fff;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.capture-toolbar {
+  position: absolute;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 5px 5px 14px;
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.35),
+    0 0 0 0.5px var(--panel-border);
+  cursor: default;
+}
+
+.capture-hint {
+  margin-right: 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.capture-toolbar button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--element);
+}
+
+.capture-toolbar button:hover {
+  background: var(--element-hover);
+}
+
+.capture-toolbar kbd {
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+.capture-toolbar .capture-cancel {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-2);
+}
+
+/* The result: a thumbnail you can drag out, and what to do with it. */
+.capture-result {
+  pointer-events: auto;
+  position: relative;
+  width: 360px;
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.3),
+    0 0 0 0.5px var(--panel-border);
+}
+
+.capture-thumb {
+  flex: none;
+  width: 120px;
+  max-height: 96px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 8px;
+  box-shadow: 0 0 0 0.5px var(--panel-border);
+  cursor: grab;
+}
+
+.capture-result-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.capture-result-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.capture-result-size {
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.capture-result-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.capture-result-actions button {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--element);
+}
+
+.capture-result-actions button:hover {
+  background: var(--element-hover);
+}
+
+.capture-result-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+}
+
+.capture-result-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}

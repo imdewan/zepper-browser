@@ -6,6 +6,7 @@ import {
   app,
   clipboard,
   dialog,
+  nativeImage,
   nativeTheme,
   screen,
   session,
@@ -68,6 +69,7 @@ import { tidyGroups } from './tidy'
 import { AiError, intelligence } from './ai'
 import { resolveInput, searchEngineName, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
 import { nextZoom } from './zoom'
+import { CAPTURE_TARGETS_SCRIPT, captureArea, captureFullPage, pngWithDensity, type CaptureTargets } from './capture'
 
 /** Height reserved for the traffic lights when the sidebar is on the right. */
 const TITLEBAR_STRIP = 34
@@ -456,6 +458,17 @@ export class Browser {
   private readonly mediaTipShown = new Set<string>()
   /** Folders in spaces' pinned areas (the tree itself is space.pinnedItems and folder.items). */
   private folders: Folder[] = []
+  /** Capture mode's frozen frame of the page (see startCapture). */
+  private captureFrame: { tabId: string; image: Electron.NativeImage; page: Rect; zoom: number; scroll: [number, number] } | null = null
+  /** The last capture, for Save, Show in Finder and dragging out. */
+  private lastCapture: {
+    png: Buffer
+    temp: string
+    saved: string | null
+    name: string
+    thumbnail: string
+    size: [number, number]
+  } | null = null
   /** Tabs showing a translation (each run has its own token, so a stopped one ends). */
   private readonly translating = new Map<string, symbol>()
   /** Typed addresses tried over HTTPS first (see did-fail-load). */
@@ -1125,6 +1138,14 @@ export class Browser {
         return this.hub.relaunch()
       case 'app.makeDefaultBrowser':
         return this.hub.makeDefaultBrowser()
+      case 'capture.take':
+      case 'capture.cancel':
+      case 'capture.save':
+      case 'capture.reveal':
+      case 'capture.retake':
+      case 'capture.drag':
+      case 'capture.dismiss':
+        return this.captureCommand(command)
       case 'page.translate':
         return void this.translatePage(command.tabId)
       case 'app.openTranslationSettings':
@@ -2249,22 +2270,134 @@ export class Browser {
     if (tab) this.activateTab(tab.id)
   }
 
-  /** ⌘⇧2: screenshot of the visible page, saved to Downloads and copied to the clipboard. */
-  async screenshot(): Promise<void> {
-    const wc = this.activeWebContents()
-    if (!wc) return
-    const image = await wc.capturePage()
+  /**
+   * ⇧⌘2: capture mode. The page is frozen as it is (so hover effects or a playing video can't change
+   * the shot), then the overlay lets you click an element or drag a region; Visible and Full page
+   * take the whole screen or the whole page.
+   */
+  async startCapture(): Promise<void> {
+    const tab = this.tab(this.activeTabId)
+    const view = tab && this.views.get(tab.id)
+    const wc = view?.webContents
+    if (!tab || !view || !wc || wc.isDestroyed() || !/^(https?|file):/.test(wc.getURL())) return
+    const page = view.getBounds()
+    const zoom = wc.getZoomFactor()
+    const [image, info] = await Promise.all([
+      wc.capturePage(),
+      wc
+        .executeJavaScriptInIsolatedWorld(ZEPPER_WORLD, [{ code: CAPTURE_TARGETS_SCRIPT }])
+        .catch(() => null) as Promise<CaptureTargets | null>
+    ])
+    this.captureFrame = { tabId: tab.id, image, page, zoom, scroll: info ? [info.scrollX, info.scrollY] : [0, 0] }
+    const targets = (info?.targets ?? []).map(([x, y, width, height]) => ({
+      x: page.x + x * zoom,
+      y: page.y + y * zoom,
+      width: width * zoom,
+      height: height * zoom
+    }))
+    this.overlay.webContents.focus()
+    this.emit({ type: 'capture.start', page, targets, scrolls: info?.scrolls ?? false }, 'overlay')
+  }
+
+  /** Takes the capture: from the frozen frame, or (full page, or areas reaching off screen) from the page itself. */
+  private async takeCapture(mode: 'visible' | 'full' | 'area', rect?: Rect): Promise<void> {
+    const frame = this.captureFrame
+    this.captureFrame = null
+    const wc = frame && this.views.get(frame.tabId)?.webContents
+    if (!frame || !wc || wc.isDestroyed()) return
+    const scale = frame.image.getSize().width / Math.max(1, frame.page.width)
+    let png: Buffer
+    try {
+      if (mode === 'full') {
+        png = await captureFullPage(wc)
+      } else if (mode === 'area' && rect) {
+        const x = rect.x - frame.page.x
+        const y = rect.y - frame.page.y
+        const inside = x >= 0 && y >= 0 && x + rect.width <= frame.page.width + 1 && y + rect.height <= frame.page.height + 1
+        png = inside
+          ? frame.image
+              .crop({
+                x: Math.round(x * scale),
+                y: Math.round(y * scale),
+                width: Math.max(1, Math.round(rect.width * scale)),
+                height: Math.max(1, Math.round(rect.height * scale))
+              })
+              .toPNG()
+          : await captureArea(wc, {
+              x: frame.scroll[0] + x / frame.zoom,
+              y: frame.scroll[1] + y / frame.zoom,
+              width: rect.width / frame.zoom,
+              height: rect.height / frame.zoom
+            })
+      } else {
+        png = frame.image.toPNG()
+      }
+    } catch (error) {
+      console.warn('[capture] failed', error)
+      this.toast({ id: 'capture', message: 'Couldn’t capture this page', timeout: 3000 })
+      return
+    }
+    png = pngWithDensity(png, scale)
+    const image = nativeImage.createFromBuffer(png, { scaleFactor: scale })
     const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19)
-    const path = uniquePath(join(app.getPath('downloads'), `Zepper Screenshot ${stamp}.png`))
-    await writeFile(path, image.toPNG())
-    await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' }) })])
-    this.toast({
-      id: 'screenshot',
-      message: 'Screenshot saved',
-      description: 'Copied to clipboard',
-      action: { label: 'Show', command: { type: 'download.show', path } },
-      timeout: 4000
-    })
+    const temp = join(app.getPath('temp'), `Zepper Capture ${stamp}.png`)
+    await writeFile(temp, png)
+    // Always on the clipboard; full pages (usually long) are saved straight to Downloads too.
+    await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(png)], { type: 'image/png' }) })])
+    const { width, height } = image.getSize()
+    this.lastCapture = {
+      png,
+      temp,
+      saved: null,
+      name: `Zepper Capture ${stamp}.png`,
+      thumbnail: image.resize({ width: Math.min(560, Math.round(width * scale)), quality: 'good' }).toDataURL(),
+      size: [Math.round(width * scale), Math.round(height * scale)]
+    }
+    if (mode === 'full') await this.saveCapture()
+    this.showCaptureResult()
+  }
+
+  private showCaptureResult(): void {
+    const capture = this.lastCapture
+    if (!capture) return
+    const [width, height] = capture.size
+    this.emit({ type: 'capture.result', thumbnail: capture.thumbnail, width, height, saved: capture.saved }, 'overlay')
+  }
+
+  private async saveCapture(): Promise<void> {
+    const capture = this.lastCapture
+    if (!capture || capture.saved) return
+    const path = uniquePath(join(this.settings.downloadPath || app.getPath('downloads'), capture.name))
+    await writeFile(path, capture.png)
+    capture.saved = path
+  }
+
+  private captureCommand(command: Extract<Command, { type: `capture.${string}` }>): void {
+    const capture = this.lastCapture
+    switch (command.type) {
+      case 'capture.take':
+        return void this.takeCapture(command.mode, command.rect)
+      case 'capture.cancel':
+        this.captureFrame = null
+        return
+      case 'capture.retake':
+        this.lastCapture = null
+        return void this.startCapture()
+      case 'capture.dismiss':
+        this.lastCapture = null
+        return
+      case 'capture.save':
+        return void this.saveCapture().then(() => this.showCaptureResult())
+      case 'capture.reveal':
+        if (capture) shell.showItemInFolder(capture.saved ?? capture.temp)
+        return
+      case 'capture.drag':
+        // Drag the capture out into Messages, Mail, Finder…
+        if (capture && !this.overlay.webContents.isDestroyed()) {
+          this.overlay.webContents.startDrag({ file: capture.temp, icon: nativeImage.createFromBuffer(capture.png).resize({ width: 96 }) })
+        }
+        return
+    }
   }
 
   cycleTab(delta: number): void {

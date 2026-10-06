@@ -105,7 +105,7 @@ export function buildMenu(hub: Hub): Menu {
           )
         },
         { type: 'separator' },
-        { label: 'Take Screenshot', accelerator: 'CmdOrCtrl+Shift+2', click: run((browser) => void browser.screenshot()) },
+        { label: 'Capture…', accelerator: 'CmdOrCtrl+Shift+2', click: run((browser) => void browser.startCapture()) },
         { type: 'separator' },
         { label: 'Copy Current URL', accelerator: 'CmdOrCtrl+Shift+C', click: run((browser) => browser.handle({ type: 'ui.copyUrl' })) },
         {

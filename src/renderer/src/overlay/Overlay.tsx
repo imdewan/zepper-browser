@@ -6,6 +6,7 @@ import type { AboutInfo, FindResult, OverlayMode, PopoverSpec, ToastSpec, UiEven
 import { zepper } from '../bridge'
 import { useSnapshot, useSystemDark, useUiEvents } from '../useSnapshot'
 import { uiAttributes } from '../chrome/App'
+import { CaptureOverlay, CaptureResult, type CaptureResultInfo, type CaptureSession } from './Capture'
 import { CreateSpaceDialog } from './CreateSpaceDialog'
 import { FindBar } from './FindBar'
 import { Palette } from './Palette'
@@ -36,6 +37,8 @@ export function Overlay(): React.JSX.Element | null {
   const [downloadsOpen, setDownloadsOpen] = useState(false)
   const [creatingSpace, setCreatingSpace] = useState(false)
   const [peek, setPeek] = useState<'shown' | 'exiting' | null>(null)
+  const [capture, setCapture] = useState<CaptureSession | null>(null)
+  const [captureResult, setCaptureResult] = useState<CaptureResultInfo | null>(null)
   const [exiting, setExiting] = useState(false)
   const lastMode = useRef<OverlayMode | null>(null)
 
@@ -44,6 +47,13 @@ export function Overlay(): React.JSX.Element | null {
       if (event.type === 'palette.open') {
         setPopover(null)
         setPalette({ mode: event.mode, currentUrl: event.currentUrl, key: Date.now() })
+      } else if (event.type === 'capture.start') {
+        setPalette(null)
+        setPopover(null)
+        setCaptureResult(null)
+        setCapture({ page: event.page, targets: event.targets, scrolls: event.scrolls })
+      } else if (event.type === 'capture.result') {
+        setCaptureResult({ thumbnail: event.thumbnail, width: event.width, height: event.height, saved: event.saved })
       } else if (event.type === 'toast') {
         setToasts((list) => [...list.filter((t) => t.id !== event.toast.id), event.toast])
       } else if (event.type === 'popover.open') {
@@ -103,14 +113,22 @@ export function Overlay(): React.JSX.Element | null {
   )
 
   const wantsFull =
-    palette !== null || popover !== null || settingsOpen || historyOpen || downloadsOpen || about !== null || creatingSpace || exiting
+    capture !== null ||
+    palette !== null ||
+    popover !== null ||
+    settingsOpen ||
+    historyOpen ||
+    downloadsOpen ||
+    about !== null ||
+    creatingSpace ||
+    exiting
   // During a right-hand peek this view sits at the window's right edge; rects sent to main are in window coordinates.
   const peekOffset =
     peek === 'shown' && !wantsFull && snapshot?.settings.sidebarPosition === 'right'
       ? snapshot.windowSize.width - (snapshot.sidebarWidth + 24)
       : 0
   useEffect(() => setViewOffsetX(peekOffset), [peekOffset])
-  const mode: OverlayMode = wantsFull ? 'full' : peek ? 'peek' : toasts.length > 0 || find ? 'corner' : 'hidden'
+  const mode: OverlayMode = wantsFull ? 'full' : peek ? 'peek' : toasts.length > 0 || find || captureResult ? 'corner' : 'hidden'
   useEffect(() => {
     if (lastMode.current === mode) return
     lastMode.current = mode
@@ -228,8 +246,12 @@ export function Overlay(): React.JSX.Element | null {
           />
         )}
       </AnimatePresence>
+      <AnimatePresence>{capture && <CaptureOverlay key="capture" session={capture} onDone={() => setCapture(null)} />}</AnimatePresence>
       <div className={cx('corner', peek === 'shown' && !wantsFull && 'corner-in-peek')}>
         <AnimatePresence>{find && <FindBar key="find" result={find.result} focusKey={find.key} onClose={closeFind} />}</AnimatePresence>
+        <AnimatePresence>
+          {captureResult && <CaptureResult key="capture-result" result={captureResult} onDismiss={() => setCaptureResult(null)} />}
+        </AnimatePresence>
         <Toasts toasts={toasts} onDismiss={(id) => setToasts((list) => list.filter((t) => t.id !== id))} />
       </div>
     </div>

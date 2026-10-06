@@ -373,6 +373,14 @@ export type Command =
   | { type: 'widevine.respond'; host: string; choice: 'install' | 'later' | 'never' }
   | { type: 'app.relaunch' }
   | { type: 'app.makeDefaultBrowser' }
+  /** Screen captures: take one (window coordinates for a region or element), cancel, and act on the result. */
+  | { type: 'capture.take'; mode: 'visible' | 'full' | 'area'; rect?: Rect }
+  | { type: 'capture.cancel' }
+  | { type: 'capture.save' }
+  | { type: 'capture.reveal' }
+  | { type: 'capture.retake' }
+  | { type: 'capture.drag' }
+  | { type: 'capture.dismiss' }
   /** Translate the page into your language, or back to the original. */
   | { type: 'page.translate'; tabId: string }
   | { type: 'app.openTranslationSettings' }
@@ -427,6 +435,10 @@ export type Command =
 /** Events pushed from the main process to renderers. */
 export type UiEvent =
   | { type: 'palette.open'; mode: 'new' | 'current' | 'split'; currentUrl: string | null }
+  /** Capture mode (⇧⌘2): the page's area and its elements (window coordinates) for hover snapping. */
+  | { type: 'capture.start'; page: Rect; targets: Rect[]; scrolls: boolean }
+  /** A capture is done: a thumbnail, its size, and where it was saved (if it was). */
+  | { type: 'capture.result'; thumbnail: string; width: number; height: number; saved: string | null }
   /** A summary or answer about the page, as it streams in. */
   | { type: 'assistant.text'; requestId: string; text: string; done: boolean; error?: string }
   | { type: 'toast'; toast: ToastSpec }
