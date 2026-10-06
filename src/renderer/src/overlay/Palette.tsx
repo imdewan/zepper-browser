@@ -68,7 +68,7 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
     resultsQuery === typed &&
     typed.length > 0 &&
     selected === 0 &&
-    (top?.kind === 'history' || top?.kind === 'tab') &&
+    (top?.kind === 'history' || top?.kind === 'tab' || top?.kind === 'site') &&
     top.completion &&
     top.completion.toLowerCase().startsWith(typed.toLowerCase()) &&
     top.completion.length > typed.length
@@ -108,7 +108,16 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
   const onKeyDown = (e: React.KeyboardEvent): void => {
     const down = e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')
     const up = e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')
-    if (e.key === 'Backspace' || e.key === 'Delete') setNoCompletion(true)
+    // With just the suggested part selected (as it is when it appears), Backspace removes the suggestion
+    // and keeps what you typed. Any other selection (⌘A, say) is deleted as usual, in onChange.
+    if ((e.key === 'Backspace' || e.key === 'Delete') && completion) {
+      const field = e.currentTarget as HTMLInputElement
+      if (field.selectionStart === typed.length && field.selectionEnd === completion.length) {
+        e.preventDefault()
+        setNoCompletion(true)
+        return
+      }
+    }
     if (completion && (e.key === 'ArrowRight' || e.key === 'End' || e.key === 'Tab')) {
       // Take the completion as typed.
       e.preventDefault()
@@ -153,8 +162,8 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
             placeholder={mode === 'split' ? 'Open in split view…' : mode === 'new' ? 'Search or enter address…' : 'Search or enter address'}
             onChange={(e) => {
               const value = e.target.value
-              // Typing more (not deleting) brings the completion back.
-              if (value.length > typed.length) setNoCompletion(false)
+              // Typing more brings the completion back; deleting keeps it away until you type again.
+              setNoCompletion(value.length <= typed.length)
               setText(value)
             }}
             onKeyDown={onKeyDown}
@@ -222,6 +231,12 @@ function SuggestionRow({ mode, suggestion, selected, engineName, onHover, onChoo
       icon = <IconGlobe size={16} />
       title = suggestion.url
       chip = 'Open'
+      break
+    case 'site':
+      // A globe, not the site's icon: fetching that would tell the site what you're typing.
+      icon = <IconGlobe size={16} />
+      title = suggestion.title
+      detail = suggestion.domain
       break
     case 'search':
       icon = <IconSearch size={16} />

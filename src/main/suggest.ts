@@ -1,6 +1,7 @@
 import type { Suggestion, Tab } from '@shared/types'
 import type { History } from './history'
 import { bangs } from './bangs'
+import { popularByAddress, popularMatches } from './popular-sites'
 import { hostOf, looksLikeUrl, resolveInput, searchUrl, stripHash, suggestUrl } from './url'
 
 const PROVIDER_TIMEOUT_MS = 700
@@ -67,7 +68,10 @@ export async function suggest(
   if (bang || completions.length > 0) return results
 
   // The site you're typing the address of comes first, completed in the field (Return goes there).
-  const top = skipHistory ? null : history.topHit(query)
+  // From your history; failing that, the most popular site with that address ("yout" → youtube.com).
+  const visited = skipHistory ? null : history.topHit(query)
+  const popular = visited ? undefined : popularByAddress(query)
+  const top = visited ?? (popular ? { url: `https://${popular.domain}/`, title: popular.name, completion: popular.domain } : null)
   // Already open: the top hit switches to that tab instead.
   const topTab = top ? tabs.find((t) => stripHash(t.url) === stripHash(top.url)) : undefined
   if (top && topTab) {
@@ -79,6 +83,8 @@ export async function suggest(
       favicon: topTab.favicon,
       completion: top.completion
     })
+  } else if (popular && top) {
+    results.push({ kind: 'site', url: top.url, title: top.title, domain: popular.domain, completion: top.completion })
   } else if (top) {
     results.push({ kind: 'history', url: top.url, title: top.title, completion: top.completion })
   }
@@ -96,10 +102,25 @@ export async function suggest(
   }
 
   const openUrls = new Set(tabs.map((t) => t.url))
-  for (const visit of skipHistory ? [] : history.search(query, 6)) {
-    if (openUrls.has(visit.url) || visit.url === top?.url) continue
-    results.push({ kind: 'history', url: visit.url, title: visit.title || visit.url })
+  // Pages that would look the same (same title on the same site, like several "YouTube" pages) show once.
+  const looks = (title: string, url: string): string => `${title.toLowerCase()}|${hostOf(url)}`
+  const seen = new Set(results.flatMap((r) => ('url' in r && r.url && 'title' in r ? [looks(r.title, r.url)] : [])))
+  for (const visit of skipHistory ? [] : history.search(query, 10)) {
+    const title = visit.title || visit.url
+    if (openUrls.has(visit.url) || visit.url === top?.url || seen.has(looks(title, visit.url))) continue
+    seen.add(looks(title, visit.url))
+    results.push({ kind: 'history', url: visit.url, title })
     if (results.length >= 7) break
+  }
+
+  // Popular sites matching the address or name ("gmail", "twitter"), unless they're already listed.
+  const listed = new Set(results.flatMap((r) => ('url' in r && r.url ? [hostOf(r.url)] : [])))
+  for (const tab of tabs) listed.add(hostOf(tab.url))
+  let added = 0
+  for (const site of popularMatches(query, 6)) {
+    if (listed.has(site.domain) || added >= 3) continue
+    results.push({ kind: 'site', url: `https://${site.domain}/`, title: site.name, domain: site.domain })
+    added++
   }
 
   const provider = useProvider ? await fetchSearchSuggestions(query) : []

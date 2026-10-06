@@ -8,10 +8,15 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 - Bring over your open tabs from Chrome and other Chromium browsers, Firefox and Arc (its spaces, pinned tabs, folders and favourites), in setup or from Settings → General → Import from another browser. Import All brings everything over in one go.
 - New windows open with all your spaces and their Essentials, starting on the one you're in.
+- The command bar suggests and completes popular sites you haven't visited yet (`yout` → youtube.com, `gmail`, `twitter`).
 
 ### Changed
 
 - The downloads panel no longer has Clear list or Remove from list (Move to Trash and Cancel stay), and shows a clearer empty state.
+
+### Fixed
+
+- In the command bar, ⌘A then Delete brought back what you'd typed instead of clearing the field. Look-alike history rows (several "YouTube" pages) now show once.
 
 ### Added
 
