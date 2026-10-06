@@ -44,6 +44,29 @@ export class History {
     this.save()
   }
 
+  /** Pages brought in from another browser: merged with what's here (more visits and later dates win). */
+  importVisits(visits: { url: string; title: string; visits: number; lastVisit: number }[]): { added: number; updated: number } {
+    let added = 0
+    let updated = 0
+    const now = Date.now()
+    for (const visit of visits) {
+      if (!/^https?:/.test(visit.url) || visit.url.length > 4096) continue
+      const lastVisit = Math.min(now, Math.max(0, visit.lastVisit || 0))
+      const existing = this.entries.get(visit.url)
+      if (existing) {
+        existing.visits = Math.max(existing.visits, visit.visits)
+        if (lastVisit > existing.lastVisit) existing.lastVisit = lastVisit
+        if (!existing.title && visit.title) existing.title = visit.title
+        updated++
+      } else {
+        this.entries.set(visit.url, { url: visit.url, title: visit.title, visits: Math.max(1, visit.visits), lastVisit })
+        added++
+      }
+    }
+    this.save()
+    return { added, updated }
+  }
+
   /**
    * A page's title settled after the visit. Only shortly after it: a background tab ticking its title
    * (an unread count, a timer) would otherwise rewrite history every few seconds, forever.

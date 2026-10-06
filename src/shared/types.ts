@@ -363,11 +363,15 @@ export interface PasskeySummary {
   lastUsed: number | null
 }
 
-/** A browser on this Mac whose passwords can be imported. */
+export type ImportKind = 'history' | 'passwords'
+
+/** A browser on this Mac whose history or passwords can be imported. */
 export interface ImportSource {
   id: string
   name: string
   profiles: { dir: string; name: string }[]
+  /** What can come from it (Firefox and Safari: history only). */
+  kinds: ImportKind[]
   /** macOS keeps its data from other apps until you allow Zepper (Full Disk Access). */
   blocked?: boolean
 }
@@ -392,6 +396,7 @@ export type VaultRequest =
   | { type: 'deletePasskey'; id: string }
   | { type: 'sources' }
   | { type: 'importBrowser'; source: string; profile: string }
+  | { type: 'importHistory'; source: string; profile: string }
   | { type: 'importFile' }
   | { type: 'export' }
   | { type: 'openPrivacySettings' }
@@ -405,6 +410,7 @@ export interface VaultReplies {
   deletePasskey: { error?: string }
   sources: ImportSource[]
   importBrowser: ImportResult | { error: string }
+  importHistory: { added: number; updated: number } | { error: string }
   /** null: you closed the file dialog. */
   importFile: ImportResult | { error: string } | null
   export: { saved: string | null; error?: string }
@@ -535,6 +541,8 @@ export type Command =
   | { type: 'history.clear'; since: number }
   | { type: 'settings.update'; patch: Partial<Settings> }
   | { type: 'ui.openSettings'; section?: string }
+  /** The welcome and setup (it opens by itself on first launch; Settings › General shows it again). */
+  | { type: 'ui.openOnboarding' }
   /** The size of what the overlay shows in the window's corner (toasts, find bar), so only that takes clicks. */
   | { type: 'ui.overlayCorner'; width: number; height: number }
   | { type: 'ui.peekSidebar'; show: boolean }
@@ -572,6 +580,7 @@ export type UiEvent =
   | { type: 'find.open' }
   | { type: 'find.result'; result: FindResult }
   | { type: 'settings.open'; section?: string }
+  | { type: 'onboarding.open' }
   | { type: 'peek.show' }
   | { type: 'overlay.dismiss' }
   | { type: 'swipe.progress'; direction: 'back' | 'forward'; progress: number; allowed: boolean }

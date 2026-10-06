@@ -2,6 +2,11 @@
 
 What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how it's built.
 
+## Welcome and setup
+
+- On first launch, a short setup: import history and passwords from other browsers on this Mac, choose a look for your first space, review the privacy protections, turn on-device intelligence on or off, and make Zepper your default browser.
+- Every step can be skipped. Settings → General → Welcome and setup shows it again.
+
 ## Window and sidebar
 
 - Vertical sidebar on the left or right, resizable (190–500px), with a window gradient that shows through, plus transparency and corner radius controls
@@ -114,6 +119,7 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
   - An optional extensions row.
 - **Downloads window:** progress, pause/resume, open, Show in Finder. You choose the save location, or have Zepper ask each time.
 - **History page** (⌘Y): search, delete entries, and clear the last hour, today or everything. History can also be cleared on quit.
+- **History import** from Chrome, Brave, Edge, Arc, Vivaldi, Opera, Helium, Chromium, Firefox and Safari (in the welcome and setup). Pages you'd already visited keep the higher visit count, so importing twice changes nothing.
 
 ## Gestures
 

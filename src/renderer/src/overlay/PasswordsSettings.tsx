@@ -337,7 +337,7 @@ function ImportPanel({ onDone, onClose }: { onDone: (notice: string) => void; on
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    void zepper.vault({ type: 'sources' }).then(setSources)
+    void zepper.vault({ type: 'sources' }).then((list) => setSources(list.filter((source) => source.kinds.includes('passwords'))))
   }, [])
 
   const fromBrowser = async (source: ImportSource): Promise<void> => {

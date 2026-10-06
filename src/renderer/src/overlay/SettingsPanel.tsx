@@ -253,6 +253,11 @@ export function SettingsPanel({
                     onChange={(newWindowSpace) => set({ newWindowSpace })}
                   />
                 </Row>
+                <Row label="Welcome and setup" hint="Import from other browsers, pick a look and see what Zepper can do.">
+                  <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openOnboarding' })}>
+                    Show Again
+                  </button>
+                </Row>
               </>
             )}
 

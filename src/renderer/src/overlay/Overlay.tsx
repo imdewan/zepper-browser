@@ -15,6 +15,7 @@ import { Peek } from './Peek'
 /** Room around the corner's content: its offset from the window edge, plus its shadows. */
 const CORNER_MARGIN = { x: 18 + 32, y: 16 + 36 }
 import { SettingsPanel } from './SettingsPanel'
+import { Onboarding } from './Onboarding'
 import { AboutPanel } from './AboutPanel'
 import { DownloadsPanel } from './DownloadsPanel'
 import { HistoryPanel } from './HistoryPanel'
@@ -36,6 +37,7 @@ export function Overlay(): React.JSX.Element | null {
   const [find, setFind] = useState<{ key: number; result: FindResult } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsSection, setSettingsSection] = useState<string | undefined>(undefined)
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [about, setAbout] = useState<AboutInfo | null>(null)
   const [downloadsOpen, setDownloadsOpen] = useState(false)
@@ -75,6 +77,14 @@ export function Overlay(): React.JSX.Element | null {
         setAbout(null)
         setSettingsSection(event.section)
         setSettingsOpen(true)
+      } else if (event.type === 'onboarding.open') {
+        setPalette(null)
+        setPopover(null)
+        setSettingsOpen(false)
+        setHistoryOpen(false)
+        setDownloadsOpen(false)
+        setAbout(null)
+        setOnboardingOpen(true)
       } else if (event.type === 'space.startCreate') {
         setPalette(null)
         setPopover(null)
@@ -122,6 +132,7 @@ export function Overlay(): React.JSX.Element | null {
     palette !== null ||
     popover !== null ||
     settingsOpen ||
+    onboardingOpen ||
     historyOpen ||
     downloadsOpen ||
     about !== null ||
@@ -178,6 +189,11 @@ export function Overlay(): React.JSX.Element | null {
   const closeSettings = useCallback(() => {
     setExiting(true)
     setSettingsOpen(false)
+    zepper.send({ type: 'ui.closePalette', refocus: true })
+  }, [])
+  const closeOnboarding = useCallback(() => {
+    setExiting(true)
+    setOnboardingOpen(false)
     zepper.send({ type: 'ui.closePalette', refocus: true })
   }, [])
   const closeDownloads = useCallback(() => {
@@ -237,6 +253,7 @@ export function Overlay(): React.JSX.Element | null {
             onClose={closeSettings}
           />
         )}
+        {onboardingOpen && <Onboarding key="onboarding" snapshot={snapshot} onClose={closeOnboarding} />}
         {historyOpen && <HistoryPanel key="history" meaning={snapshot.intelligence.embeddings} onClose={closeHistory} />}
         {about && <AboutPanel key="about" info={about} onClose={closeAbout} />}
         {downloadsOpen && <DownloadsPanel key="downloads" downloads={snapshot.downloads} onClose={closeDownloads} />}

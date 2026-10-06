@@ -1,17 +1,17 @@
 import { app } from 'electron'
 import { createDecipheriv, pbkdf2Sync } from 'node:crypto'
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { closeSync, copyFileSync, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { ImportSource } from '@shared/types'
+import type { ImportKind, ImportSource } from '@shared/types'
 import { readKeychain } from './native'
 import type { ImportEntry } from './vault'
 
 /**
- * Bringing passwords into Zepper: straight from Chromium-based browsers on this Mac (their saved
- * logins, decrypted with the key they keep in the Keychain, which macOS asks you to allow), or
- * from a CSV export: Apple Passwords and Safari, Firefox, Chrome, 1Password, Bitwarden, LastPass,
- * Proton Pass and others.
+ * Bringing your things into Zepper. Passwords: straight from Chromium-based browsers on this Mac
+ * (their saved logins, decrypted with the key they keep in the Keychain, which macOS asks you to
+ * allow), or from a CSV export: Apple Passwords and Safari, Firefox, Chrome, 1Password, Bitwarden,
+ * LastPass, Proton Pass and others. History: from Chromium browsers, Firefox and Safari.
  */
 
 interface ChromiumBrowser {
@@ -61,26 +61,169 @@ function profiles(browser: ChromiumBrowser): { dir: string; name: string }[] | '
     // No profile names; folder names will do.
   }
   const found: { dir: string; name: string }[] = []
-  if (existsSync(join(root, 'Login Data'))) found.push({ dir: '.', name: 'Default' })
+  const hasData = (dir: string): boolean => existsSync(join(dir, 'Login Data')) || existsSync(join(dir, 'History'))
+  if (hasData(root)) found.push({ dir: '.', name: 'Default' })
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || !/^(Default|Profile \d+)$/.test(entry.name)) continue
-    if (existsSync(join(root, entry.name, 'Login Data'))) found.push({ dir: entry.name, name: names[entry.name]?.name || entry.name })
+    if (hasData(join(root, entry.name))) found.push({ dir: entry.name, name: names[entry.name]?.name || entry.name })
   }
   return found
 }
 
-/** Browsers on this Mac with saved passwords Zepper can import. */
+const FIREFOX_DIR = (): string => join(supportDir(), 'Firefox')
+const SAFARI_HISTORY = (): string => join(homedir(), 'Library', 'Safari', 'History.db')
+
+/** Firefox profiles with history (profiles.ini lists them). */
+function firefoxProfiles(): { dir: string; name: string }[] | 'blocked' {
+  const root = FIREFOX_DIR()
+  if (!existsSync(root)) return []
+  let ini: string
+  try {
+    ini = readFileSync(join(root, 'profiles.ini'), 'utf8')
+  } catch (error) {
+    return blocked(error) ? 'blocked' : []
+  }
+  const found: { dir: string; name: string }[] = []
+  for (const section of ini.split(/^\[/m)) {
+    if (!/^Profile\d+\]/.test(section)) continue
+    const field = (key: string): string | undefined => new RegExp(`^${key}=(.*)$`, 'm').exec(section)?.[1]?.trim()
+    const path = field('Path')
+    if (!path) continue
+    const dir = field('IsRelative') === '0' ? path : join(root, path)
+    if (existsSync(join(dir, 'places.sqlite'))) found.push({ dir, name: field('Name') ?? 'Default' })
+  }
+  return found
+}
+
+/** Whether a file exists but macOS keeps it from Zepper (Safari's history, without Full Disk Access). */
+function unreadable(path: string): boolean {
+  try {
+    closeSync(openSync(path, 'r'))
+    return false
+  } catch (error) {
+    return blocked(error)
+  }
+}
+
+/** Browsers on this Mac with history or passwords Zepper can import. */
 export function importSources(): ImportSource[] {
   if (process.platform !== 'darwin') return []
-  return CHROMIUM_BROWSERS.flatMap((browser) => {
+  const sources: ImportSource[] = CHROMIUM_BROWSERS.flatMap((browser) => {
     const found = profiles(browser)
-    if (found === 'blocked') return [{ id: browser.id, name: browser.name, profiles: [], blocked: true }]
-    return found.length ? [{ id: browser.id, name: browser.name, profiles: found }] : []
+    const kinds: ImportKind[] = ['history', 'passwords']
+    if (found === 'blocked') return [{ id: browser.id, name: browser.name, profiles: [], kinds, blocked: true }]
+    return found.length ? [{ id: browser.id, name: browser.name, profiles: found, kinds }] : []
   })
+  const firefox = firefoxProfiles()
+  if (firefox === 'blocked') sources.push({ id: 'firefox', name: 'Firefox', profiles: [], kinds: ['history'], blocked: true })
+  else if (firefox.length) sources.push({ id: 'firefox', name: 'Firefox', profiles: firefox, kinds: ['history'] })
+  if (existsSync(SAFARI_HISTORY())) {
+    sources.push({
+      id: 'safari',
+      name: 'Safari',
+      profiles: [{ dir: '.', name: 'Safari' }],
+      kinds: ['history'],
+      blocked: unreadable(SAFARI_HISTORY())
+    })
+  }
+  return sources
+}
+
+export interface HistoryImport {
+  url: string
+  title: string
+  visits: number
+  lastVisit: number
+}
+
+/** A copy of a browser's SQLite database (with its write-ahead log), which may be open in that browser. */
+function copyDatabase(path: string, name: string, temp: string): string {
+  const copy = join(temp, name)
+  copyFileSync(path, copy)
+  for (const suffix of ['-wal', '-shm']) if (existsSync(path + suffix)) copyFileSync(path + suffix, copy + suffix)
+  return copy
+}
+
+const HISTORY_LIMIT = 10_000
+
+/** A browser's history: the most recent pages, with how often you visited them. */
+export async function importHistory(sourceId: string, profileDir: string): Promise<HistoryImport[]> {
+  const temp = mkdtempSync(join(app.getPath('temp'), 'zepper-import-'))
+  const { DatabaseSync } = await import('node:sqlite')
+  try {
+    if (sourceId === 'safari') {
+      if (unreadable(SAFARI_HISTORY())) throw new Error(blockedMessage('Safari'))
+      const db = new DatabaseSync(copyDatabase(SAFARI_HISTORY(), 'History.db', temp), { readOnly: true })
+      // Visits count seconds from 2001; each page's latest visit carries its title.
+      const rows = db
+        .prepare(
+          `SELECT i.url AS url, i.visit_count AS visits, v.visit_time AS time, v.title AS title
+           FROM history_items i JOIN history_visits v ON v.history_item = i.id
+           WHERE v.visit_time = (SELECT MAX(visit_time) FROM history_visits WHERE history_item = i.id)
+           ORDER BY v.visit_time DESC LIMIT ${HISTORY_LIMIT}`
+        )
+        .all() as { url: string; visits: number; time: number; title: string | null }[]
+      db.close()
+      return rows.map((r) => ({
+        url: r.url,
+        title: r.title ?? '',
+        visits: Number(r.visits) || 1,
+        lastVisit: Math.round((Number(r.time) + 978_307_200) * 1000)
+      }))
+    }
+    if (sourceId === 'firefox') {
+      const found = firefoxProfiles()
+      if (found === 'blocked') throw new Error(blockedMessage('Firefox'))
+      const profile = found.find((p) => p.dir === profileDir)
+      if (!profile) throw new Error('That Firefox profile wasn’t found.')
+      const db = new DatabaseSync(copyDatabase(join(profile.dir, 'places.sqlite'), 'places.sqlite', temp), { readOnly: true })
+      const query = db.prepare(
+        `SELECT url, title, visit_count, last_visit_date FROM moz_places
+         WHERE visit_count > 0 AND hidden = 0 AND last_visit_date IS NOT NULL ORDER BY last_visit_date DESC LIMIT ${HISTORY_LIMIT}`
+      )
+      query.setReadBigInts(true)
+      const rows = query.all() as { url: string; title: string | null; visit_count: bigint; last_visit_date: bigint }[]
+      db.close()
+      // Firefox counts microseconds from 1970.
+      return rows.map((r) => ({
+        url: r.url,
+        title: r.title ?? '',
+        visits: Number(r.visit_count),
+        lastVisit: Number(r.last_visit_date / 1000n)
+      }))
+    }
+    const browser = CHROMIUM_BROWSERS.find((b) => b.id === sourceId)
+    if (!browser) throw new Error('That browser wasn’t found.')
+    const found = profiles(browser)
+    if (found === 'blocked') throw new Error(blockedMessage(browser.name))
+    const profile = found.find((p) => p.dir === profileDir)
+    if (!profile) throw new Error('That browser profile wasn’t found.')
+    let copy: string
+    try {
+      copy = copyDatabase(join(supportDir(), browser.dir, profile.dir, 'History'), 'History', temp)
+    } catch (error) {
+      throw blocked(error) ? new Error(blockedMessage(browser.name)) : error
+    }
+    const db = new DatabaseSync(copy, { readOnly: true })
+    const query = db.prepare(
+      `SELECT url, title, visit_count, last_visit_time FROM urls WHERE hidden = 0 AND visit_count > 0 ORDER BY last_visit_time DESC LIMIT ${HISTORY_LIMIT}`
+    )
+    query.setReadBigInts(true)
+    const rows = query.all() as { url: string; title: string; visit_count: bigint; last_visit_time: bigint }[]
+    db.close()
+    return rows.map((r) => ({
+      url: r.url,
+      title: r.title ?? '',
+      visits: Number(r.visit_count),
+      lastVisit: fromChromeTime(r.last_visit_time)
+    }))
+  } finally {
+    rmSync(temp, { recursive: true, force: true })
+  }
 }
 
 const blockedMessage = (name: string): string =>
-  `macOS didn’t let Zepper read ${name}’s data. Allow Zepper in Privacy & Security › Full Disk Access, or export a passwords file from ${name} and import that.`
+  `macOS didn’t let Zepper read ${name}’s data. Allow Zepper in Privacy & Security › Full Disk Access, then try again.`
 
 /** Chrome's timestamps count microseconds from 1601 (too large for a JavaScript number, so read as BigInt). */
 const fromChromeTime = (value: bigint): number => Number(value / 1000n) - 11_644_473_600_000

@@ -157,7 +157,7 @@ export class Hub {
     ipcMain.handle(IPC.vault, async (event, request: VaultRequest) => {
       const browser = this.uiOwner(event.sender)
       if (!browser || !request || typeof request !== 'object') return null
-      return handleVaultRequest(this.services.vault, services.settings, browser.window(), request)
+      return handleVaultRequest(this.services.vault, services.history, services.settings, browser.window(), request)
     })
     // Client certificates: you choose which (if any) a site gets.
     app.on('select-client-certificate', (event, wc, url, list, callback) => {

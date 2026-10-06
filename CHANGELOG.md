@@ -8,6 +8,7 @@ The first public version.
 
 ### Added
 
+- A welcome and setup on first launch: import history and passwords from other browsers, pick a look, review privacy, and set Zepper as the default browser.
 - Spaces with gradient themes and optional separate sign-ins (profiles).
 - A vertical sidebar with Essentials, pinned tabs, nestable folders, drag and drop, split view and compact mode.
 - Tidy Tabs: groups tabs into folders with Apple Intelligence (macOS 26 and later), or by site.

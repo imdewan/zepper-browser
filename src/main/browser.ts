@@ -724,6 +724,8 @@ export class Browser {
       const restore = this.restoreTabId && this.tab(this.restoreTabId)
       if (initialUrl) this.openTab(initialUrl)
       else if (restore) this.activateTab(restore.id)
+      // First launch: the welcome and setup, once the window has settled.
+      if (this.kind === 'main' && !this.settings.onboarded) setTimeout(() => this.handle({ type: 'ui.openOnboarding' }), 600)
       // Reloaded later (or after a crash), the overlay starts empty: nothing of it may stay over the window.
       this.overlay.webContents.on('did-finish-load', () => this.resetOverlay())
     })
@@ -1350,6 +1352,10 @@ export class Browser {
         this.setOverlayMode('full')
         this.overlay.webContents.focus()
         return this.emit({ type: 'settings.open', section: command.section }, 'overlay')
+      case 'ui.openOnboarding':
+        this.setOverlayMode('full')
+        this.overlay.webContents.focus()
+        return this.emit({ type: 'onboarding.open' }, 'overlay')
       case 'ui.peekSidebar':
         return this.setPeek(command.show)
       case 'ui.peekLights':

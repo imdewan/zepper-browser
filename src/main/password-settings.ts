@@ -2,7 +2,8 @@ import { app, dialog, shell, type BrowserWindow } from 'electron'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { VaultReplies, VaultRequest } from '@shared/types'
-import { entriesFromCsv, importFromBrowser, importSources } from './importers'
+import type { History } from './history'
+import { entriesFromCsv, importFromBrowser, importHistory, importSources } from './importers'
 import { verifyOwner } from './native'
 import type { SettingsStore } from './settings-store'
 import type { Vault } from './vault'
@@ -31,6 +32,7 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
 
 export async function handleVaultRequest(
   vault: Vault,
+  history: History,
   settings: SettingsStore,
   win: BrowserWindow,
   request: VaultRequest
@@ -76,6 +78,13 @@ export async function handleVaultRequest(
         const added = neverSave.filter((site) => !list.includes(site))
         if (added.length) settings.update({ neverSavePasswords: [...list, ...added] })
         return result
+      } catch (error) {
+        return { error: message(error) }
+      }
+    }
+    case 'importHistory': {
+      try {
+        return history.importVisits(await importHistory(String(request.source), String(request.profile)))
       } catch (error) {
         return { error: message(error) }
       }

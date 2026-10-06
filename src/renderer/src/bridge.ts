@@ -251,7 +251,9 @@ function createMock(): ZepperApi {
           passkeys: [{ id: 'k1', rpId: 'webauthn.io', userName: 'zepper-test', displayName: 'Zepper', created: now, lastUsed: null }]
         },
         reveal: { password: 'hunter2' },
-        sources: [{ id: 'chrome', name: 'Google Chrome', profiles: [{ dir: 'Default', name: 'Person 1' }] }],
+        sources: [
+          { id: 'chrome', name: 'Google Chrome', profiles: [{ dir: 'Default', name: 'Person 1' }], kinds: ['history', 'passwords'] }
+        ],
         importBrowser: { added: 12, skipped: 2, conflicts: 0, invalid: 0 },
         importFile: { added: 3, skipped: 0, conflicts: 0, invalid: 1 },
         export: { saved: '/Users/you/Downloads/Zepper Passwords.csv' }
