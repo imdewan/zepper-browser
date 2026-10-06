@@ -1,8 +1,29 @@
-import { createElement, useEffect, useRef, useState } from 'react'
+import { createElement, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { rectOf } from './util'
 
-/** Where Chrome extensions live (see main/extensions.ts). */
-export const EXTENSIONS_PARTITION = 'zepper-browsing'
+/**
+ * The partition of the session whose extensions the UI shows: the active space's (each space with
+ * its own sign-ins runs the extensions in its own session; see main/extensions.ts). Empty in
+ * private windows, which have no extensions.
+ */
+let partition = 'zepper-browsing'
+const partitionListeners = new Set<() => void>()
+
+export function setExtensionsPartition(next: string): void {
+  if (next === partition) return
+  partition = next
+  for (const listener of partitionListeners) listener()
+}
+
+function usePartition(): string {
+  return useSyncExternalStore(
+    (listener) => {
+      partitionListeners.add(listener)
+      return () => partitionListeners.delete(listener)
+    },
+    () => partition
+  )
+}
 
 export interface ExtensionAction {
   id: string
@@ -39,20 +60,21 @@ const api = (): BrowserActionApi | undefined => (window as unknown as { browserA
 
 /** Installed extensions with a toolbar action, kept up to date. */
 export function useExtensions(): ExtensionsState {
-  const [state, setState] = useState<ExtensionsState>({ actions: [] })
+  const current = usePartition()
+  const [state, setState] = useState<{ partition: string; state: ExtensionsState }>({ partition: current, state: { actions: [] } })
   useEffect(() => {
     const browserAction = api()
-    if (!browserAction) return
-    const onUpdate = (next: ExtensionsState): void => setState(next)
+    if (!browserAction || !current) return
+    const onUpdate = (next: ExtensionsState): void => setState({ partition: current, state: next })
     browserAction.addEventListener('update', onUpdate)
-    browserAction.addObserver(EXTENSIONS_PARTITION)
-    void browserAction.getState(EXTENSIONS_PARTITION).then(onUpdate, () => {})
+    browserAction.addObserver(current)
+    void browserAction.getState(current).then(onUpdate, () => {})
     return () => {
       browserAction.removeEventListener('update', onUpdate)
-      browserAction.removeObserver(EXTENSIONS_PARTITION)
+      browserAction.removeObserver(current)
     }
-  }, [])
-  return state
+  }, [current])
+  return state.partition === current ? state.state : { actions: [] }
 }
 
 export function extensionTitle(action: ExtensionAction, tabId: number | undefined): string {
@@ -60,7 +82,7 @@ export function extensionTitle(action: ExtensionAction, tabId: number | undefine
 }
 
 export function extensionIconUrl(id: string, tabId: number | undefined): string {
-  const params = new URLSearchParams({ tabId: `${tabId ?? -1}`, partition: EXTENSIONS_PARTITION })
+  const params = new URLSearchParams({ tabId: `${tabId ?? -1}`, partition })
   return `crx://extension-icon/${id}/32/2?${params}`
 }
 
@@ -73,7 +95,7 @@ export function activateExtension(
 ): void {
   const box = anchor instanceof Element ? rectOf(anchor) : anchor
   const rect = { left: box.x, top: box.y, width: box.width, height: box.height }
-  void api()?.activate(EXTENSIONS_PARTITION, {
+  void api()?.activate(partition, {
     eventType,
     extensionId: id,
     tabId: tabId ?? -1,
@@ -90,17 +112,18 @@ export function activateExtension(
 export function ExtensionButton({ id, tabId, version }: { id: string; tabId: number | undefined; version: unknown }): React.JSX.Element {
   const host = useRef<HTMLSpanElement>(null)
   const button = useRef<HTMLButtonElement | null>(null)
+  const current = usePartition()
 
   useEffect(() => {
     const el = document.createElement('button', { is: 'browser-action' })
     el.className = 'extension-button'
-    el.setAttribute('partition', EXTENSIONS_PARTITION)
+    el.setAttribute('partition', current)
     el.setAttribute('alignment', 'bottom right')
     el.id = id
     button.current = el
     host.current?.appendChild(el)
     return () => el.remove()
-  }, [id])
+  }, [id, current])
 
   useEffect(() => {
     button.current?.setAttribute('tab', `${tabId ?? -1}`)

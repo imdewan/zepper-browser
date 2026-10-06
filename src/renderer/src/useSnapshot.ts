@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react'
 import type { Snapshot, UiEvent } from '@shared/types'
 import { zepper } from './bridge'
+import { setExtensionsPartition } from './extensions'
 
 export function useSnapshot(): Snapshot | null {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   useEffect(() => {
     let alive = true
-    const off = zepper.onSnapshot((s) => alive && setSnapshot(s))
-    void zepper.getSnapshot().then((s) => alive && setSnapshot((prev) => prev ?? s))
+    const receive = (s: Snapshot): void => {
+      // Extension buttons follow the space you're in (each has its own extension session).
+      setExtensionsPartition(s.extensionsPartition)
+      setSnapshot(s)
+    }
+    const off = zepper.onSnapshot((s) => alive && receive(s))
+    void zepper.getSnapshot().then((s) => alive && setSnapshot((prev) => prev ?? (setExtensionsPartition(s.extensionsPartition), s)))
     return () => {
       alive = false
       off()

@@ -28,6 +28,38 @@ interface PageConfig {
   askForWidevine: boolean
   globalPrivacyControl: boolean
   fingerprintSeed: number | null
+  brand: { name: string; major: string; full: string } | null
+}
+
+/** navigator.userAgentData names the browser brand the request headers do (runs in the page's world). */
+function brandShim(name: string, major: string, full: string): void {
+  const proto = (globalThis as unknown as { NavigatorUAData?: { prototype: object } }).NavigatorUAData?.prototype
+  if (!proto) return
+  const brands = Object.getOwnPropertyDescriptor(proto, 'brands')
+  if (brands?.get) {
+    const original = brands.get
+    Object.defineProperty(proto, 'brands', {
+      ...brands,
+      get(this: object) {
+        const list = original.call(this) as { brand: string; version: string }[]
+        return list.some((b) => b.brand === name) ? list : [{ brand: name, version: major }, ...list]
+      }
+    })
+  }
+  const high = Object.getOwnPropertyDescriptor(proto, 'getHighEntropyValues')
+  if (typeof high?.value === 'function') {
+    const original = high.value as (hints: string[]) => Promise<Record<string, unknown>>
+    Object.defineProperty(proto, 'getHighEntropyValues', {
+      ...high,
+      value(this: object, hints: string[]) {
+        return original.call(this, hints).then((values) => {
+          const add = (list: unknown, version: string): unknown =>
+            Array.isArray(list) && !list.some((b) => b.brand === name) ? [{ brand: name, version }, ...list] : list
+          return { ...values, brands: add(values.brands, major), fullVersionList: add(values.fullVersionList, full) }
+        })
+      }
+    })
+  }
 }
 
 /**
@@ -255,12 +287,53 @@ function reportWidevineNeeds(): void {
   })
 }
 
+/**
+ * The Chrome Web Store works in Zepper (extensions install with "Add to Zepper"), but it still
+ * shows its "Switch to Chrome" banner and prompt: they're hidden there.
+ */
+function hideSwitchToChrome(): void {
+  const hide = (): void => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!/Switch to Chrome/.test(node.nodeValue ?? '')) continue
+      // The prompt is a dialog of its own; the banner is the block holding nothing but its message
+      const message = (node.nodeValue ?? '').trim()
+      let block: HTMLElement | null = node.parentElement?.closest<HTMLElement>('[role="dialog"]') ?? null
+      if (!block) {
+        block = node.parentElement
+        // (with its own button, "Install Zepper", but nothing more)
+        const onlyMessage = (el: HTMLElement): boolean => el.innerText.replace(message, '').trim().length <= 24
+        while (block?.parentElement && block.parentElement !== document.body && onlyMessage(block.parentElement)) {
+          block = block.parentElement
+        }
+      }
+      if (block && block.style.display !== 'none') block.style.setProperty('display', 'none', 'important')
+    }
+  }
+  let queued = false
+  const schedule = (): void => {
+    if (queued) return
+    queued = true
+    requestAnimationFrame(() => {
+      queued = false
+      hide()
+    })
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    hide()
+    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true, characterData: true })
+  })
+}
+
 function applyCompat(): void {
   if (!/^https?:/.test(location.href)) return
+  if (location.hostname === 'chromewebstore.google.com') hideSwitchToChrome()
   try {
     const config = ipcRenderer.sendSync(PAGE_CONFIG_CHANNEL) as PageConfig
     if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
     if (config.globalPrivacyControl) contextBridge.executeInMainWorld({ func: privacyControlShim })
+    if (config.brand)
+      contextBridge.executeInMainWorld({ func: brandShim, args: [config.brand.name, config.brand.major, config.brand.full] })
     if (config.fingerprintSeed !== null) contextBridge.executeInMainWorld({ func: fingerprintShim, args: [config.fingerprintSeed] })
     if (config.signInCompat && location.hostname === 'accounts.google.com') contextBridge.executeInMainWorld({ func: signInPageShim })
     if (config.blockWidevine) {

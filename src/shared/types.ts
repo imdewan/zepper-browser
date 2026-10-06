@@ -159,6 +159,8 @@ export interface Snapshot {
   tidy: { kind: 'ai' } | { kind: 'site'; reason: string }
   /** Zepper opens links from other apps. */
   defaultBrowser: boolean
+  /** The session partition whose extensions the UI shows (the active space's); empty in private windows. */
+  extensionsPartition: string
   /** What Apple's on-device intelligence can do on this Mac. */
   intelligence: IntelligenceStatus
   /** The command bar is open (the empty page steps back while it is). */

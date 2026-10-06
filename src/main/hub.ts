@@ -162,6 +162,8 @@ export class Hub {
       session.fromPartition('zepper-ui')
     )
     this.services.extensions = extensions
+    // Every space's browsing session (not private windows') runs the extensions too.
+    for (const ses of this.sessions) if (ses.isPersistent()) extensions.attach(ses)
     void extensions.start(this.services.settings)
   }
 
@@ -245,6 +247,7 @@ export class Hub {
   private attachSession(ses: Session): void {
     if (this.sessions.has(ses)) return
     this.sessions.add(ses)
+    if (ses.isPersistent()) this.services.extensions?.attach(ses)
     ses.setUserAgent(this.userAgent)
     const { certificates, adblock, settings } = this.services
     certificates.attach(ses)

@@ -9,7 +9,6 @@ import {
   nativeImage,
   nativeTheme,
   screen,
-  session,
   shell,
   type AuthInfo,
   type Certificate,
@@ -66,6 +65,7 @@ import { JsonFile } from './persist'
 import { parse as parseDomain } from 'tldts-experimental'
 import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
 import { suggest } from './suggest'
+import { BROWSING_PARTITION } from './extensions'
 import { tidyGroups } from './tidy'
 import { AiError, intelligence } from './ai'
 import { resolveInput, searchEngineName, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
@@ -1411,7 +1411,7 @@ export class Browser {
     if (space) space.lastTabId = id
     this.layout()
     if (!this.paletteOpen && this.overlayMode !== 'full') view.webContents.focus()
-    if (this.usesExtensions(view.webContents)) this.extensions?.api.selectTab(view.webContents)
+    this.extensions?.apiFor(view.webContents.session)?.selectTab(view.webContents)
     this.broadcast()
     this.showNextPrompt()
     this.showNextDialog()
@@ -2574,6 +2574,13 @@ export class Browser {
     this.translating.delete(tabId)
   }
 
+  /** The partition of the active space's session, for its extension buttons (none in private windows). */
+  private extensionsPartition(): string {
+    if (this.kind === 'private') return ''
+    const profile = this.space(this.activeSpaceId)?.profile ?? DEFAULT_PROFILE
+    return profile === DEFAULT_PROFILE ? BROWSING_PARTITION : `persist:space-${profile}`
+  }
+
   /** What on-device intelligence can do here: nothing when it's turned off in Settings. */
   private get ai(): IntelligenceStatus {
     return this.settings.aiFeatures
@@ -2769,7 +2776,7 @@ export class Browser {
     this.views.set(tab.id, view)
     this.tabByWebContents.set(view.webContents.id, tab.id)
     this.wire(tab.id, view.webContents)
-    if (this.usesExtensions(view.webContents)) this.extensions?.api.addTab(view.webContents, this.win)
+    this.extensions?.apiFor(view.webContents.session)?.addTab(view.webContents, this.win)
     tab.loaded = true
     if (!adopt) void view.webContents.loadURL(tab.url).catch(() => {})
     return view
@@ -2785,11 +2792,6 @@ export class Browser {
     // Essentials too use their space's sign-ins.
     const profile = tab.spaceId ? (this.space(tab.spaceId)?.profile ?? DEFAULT_PROFILE) : DEFAULT_PROFILE
     return this.hub.profileSession(profile)
-  }
-
-  /** Extensions are installed in the default profile only. */
-  private usesExtensions(wc: WebContents): boolean {
-    return wc.session === session.defaultSession
   }
 
   /**
@@ -2851,7 +2853,7 @@ export class Browser {
       if (tab) tab.lastActiveAt = Date.now()
       const space = this.space(this.activeSpaceId)
       if (space) space.lastTabId = tabId
-      if (this.usesExtensions(wc)) this.extensions?.api.selectTab(wc)
+      this.extensions?.apiFor(wc.session)?.selectTab(wc)
       this.broadcast()
     })
     // A page with unsaved changes asks before it's left, as in Chrome (Electron would otherwise cancel silently).
@@ -4158,8 +4160,7 @@ export class Browser {
         { type: 'separator' }
       )
     }
-    // Extensions live in the default profile; pages in a space's own profile have no extension items.
-    const extensionItems = this.usesExtensions(wc) ? (this.extensions?.api.getContextMenuItems(wc, params) ?? []) : []
+    const extensionItems = this.extensions?.apiFor(wc.session)?.getContextMenuItems(wc, params) ?? []
     if (extensionItems.length > 0) items.push(...extensionItems, { type: 'separator' })
     items.push({ label: 'Inspect Element', click: () => wc.inspectElement(params.x, params.y) })
     this.popup(items)
@@ -4364,6 +4365,7 @@ export class Browser {
       tidy: this.settings.aiFeatures ? this.hub.tidy : { kind: 'site', reason: 'Apple Intelligence features are turned off in Settings.' },
       defaultBrowser: this.hub.defaultBrowser,
       intelligence: this.ai,
+      extensionsPartition: this.extensionsPartition(),
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : []

@@ -31,6 +31,8 @@ export interface PageConfig {
   globalPrivacyControl: boolean
   /** Seed for fingerprinting noise on this site (null: protection off here). */
   fingerprintSeed: number | null
+  /** The browser brand pages see in navigator.userAgentData, matching the headers (null: leave as is). */
+  brand: { name: string; major: string; full: string } | null
 }
 
 const FIREFOX_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0'
@@ -68,7 +70,16 @@ export function clientHintHeaders(headers: Record<string, string>, ua: string): 
     return next
   }
   const edge = / Edg\/(\d+)/.exec(ua)
-  if (!edge) return headers
+  if (!edge) {
+    // Presenting as Chrome: the brand list says Google Chrome, as Chrome's does (Electron's says only Chromium).
+    const major = /Chrome\/(\d+)/.exec(ua)?.[1]
+    const next = { ...headers }
+    for (const key of Object.keys(next)) {
+      if (key.toLowerCase() === 'sec-ch-ua' && major)
+        next[key] = `"Google Chrome";v="${major}", "Chromium";v="${major}", "Not?A_Brand";v="24"`
+    }
+    return next
+  }
   const next = { ...headers }
   for (const key of Object.keys(next)) {
     if (key.toLowerCase() === 'sec-ch-ua') {
@@ -96,7 +107,14 @@ export function servePageConfig(settings: SettingsStore, currentUa: () => string
       blockWidevine: !widevine,
       askForWidevine: !widevine && widevinePrompt,
       globalPrivacyControl,
-      fingerprintSeed: blockFingerprinting && pageUrl && protects(pageUrl) ? fingerprintSeed(pageUrl) : null
+      fingerprintSeed: blockFingerprinting && pageUrl && protects(pageUrl) ? fingerprintSeed(pageUrl) : null,
+      brand: chromium
+        ? {
+            name: / Edg\//.test(ua) ? 'Microsoft Edge' : 'Google Chrome',
+            major: /Chrome\/(\d+)/.exec(ua)?.[1] ?? process.versions.chrome.split('.')[0],
+            full: process.versions.chrome
+          }
+        : null
     }
     event.returnValue = config
   })
