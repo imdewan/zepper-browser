@@ -12,7 +12,7 @@ import type { UpdateStatus } from '@shared/types'
  * newer version and unpacks it next to your profile, then shows an Update button. Clicking it
  * restarts into the new version; quitting normally installs it too, so the next launch is updated.
  *
- * The feed is electron-builder's latest-mac.yml on the latest release (its sha512 checks the
+ * The feed is electron-builder's latest-mac.yml, published as FEED_FILE on the latest release (its sha512 checks the
  * download). Installing swaps the app bundle once Zepper has quit, using a small shell script, so
  * it works without Squirrel (which needs a Developer ID signature to trust an update).
  */
@@ -20,6 +20,11 @@ import type { UpdateStatus } from '@shared/types'
 const REPOSITORY = 'imdewan/zepper-browser'
 const FEED = `https://github.com/${REPOSITORY}/releases/latest/download`
 export const RELEASES_PAGE = `https://github.com/${REPOSITORY}/releases/latest`
+/**
+ * electron-builder's latest-mac.yml, renamed so the release page (which lists files alphabetically)
+ * shows the .dmg first: "Zepper-update…" sorts after "Zepper-0.1.0-arm64.dmg" and the .zip.
+ */
+export const FEED_FILE = 'Zepper-update-mac.yml'
 const FIRST_CHECK_MS = 10_000
 const CHECK_EVERY_MS = 4 * 60 * 60 * 1000
 
@@ -122,7 +127,7 @@ export class Updater {
     this.busy = true
     if (manual) this.set({ state: 'checking' })
     try {
-      const response = await net.fetch(`${this.feed}/latest-mac.yml`, { cache: 'no-store' })
+      const response = await net.fetch(`${this.feed}/${FEED_FILE}`, { cache: 'no-store' })
       if (!response.ok) throw new Error(`The update feed answered ${response.status}`)
       const release = parseFeed(await response.text())
       if (!release) throw new Error('The update feed couldn’t be read')

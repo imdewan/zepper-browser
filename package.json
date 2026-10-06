@@ -23,7 +23,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "check": "npm run typecheck && npm run lint && prettier --check .",
-    "dist": "electron-vite build && npm run build:native && node scripts/stage-electron.mjs && electron-builder --mac",
+    "dist": "electron-vite build && npm run build:native && node scripts/stage-electron.mjs && electron-builder --mac && cp dist/latest-mac.yml dist/Zepper-update-mac.yml",
     "dist:browser": "node scripts/dist-browser.mjs",
     "brand:dev": "node scripts/brand-dev-runtime.mjs",
     "build:native": "mkdir -p build/bin && swiftc -O -parse-as-library -swift-version 5 -target arm64-apple-macos26.0 native/zepper-ai/main.swift -o build/bin/zepper-ai && npm run build:credentials",

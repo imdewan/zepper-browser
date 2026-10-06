@@ -8,7 +8,7 @@
 // The entitlement goes on the main app only: Electron's helper apps have no profile, and macOS stops any
 // process that claims a restricted entitlement without one.
 import { execFileSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ENTITLEMENT = 'com.apple.developer.web-browser.public-key-credential'
@@ -53,3 +53,5 @@ run('npx', ['electron-vite', 'build'])
 run('npm', ['run', 'build:native'])
 run('node', ['scripts/stage-electron.mjs'])
 run('npx', ['electron-builder', '--mac', `-c.mac.entitlements=${generated}`, `-c.mac.provisioningProfile=${profile}`])
+// The update feed, under the name the app looks for (see FEED_FILE in src/main/updater.ts).
+copyFileSync(join(root, 'dist', 'latest-mac.yml'), join(root, 'dist', 'Zepper-update-mac.yml'))
