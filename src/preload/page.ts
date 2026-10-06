@@ -369,7 +369,12 @@ function hideChromiumShim(vendor: string): void {
 }
 
 /** Runs in the page's main world: makes `window.chrome` look like real Chrome's and hides passkeys. */
-function signInPageShim(keepPasskeys: boolean): void {
+/**
+ * Runs in the page's main world when presenting as Chrome or Edge: \`window.chrome\` as Chrome has it
+ * (app, csi, loadTimes). Electron leaves it empty, which bot checks (X's sign-in, Google's) read
+ * as an automated browser.
+ */
+function chromeObjectShim(): void {
   const native = <T extends (...args: never[]) => unknown>(name: string, fn: T): T => {
     const source = `function ${name}() { [native code] }`
     Object.defineProperty(fn, 'name', { value: name })
@@ -377,17 +382,8 @@ function signInPageShim(keepPasskeys: boolean): void {
     return fn
   }
   const origin = performance.timeOrigin / 1000
-  const w = window as unknown as { chrome?: Record<string, unknown>; PublicKeyCredential?: unknown }
+  const w = window as unknown as { chrome?: Record<string, unknown> }
   const chrome = w.chrome ?? {}
-  chrome.app ??= {
-    isInstalled: false,
-    InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
-    RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' },
-    getDetails: native('getDetails', () => null),
-    getIsInstalled: native('getIsInstalled', () => false),
-    runningState: native('runningState', () => 'cannot_run')
-  }
-  chrome.csi ??= native('csi', () => ({ startE: origin * 1000, onloadT: origin * 1000 + 300, pageT: performance.now(), tran: 15 }))
   chrome.loadTimes ??= native('loadTimes', () => ({
     requestTime: origin,
     startLoadTime: origin,
@@ -403,7 +399,21 @@ function signInPageShim(keepPasskeys: boolean): void {
     wasAlternateProtocolAvailable: false,
     connectionInfo: 'h2'
   }))
+  chrome.csi ??= native('csi', () => ({ startE: origin * 1000, onloadT: origin * 1000 + 300, pageT: performance.now(), tran: 15 }))
+  chrome.app ??= {
+    isInstalled: false,
+    InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+    RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' },
+    getDetails: native('getDetails', () => null),
+    getIsInstalled: native('getIsInstalled', () => false),
+    runningState: native('runningState', () => 'cannot_run')
+  }
   if (!w.chrome) Object.defineProperty(window, 'chrome', { value: chrome, configurable: true, writable: true })
+}
+
+/** Runs in the page's main world on Google's sign-in page (after chromeObjectShim): passkeys hidden when they can't work. */
+function signInPageShim(keepPasskeys: boolean): void {
+  const w = window as unknown as { PublicKeyCredential?: unknown }
   // Without the system's passkeys, Google would offer one that can't work; hide them.
   if (!keepPasskeys) delete w.PublicKeyCredential
 }
@@ -494,8 +504,10 @@ function applyCompat(): void {
     contextBridge.executeInMainWorld({ func: captureShim, args: [captureEvent] })
     if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
     if (config.globalPrivacyControl) contextBridge.executeInMainWorld({ func: privacyControlShim })
-    if (config.brand)
+    if (config.brand) {
       contextBridge.executeInMainWorld({ func: brandShim, args: [config.brand.name, config.brand.major, config.brand.full] })
+      contextBridge.executeInMainWorld({ func: chromeObjectShim })
+    }
     if (config.fingerprintSeed !== null) contextBridge.executeInMainWorld({ func: fingerprintShim, args: [config.fingerprintSeed] })
     if (config.signInCompat && location.hostname === 'accounts.google.com')
       contextBridge.executeInMainWorld({ func: signInPageShim, args: [config.passkeys] })

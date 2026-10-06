@@ -38,9 +38,12 @@ app.commandLine.appendSwitch('enable-features', 'MacCatapLoopbackAudioForScreenS
 
 // Present a plain Chrome user agent: many sites (Google sign-in, WhatsApp Web,
 // Teams) refuse or degrade when they see Electron or an unknown app token.
+// Chrome itself sends a reduced version ("Chrome/152.0.0.0", the full one only in client hints); a full
+// version in the user agent marks an embedded browser, which sign-in checks (X's, say) treat as a bot.
 app.userAgentFallback = app.userAgentFallback
   .replace(/\(KHTML, like Gecko\) .*?Chrome\//, '(KHTML, like Gecko) Chrome/')
   .replace(/ Electron\/\S+/, '')
+  .replace(/Chrome\/(\d+)\.\d+\.\d+\.\d+/, 'Chrome/$1.0.0.0')
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
