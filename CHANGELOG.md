@@ -4,10 +4,6 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
-### Fixed
-
-- The app icon follows your Mac's icon style (light, dark, clear or tinted) even while Zepper isn't running, instead of switching only once it opened.
-
 ## [0.1.0] - 2026-10-06
 
 The first public version.
@@ -19,6 +15,7 @@ The first public version.
 - Screen sharing like Chrome's: choose a tab, a window or a whole screen, with the tab's sound or the Mac's (macOS 14.2 and later).
 - Tabs show when they're using the camera, microphone or screen.
 - Essentials can be rearranged anywhere in the grid and given an emoji instead of the site's icon.
+- A light and dark app icon (and macOS's clear and tinted styles) that follows your Mac's icon style, open or not.
 - Pop-up blocking that only stops floods: windows you open are never blocked, and sites can open a couple on their own. Always Allow from the notice, or Allow, Auto or Block per site from the lock icon.
 - Settings for updates (status, Check Now, background downloads), each site's permissions (with a reset), and what macOS lets Zepper use.
 - Spaces with gradient themes and optional separate sign-ins (profiles).
