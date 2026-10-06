@@ -1993,27 +1993,31 @@ button.site-button.insecure:hover {
 
 /* ---- Camera, microphone and screen in use ---------------------------------------------- */
 
+/* Solid dots in macOS's indicator colours with a white symbol: they read on any theme, light or dark. */
 .tab-capture {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  height: 18px;
-  margin-right: 2px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--text) 9%, transparent);
+  margin-right: 3px;
 }
 
-/* macOS's indicator colours, solid on any theme. */
+.tab-capture svg {
+  box-sizing: content-box;
+  padding: 3px;
+  border-radius: 50%;
+  color: #fff;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.18);
+}
+
 .capture-camera {
-  color: #30b14f;
+  background: #1f9d47;
 }
 
 .capture-microphone {
-  color: #f08c00;
+  background: #e07b00;
 }
 
 .capture-screen {
-  color: #a24fe0;
+  background: #9b4dd6;
 }

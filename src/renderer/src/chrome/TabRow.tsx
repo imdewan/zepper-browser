@@ -201,9 +201,9 @@ export function CaptureIndicator({ capture }: { capture: CaptureState }): React.
   const what = using.length > 1 ? `${using.slice(0, -1).join(', ')} and ${using[using.length - 1]}` : using[0]
   return (
     <span className="tab-capture" title={`Using your ${what}`} role="img" aria-label={`Using your ${what}`}>
-      {capture.camera && <IconCamera size={12} className="capture-camera" />}
-      {capture.microphone && !capture.camera && <IconMic size={12} className="capture-microphone" />}
-      {capture.screen && <IconScreenShare size={12} className="capture-screen" />}
+      {capture.camera && <IconCamera size={11} className="capture-camera" />}
+      {capture.microphone && !capture.camera && <IconMic size={11} className="capture-microphone" />}
+      {capture.screen && <IconScreenShare size={11} className="capture-screen" />}
     </span>
   )
 }
