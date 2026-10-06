@@ -109,7 +109,7 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
 
 ## Media
 
-- **Now-playing card** for audio in other tabs: play/pause, mute, hide. It offers to pause other tabs when something new starts.
+- **Now-playing card** for audio in other tabs: play/pause, mute, hide. It offers to pause other tabs when something new starts. Only media counts (a video or audio player, or a page that says what's playing), not notification sounds or call audio.
 - **Picture-in-picture:**
   - automatic when you leave a playing video;
   - a rounded, resizable floating player;

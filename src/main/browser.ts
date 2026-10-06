@@ -181,11 +181,22 @@ function makeTab(fields: Partial<Tab> & Pick<Tab, 'kind' | 'url'>): Tab {
 const MEDIA_REFRESH_MS = 3000
 /** Closed tabs remembered for Reopen Closed Tab. */
 const MAX_CLOSED = 50
+/** How long a tab has to keep making sound before it counts as playing media (a notification ping is over by then). */
+const MEDIA_SETTLE_MS = 2500
+
+/**
+ * Whether a frame is playing real media, and its Media Session details: the page publishes what's
+ * playing (Spotify, YouTube…), or a video or audio element of some length (or a live stream) is
+ * playing with sound. Pings, ringtones and call audio are neither. null: no media here.
+ */
 const MEDIA_METADATA_SCRIPT = `(() => {
   const m = navigator.mediaSession && navigator.mediaSession.metadata
-  if (!m) return null
-  const art = (m.artwork || []).slice().sort((a, b) => parseInt(b.sizes || '0') - parseInt(a.sizes || '0'))[0]
-  return { title: m.title || '', artist: m.artist || m.album || '', artwork: art ? new URL(art.src, location.href).href : null }
+  const playing = Array.from(document.querySelectorAll('video, audio')).some(
+    (el) => !el.paused && !el.ended && !el.muted && el.volume > 0 && el.readyState >= 2 && (!isFinite(el.duration) || el.duration >= 20)
+  )
+  if (!(m && m.title) && !playing) return null
+  const art = m ? (m.artwork || []).slice().sort((a, b) => parseInt(b.sizes || '0') - parseInt(a.sizes || '0'))[0] : null
+  return { title: (m && m.title) || '', artist: m ? m.artist || m.album || '' : '', artwork: art ? new URL(art.src, location.href).href : null }
 })()`
 
 /** Pops a playing, audible video into picture-in-picture. Needs a user gesture, which executeJavaScript can grant. */
@@ -3268,10 +3279,13 @@ export class Browser {
     })
     wc.on('audio-state-changed', (event) => {
       update({ audible: event.audible, audibleAt: Date.now() })
-      if (event.audible) {
-        void this.refreshMedia(tabId, wc)
-        this.offerToPauseOthers(tabId)
-      }
+      if (!event.audible) return
+      // Only media gets the now-playing card and the offer to pause the rest: not a sound that's over in
+      // a moment (a notification ping), nor one with no player behind it (a ringtone, call audio).
+      setTimeout(() => {
+        if (wc.isDestroyed() || !this.tab(tabId)?.audible) return
+        void this.refreshMedia(tabId, wc, true).then((media) => media && this.offerToPauseOthers(tabId))
+      }, MEDIA_SETTLE_MS)
     })
     wc.on('enter-html-full-screen', () => {
       this.htmlFullscreen = true
@@ -3468,26 +3482,34 @@ export class Browser {
   }
 
   /** Captures now-playing details when a tab starts making sound. */
-  private async refreshMedia(tabId: string, wc: WebContents): Promise<void> {
+  /**
+   * Reads what a tab is playing, from its page and its frames (an embedded player). `confirm`: the tab
+   * just started making sound, and only gets media details if that's real media. Returns whether it is.
+   */
+  private async refreshMedia(tabId: string, wc: WebContents, confirm = false): Promise<boolean> {
     const tab = this.tab(tabId)
-    if (!tab) return
+    if (!tab || wc.isDestroyed()) return false
     // Players that tick their title every second would ask every second: at most every few seconds.
     const last = this.mediaReadAt.get(tabId) ?? 0
-    if (tab.media && Date.now() - last < MEDIA_REFRESH_MS) return
+    if (tab.media && Date.now() - last < MEDIA_REFRESH_MS) return true
     this.mediaReadAt.set(tabId, Date.now())
-    let meta: { title: string; artist: string; artwork: string | null } | null
-    try {
-      // Reading metadata needs no user gesture, so the page isn't handed one.
-      meta = await wc.executeJavaScript(MEDIA_METADATA_SCRIPT, false)
-    } catch {
-      meta = null
-    }
+    type Meta = { title: string; artist: string; artwork: string | null }
+    // Reading it needs no user gesture, so the page isn't handed one.
+    const found = await Promise.all(
+      wc.mainFrame.framesInSubtree.map(
+        (frame) => frame.executeJavaScript(MEDIA_METADATA_SCRIPT, false).catch(() => null) as Promise<Meta | null>
+      )
+    ).catch(() => [] as (Meta | null)[])
+    const playing = found.filter((m): m is Meta => !!m)
+    if (confirm && playing.length === 0) return false
+    const meta = playing.find((m) => m.title) ?? playing[0] ?? null
     tab.media = {
       title: meta?.title || tab.title,
       artist: meta?.artist || safeHost(tab.url).replace(/^www\./, ''),
       artwork: meta?.artwork ?? null
     }
     this.broadcast()
+    return true
   }
 
   onAdBlocked(webContentsId: number): void {

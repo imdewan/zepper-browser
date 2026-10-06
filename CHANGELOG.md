@@ -17,6 +17,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 ### Fixed
 
 - Sign-in checks that look for automated browsers (X's "We've temporarily limited your login") could flag Zepper: its user agent carried Chrome's full version (Chrome sends a reduced one) and \`window.chrome\` was empty. Both now match Chrome, along with the Sec-CH-UA-Full-Version-List header, \`userAgentData.toJSON()\`, and the blank and srcdoc frames fingerprinting scripts create to look past a browser's patches.
+- Notification sounds (Discord's pings, say) put the site in the now-playing card and offered to pause your music. Only media counts now: sound that lasts, from a page that says what's playing or a real video or audio player (embedded ones too).
 - A page waiting on its own alert (Google Calendar's reminders, say) set off "Page isn't responding". Pages with a dialog open or waiting aren't checked, and the notice now closes by itself when a page recovers.
 - In the command bar, ⌘A then Delete brought back what you'd typed instead of clearing the field. Look-alike history rows (several "YouTube" pages) now show once.
 
