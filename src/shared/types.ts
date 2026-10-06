@@ -47,6 +47,8 @@ export interface CaptureState {
   camera: boolean
   microphone: boolean
   screen: boolean
+  /** Receiving other people's audio or video (a call), even with your camera and microphone off. */
+  call: boolean
 }
 
 export interface MediaInfo {

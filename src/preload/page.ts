@@ -360,8 +360,10 @@ function captureShim(eventName: string): void {
   const live = new Set<MediaStreamTrack>()
   const kinds = new WeakMap<MediaStreamTrack, Kind>()
   let last = ''
+  // Connections receiving other people's audio or video: a call, even when you're only listening.
+  const calls = new Set<RTCPeerConnection>()
   const report = (): void => {
-    const state = { camera: false, microphone: false, screen: false }
+    const state = { camera: false, microphone: false, screen: false, call: calls.size > 0 }
     for (const track of live) {
       if (track.readyState === 'live') state[kinds.get(track) ?? 'camera'] = true
       else live.delete(track)
@@ -408,6 +410,40 @@ function captureShim(eventName: string): void {
         }
       })
     })
+  }
+  const Peer = (globalThis as unknown as { RTCPeerConnection?: typeof RTCPeerConnection }).RTCPeerConnection
+  if (Peer) {
+    const ended = (pc: RTCPeerConnection): void => {
+      if (calls.delete(pc)) report()
+    }
+    const Wrapped = new Proxy(Peer, {
+      construct(target, args, newTarget) {
+        const pc = Reflect.construct(target, args, newTarget) as RTCPeerConnection
+        pc.addEventListener('track', () => {
+          calls.add(pc)
+          report()
+        })
+        pc.addEventListener('connectionstatechange', () => {
+          if (pc.connectionState === 'closed' || pc.connectionState === 'failed') ended(pc)
+        })
+        return pc
+      }
+    })
+    Object.defineProperty(globalThis, 'RTCPeerConnection', { value: Wrapped, writable: true, configurable: true })
+    // close() doesn't fire connectionstatechange.
+    const close = Object.getOwnPropertyDescriptor(Peer.prototype, 'close')
+    if (typeof close?.value === 'function') {
+      Object.defineProperty(Peer.prototype, 'close', {
+        ...close,
+        value: new Proxy(close.value as () => void, {
+          apply(target, self: RTCPeerConnection, args) {
+            const result = Reflect.apply(target, self, args)
+            ended(self)
+            return result
+          }
+        })
+      })
+    }
   }
   const clone = Object.getOwnPropertyDescriptor(track, 'clone')
   if (typeof clone?.value === 'function') {

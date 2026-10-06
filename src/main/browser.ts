@@ -3398,8 +3398,13 @@ export class Browser {
     } catch {
       return
     }
-    const on: CaptureState = { camera: state.camera === true, microphone: state.microphone === true, screen: state.screen === true }
-    this.setFrameCapture(tabId, `${frame.processId}:${frame.routingId}`, on.camera || on.microphone || on.screen ? on : null)
+    const on: CaptureState = {
+      camera: state.camera === true,
+      microphone: state.microphone === true,
+      screen: state.screen === true,
+      call: state.call === true
+    }
+    this.setFrameCapture(tabId, `${frame.processId}:${frame.routingId}`, on.camera || on.microphone || on.screen || on.call ? on : null)
   }
 
   private setFrameCapture(tabId: string, frameKey: string, state: CaptureState | null): void {
@@ -3422,7 +3427,12 @@ export class Browser {
     if (!tab) return
     const frames = [...(this.captureFrames.get(tabId)?.values() ?? [])]
     const next: CaptureState | null = frames.length
-      ? { camera: frames.some((f) => f.camera), microphone: frames.some((f) => f.microphone), screen: frames.some((f) => f.screen) }
+      ? {
+          camera: frames.some((f) => f.camera),
+          microphone: frames.some((f) => f.microphone),
+          screen: frames.some((f) => f.screen),
+          call: frames.some((f) => f.call)
+        }
       : null
     const same = next === tab.capture || (next && tab.capture && JSON.stringify(next) === JSON.stringify(tab.capture))
     if (same) return

@@ -71,6 +71,7 @@ function sameRow(a: TabRowProps, b: TabRowProps): boolean {
     x.capture?.camera === y.capture?.camera &&
     x.capture?.microphone === y.capture?.microphone &&
     x.capture?.screen === y.capture?.screen &&
+    x.capture?.call === y.capture?.call &&
     x.pinned?.url === y.pinned?.url &&
     x.pinned?.favicon === y.pinned?.favicon
   )
@@ -137,7 +138,7 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
           )}
         </div>
 
-        {tab.capture && <CaptureIndicator capture={tab.capture} />}
+        {tab.capture && (tab.capture.camera || tab.capture.microphone || tab.capture.screen) && <CaptureIndicator capture={tab.capture} />}
 
         {((tab.audible && !tab.capture) || tab.muted) && (
           <button
