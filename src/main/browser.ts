@@ -921,7 +921,7 @@ export class Browser {
     return keys.every((k) => this.permissions.get(originOf(requestingOrigin), k) === 'allow')
   }
 
-  handleDownload(item: DownloadItem): void {
+  handleDownload(item: DownloadItem, source?: WebContents | null): void {
     const { downloadAsk, downloadPath } = this.settings
     const folder = downloadPath && existsSync(downloadPath) ? downloadPath : app.getPath('downloads')
     const path = uniquePath(join(folder, item.getFilename()))
@@ -929,11 +929,26 @@ export class Browser {
     if (downloadAsk) item.setSaveDialogOptions({ defaultPath: path })
     else item.setSavePath(path)
     const name = basename(path)
+    // The site you were on (a download link often points at a CDN with an unhelpful name).
+    const site = safeHost(source && !source.isDestroyed() ? source.getURL() : '') || safeHost(item.getURL())
     // The downloads button shows progress; the list lives in the downloads panel.
-    this.hub.downloads.track(item, path, this.kind === 'private')
-    item.on('updated', () => {
+    this.hub.downloads.track(item, path, this.kind === 'private', site)
+    // Once it's really under way (after the save dialog, if Zepper asks where): say what and from where.
+    // The "complete" toast replaces it, as they share an id.
+    let announced = false
+    item.on('updated', (_event, state) => {
       const total = item.getTotalBytes()
       if (total > 0 && !this.win.isDestroyed()) this.win.setProgressBar(item.getReceivedBytes() / total)
+      if (announced || state !== 'progressing') return
+      announced = true
+      const file = basename(item.getSavePath() || path)
+      this.toast({
+        id: `download-${name}`,
+        message: 'Downloading…',
+        description: site ? `${file} from ${site}` : file,
+        action: { label: 'Show', command: { type: 'ui.downloads' } },
+        timeout: 4000
+      })
     })
     item.once('done', (_e, state) => {
       if (!this.win.isDestroyed()) this.win.setProgressBar(-1)

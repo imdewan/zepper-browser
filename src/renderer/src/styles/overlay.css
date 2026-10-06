@@ -2047,17 +2047,16 @@
   transition: width 0.3s ease;
 }
 
+/* Always shown, so what you can do with a download is visible at a glance. */
 .download-actions {
   flex: none;
   display: flex;
   align-items: center;
   gap: 2px;
-  opacity: 0;
-  transition: opacity 0.1s ease;
 }
 
-.download-row:hover .download-actions {
-  opacity: 1;
+.download-action.delete:hover {
+  color: #ff453a;
 }
 
 .download-action {

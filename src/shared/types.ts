@@ -140,6 +140,8 @@ export interface DownloadEntry {
   startedAt: number
   /** From a private window: only shown there, never saved. */
   private: boolean
+  /** The site you downloaded it from (the link itself often points at a CDN). */
+  site?: string
 }
 
 /** Google Widevine (DRM): not in this build, turned off, downloading, usable, or failed to install. */
@@ -558,7 +560,7 @@ export type Command =
   | { type: 'find.query'; text: string; forward: boolean; findNext: boolean }
   | { type: 'find.stop' }
   | { type: 'download.show'; path: string }
-  | { type: 'download.action'; id: string; action: 'open' | 'reveal' | 'pause' | 'resume' | 'cancel' | 'remove' }
+  | { type: 'download.action'; id: string; action: 'open' | 'reveal' | 'pause' | 'resume' | 'cancel' | 'remove' | 'trash' }
   | { type: 'downloads.clear' }
   | { type: 'settings.chooseDownloadFolder' }
   | { type: 'ui.downloads' }

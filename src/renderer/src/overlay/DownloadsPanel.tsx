@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { motion } from 'motion/react'
-import type { DownloadEntry } from '@shared/types'
+import type { Command, DownloadEntry } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconClose, IconFolder, IconPause, IconPlay } from '../icons'
+import { IconClose, IconFolder, IconPause, IconPlay, IconTrash } from '../icons'
 import { cx, hostOf } from '../util'
 
 const units = ['B', 'KB', 'MB', 'GB']
@@ -36,7 +36,7 @@ function status(d: DownloadEntry): string {
     case 'paused':
       return `Paused · ${d.total > 0 ? `${size(d.received)} of ${size(d.total)}` : size(d.received)}`
     case 'completed':
-      return `${size(d.total || d.received)} · ${hostOf(d.url)}`
+      return `${size(d.total || d.received)} · ${d.site || hostOf(d.url)}`
     case 'cancelled':
       return 'Cancelled'
     default:
@@ -50,7 +50,7 @@ function badge(filename: string): string {
   return ext ? ext.toUpperCase() : 'FILE'
 }
 
-const send = (id: string, action: 'open' | 'reveal' | 'pause' | 'resume' | 'cancel' | 'remove'): void =>
+const send = (id: string, action: Extract<Command, { type: 'download.action' }>['action']): void =>
   zepper.send({ type: 'download.action', id, action })
 
 /** Downloads (⌥⌘L or the bottom bar's button): what's downloading and what you downloaded recently. */
@@ -122,6 +122,11 @@ export function DownloadsPanel({ downloads, onClose }: { downloads: DownloadEntr
                     {done && (
                       <button className="download-action" title="Show in Finder" onClick={() => send(d.id, 'reveal')}>
                         <IconFolder size={14} />
+                      </button>
+                    )}
+                    {done && (
+                      <button className="download-action delete" title="Move to Trash" onClick={() => send(d.id, 'trash')}>
+                        <IconTrash size={13} />
                       </button>
                     )}
                     <button

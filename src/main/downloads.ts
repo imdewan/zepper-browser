@@ -35,11 +35,12 @@ export class Downloads {
     return includePrivate ? this.entries : this.entries.filter((e) => !e.private)
   }
 
-  track(item: DownloadItem, path: string, isPrivate: boolean): void {
+  track(item: DownloadItem, path: string, isPrivate: boolean, site?: string): void {
     const entry: DownloadEntry = {
       id: randomUUID(),
       filename: basename(path),
       url: item.getURL(),
+      ...(site ? { site } : {}),
       path,
       state: 'progressing',
       received: 0,
@@ -112,6 +113,15 @@ export class Downloads {
   /** Removes an entry from the list (cancelling it if it's still running); the file stays. */
   remove(id: string): void {
     this.cancel(id)
+    this.entries = this.entries.filter((e) => e.id !== id)
+    this.changed(true)
+  }
+
+  /** Moves the downloaded file to the Trash (you can put it back from there) and drops it from the list. */
+  async trash(id: string): Promise<void> {
+    const entry = this.entry(id)
+    if (!entry || this.active.has(id)) return
+    if (existsSync(entry.path)) await shell.trashItem(entry.path).catch((error) => console.warn('[downloads] could not trash', error))
     this.entries = this.entries.filter((e) => e.id !== id)
     this.changed(true)
   }

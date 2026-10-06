@@ -129,7 +129,7 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
   - Chrome Web Store installs and an extensions panel with pinning.
   - Settings → Extensions to turn extensions on or off, open their options, or remove them.
   - An optional extensions row.
-- **Downloads window:** progress, pause/resume, open, Show in Finder. You choose the save location, or have Zepper ask each time.
+- **Downloads window:** progress, pause/resume, open, Show in Finder, Move to Trash, and the site each download came from. A toast says what's downloading as it starts. You choose the save location, or have Zepper ask each time.
 - **History page** (⌘Y): search, delete entries, and clear the last hour, today or everything. History can also be cleared on quit.
 - **History import** from Chrome, Brave, Edge, Arc, Vivaldi, Opera, Helium, Chromium, Firefox and Safari (in the welcome and setup). Pages you'd already visited keep the higher visit count, so importing twice changes nothing.
 

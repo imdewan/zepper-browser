@@ -4,6 +4,11 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- Starting a download shows which file is downloading and from which site, with a button to open Downloads.
+- Downloads can be moved to the Trash from the downloads panel, whose buttons are now always shown; each download lists the site it came from.
+
 ## [0.1.0] - 2026-10-06
 
 The first public version.

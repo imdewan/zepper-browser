@@ -363,7 +363,7 @@ export class Hub {
       const browser = this.owner(wc) ?? this.focused()
       return browser ? browser.checkPermission(permission, requestingOrigin, details) : false
     })
-    ses.on('will-download', (_event, item, wc) => (this.owner(wc) ?? this.focused())?.handleDownload(item))
+    ses.on('will-download', (_event, item, wc) => (this.owner(wc) ?? this.focused())?.handleDownload(item, wc))
     // Screen sharing (getDisplayMedia): Zepper's picker, in the window showing the page.
     ses.setDisplayMediaRequestHandler((request, callback) => {
       const wc = request.frame ? webContents.fromFrame(request.frame) : undefined
