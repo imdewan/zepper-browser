@@ -1094,6 +1094,8 @@ export class Browser {
   // Commands
 
   handle(command: Command): void {
+    // The passwords dropdown handles all of its own commands.
+    if (command.type.startsWith('autofill.')) return this.autofill.handle(command)
     switch (command.type) {
       case 'tab.activate':
         return this.activateTab(command.tabId)
@@ -1212,14 +1214,6 @@ export class Browser {
       case 'capture.drag':
       case 'capture.dismiss':
         return this.captureCommand(command)
-      case 'autofill.fill':
-      case 'autofill.connect':
-      case 'autofill.pin':
-      case 'autofill.save':
-      case 'autofill.dismiss':
-      case 'autofill.resize':
-      case 'autofill.openPasswords':
-        return this.autofill.handle(command)
       case 'page.translate':
         return void this.translatePage(command.tabId)
       case 'app.openTranslationSettings':
