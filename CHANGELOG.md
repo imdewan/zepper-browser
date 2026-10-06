@@ -15,6 +15,7 @@ The first public version.
 - Arc-style captures of elements, regions, the visible page or the whole page.
 - Per-site switches for each privacy protection; Essentials per space.
 - A built-in password manager: saving and filling passwords, strong password suggestions, passkeys with Touch ID (including passkey autofill), import from Chromium browsers and CSV exports, and export.
+- Passkeys from a phone: scan a QR code with an iPhone or Android phone to sign in with its passkeys.
 - Chrome Web Store extensions in every space.
 - A command bar with search suggestions, open-tab switching and local DuckDuckGo bangs.
 - Privacy protections on by default: ad, tracker and cookie-banner blocking, fingerprinting protection, cross-site cookie blocking, HTTPS upgrades, clean links, Secure DNS and Global Privacy Control, switchable per site.

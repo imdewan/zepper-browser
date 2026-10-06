@@ -1,5 +1,5 @@
 import type { SVGProps } from 'react'
-import { KeyRound, UserRoundKey, type LucideProps } from 'lucide-react'
+import { KeyRound, Smartphone, UserRoundKey, type LucideProps } from 'lucide-react'
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number }
 
@@ -112,6 +112,9 @@ export const IconLock = (p: IconProps): React.JSX.Element => (
 // Password manager glyphs come from Lucide, the icon pack Settings uses.
 export const IconKey = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
   <KeyRound size={size} strokeWidth={1.9} aria-hidden="true" {...(p as LucideProps)} />
+)
+export const IconPhone = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
+  <Smartphone size={size} strokeWidth={1.9} aria-hidden="true" {...(p as LucideProps)} />
 )
 /** A person with a key: passkeys. */
 export const IconPasskey = ({ size = 16, ...p }: IconProps): React.JSX.Element => (

@@ -14,6 +14,9 @@ export interface CredentialsAddon {
   cancel(): void
   verifyOwner(reason: string): Promise<string>
   readKeychain(service: string, account: string): Promise<string>
+  /** Scans for Bluetooth LE advertisements with these 16-bit service UUIDs, reporting JSON events. */
+  bleScan(services: string, onEvent: (json: string) => void): void
+  bleStop(): void
 }
 
 let addon: CredentialsAddon | null | undefined

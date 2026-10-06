@@ -54,6 +54,7 @@
     "lucide-react": "^1.52.0",
     "motion": "^14.0.0",
     "prettier": "^3.9.9",
+    "qrcode-generator": "^2.0.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "~5.9.3",
@@ -129,7 +130,8 @@
         "NSCameraUsageDescription": "Websites you allow can use your camera.",
         "NSMicrophoneUsageDescription": "Websites you allow can use your microphone.",
         "NSLocationWhenInUseUsageDescription": "Websites you allow can use your location.",
-        "NSLocationUsageDescription": "Websites you allow can use your location."
+        "NSLocationUsageDescription": "Websites you allow can use your location.",
+        "NSBluetoothAlwaysUsageDescription": "Zepper uses Bluetooth to check your phone is nearby when you sign in with a passkey from it."
       },
       "target": [
         "dmg",

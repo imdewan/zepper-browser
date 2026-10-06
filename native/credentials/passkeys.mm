@@ -369,6 +369,8 @@ static napi_value Init(napi_env env, napi_value exports) {
       {"cancel", nullptr, Cancel, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"verifyOwner", nullptr, VerifyOwner, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"readKeychain", nullptr, ReadKeychain, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"bleScan", nullptr, BleScan, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"bleStop", nullptr, BleStop, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(properties) / sizeof(properties[0]), properties);
   return exports;

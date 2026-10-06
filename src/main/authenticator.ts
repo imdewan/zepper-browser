@@ -1,4 +1,5 @@
 import { createHash, createPrivateKey, generateKeyPairSync, randomBytes, sign } from 'node:crypto'
+import { encode as cbor, type CborValue as Cbor } from './cbor'
 import type { PasskeyRecord, Vault } from './vault'
 
 /**
@@ -28,38 +29,13 @@ const b64url = (data: Buffer): string => data.toString('base64url')
 const sha256 = (data: Buffer | string): Buffer => createHash('sha256').update(data).digest()
 
 /** The client data the signature covers, as Chrome writes it (key order matters to some sites). */
-function clientData(type: 'webauthn.create' | 'webauthn.get', ceremony: CeremonyBase): Buffer {
+export function clientData(type: 'webauthn.create' | 'webauthn.get', ceremony: Pick<CeremonyBase, 'origin' | 'challenge'>): Buffer {
   return Buffer.from(JSON.stringify({ type, challenge: ceremony.challenge, origin: ceremony.origin, crossOrigin: false }), 'utf8')
 }
 
 function authenticatorData(rpId: string, flags: number, attested?: Buffer): Buffer {
   // The signature counter stays 0, as for passkeys on other platforms.
   return Buffer.concat([sha256(rpId), Buffer.from([flags, 0, 0, 0, 0]), attested ?? Buffer.alloc(0)])
-}
-
-// ---- CBOR (just what attestation objects and COSE keys need) ----
-
-type Cbor = number | string | Buffer | Map<number | string, Cbor>
-
-function cbor(value: Cbor): Buffer {
-  const head = (major: number, n: number): Buffer => {
-    if (n < 24) return Buffer.from([(major << 5) | n])
-    if (n < 0x100) return Buffer.from([(major << 5) | 24, n])
-    if (n < 0x10000) return Buffer.from([(major << 5) | 25, n >> 8, n & 0xff])
-    const b = Buffer.alloc(5)
-    b[0] = (major << 5) | 26
-    b.writeUInt32BE(n, 1)
-    return b
-  }
-  if (typeof value === 'number') return value >= 0 ? head(0, value) : head(1, -1 - value)
-  if (typeof value === 'string') {
-    const text = Buffer.from(value, 'utf8')
-    return Buffer.concat([head(3, text.length), text])
-  }
-  if (Buffer.isBuffer(value)) return Buffer.concat([head(2, value.length), value])
-  const parts = [head(5, value.size)]
-  for (const [k, v] of value) parts.push(cbor(k), cbor(v))
-  return Buffer.concat(parts)
 }
 
 export interface CreateResult {

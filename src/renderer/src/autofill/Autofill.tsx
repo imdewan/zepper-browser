@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
-import type { AutofillItem, AutofillState } from '@shared/types'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import qrcode from 'qrcode-generator'
+import type { AutofillItem, AutofillState, PhoneStatus } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconCheck, IconKey, IconPasskey, IconSparkle } from '../icons'
+import { IconCheck, IconKey, IconPasskey, IconPhone, IconSparkle } from '../icons'
 import { cx } from '../util'
 
 /**
@@ -138,11 +139,7 @@ export function Autofill(): React.JSX.Element | null {
             </span>
           </div>
           <div className="af-actions">
-            {state.other && (
-              <button className="af-quiet" onClick={() => zepper.send({ type: 'autofill.passkeyOther' })}>
-                Use another device…
-              </button>
-            )}
+            <OtherDevices other={state.other} />
             <span className="af-spacer" />
             <button onClick={() => zepper.send({ type: 'autofill.dismiss' })}>Cancel</button>
             <button className="af-primary" onClick={() => zepper.send({ type: 'autofill.passkeyCreate' })}>
@@ -182,16 +179,67 @@ export function Autofill(): React.JSX.Element | null {
             </div>
           )}
           <div className="af-actions">
-            {state.other && (
-              <button className="af-quiet" onClick={() => zepper.send({ type: 'autofill.passkeyOther' })}>
-                Use another device…
-              </button>
-            )}
+            <OtherDevices other={state.other} />
             <span className="af-spacer" />
             <button onClick={() => zepper.send({ type: 'autofill.dismiss' })}>Cancel</button>
           </div>
         </div>
       )}
+      {state.kind === 'passkeyPhone' && <PhoneSheet state={state} />}
+    </div>
+  )
+}
+
+/** Other places a passkey can come from: a phone (QR code), or macOS's own (with Apple's browser entitlement). */
+function OtherDevices({ other }: { other: boolean }): React.JSX.Element {
+  return (
+    <>
+      <button className="af-quiet" onClick={() => zepper.send({ type: 'autofill.passkeyPhone' })}>
+        Use a phone…
+      </button>
+      {other && (
+        <button className="af-quiet" onClick={() => zepper.send({ type: 'autofill.passkeyOther' })}>
+          Other device…
+        </button>
+      )}
+    </>
+  )
+}
+
+const PHONE_STATUS: Record<PhoneStatus, string> = {
+  scan: 'Scan this code with your phone’s camera. Bluetooth needs to be on, on both devices.',
+  connecting: 'Connecting to your phone…',
+  confirm: 'Continue on your phone.',
+  error: ''
+}
+
+/** Signing in with a phone's passkey: the QR code it scans, then where things are. */
+function PhoneSheet({ state }: { state: Extract<AutofillState, { kind: 'passkeyPhone' }> }): React.JSX.Element {
+  const svg = useMemo(() => {
+    const code = qrcode(0, 'L')
+    code.addData(state.qr, 'Alphanumeric')
+    code.make()
+    return code.createSvgTag({ cellSize: 4, margin: 0, scalable: true })
+  }, [state.qr])
+  return (
+    <div className="af-card">
+      <div className="af-head">
+        <span className="af-icon large">
+          <IconPhone size={17} />
+        </span>
+        <span className="af-text">
+          <span className="af-name">{state.create ? 'Save a passkey on your phone' : 'Use a passkey from your phone'}</span>
+          <span className="af-sub">{state.rpId}</span>
+        </span>
+      </div>
+      {state.status === 'scan' && <div className="af-qr" dangerouslySetInnerHTML={{ __html: svg }} />}
+      <div className={cx('af-phone-status', state.status === 'error' && 'af-error')}>
+        {state.status === 'error' ? state.error : PHONE_STATUS[state.status]}
+      </div>
+      <div className="af-actions">
+        <span className="af-spacer" />
+        <button onClick={() => zepper.send({ type: 'autofill.dismiss' })}>Cancel</button>
+      </div>
     </div>
   )
 }

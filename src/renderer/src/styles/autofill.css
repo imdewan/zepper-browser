@@ -189,3 +189,26 @@
 .af-choices .af-row:hover {
   background: var(--hover);
 }
+
+/* The QR code a phone scans (black on white, whatever the theme, so cameras read it). */
+.af-qr {
+  align-self: center;
+  width: 176px;
+  height: 176px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.af-qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.af-phone-status {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+  text-align: center;
+}

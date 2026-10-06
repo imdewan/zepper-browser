@@ -2,8 +2,9 @@ import { BrowserWindow, nativeTheme, type WebContents, type WebFrameMain } from 
 import { randomInt } from 'node:crypto'
 import { parse as parseDomain } from 'tldts-experimental'
 import type { Settings } from '@shared/settings'
-import { IPC, type AutofillItem, type AutofillState, type Command, type Rect } from '@shared/types'
+import { IPC, type AutofillItem, type AutofillState, type Command, type PhoneStatus, type Rect } from '@shared/types'
 import { getAssertion, makeCredential } from './authenticator'
+import { HybridSession } from './hybrid'
 import { verifyOwner } from './native'
 import {
   WebAuthnError,
@@ -122,6 +123,8 @@ export class AutofillController {
   private sheet: Ticket | null = null
   /** Pages waiting to offer passkeys in the dropdown (mediation: "conditional"). */
   private readonly conditional = new Map<WebContents, Ticket>()
+  /** A passkey request being answered by a phone (QR code, Bluetooth, tunnel). */
+  private phone: HybridSession | null = null
 
   constructor(
     private readonly host: AutofillHost,
@@ -177,6 +180,8 @@ export class AutofillController {
         return void this.usePasskey(command.id)
       case 'autofill.passkeyOther':
         return void this.otherDevice()
+      case 'autofill.passkeyPhone':
+        return void this.usePhone()
     }
   }
 
@@ -415,7 +420,9 @@ export class AutofillController {
     if (ticket.timer) clearTimeout(ticket.timer)
     if (this.sheet === ticket) {
       this.sheet = null
-      if (this.state?.kind === 'passkeyCreate' || this.state?.kind === 'passkeyGet') this.close()
+      this.phone?.cancel()
+      this.phone = null
+      if (this.state?.kind === 'passkeyCreate' || this.state?.kind === 'passkeyGet' || this.state?.kind === 'passkeyPhone') this.close()
     }
     for (const [wc, waiting] of this.conditional) if (waiting === ticket) this.conditional.delete(wc)
     ticket.resolve(reply)
@@ -476,8 +483,39 @@ export class AutofillController {
     }
   }
 
+  /** A phone's passkey: show a QR code to scan, then the phone does the rest (FIDO hybrid). */
+  private async usePhone(): Promise<void> {
+    const ticket = this.sheet
+    if (!ticket || this.phone) return
+    const { request } = ticket
+    const session = new HybridSession(request)
+    this.phone = session
+    const render = (status: PhoneStatus, error?: string): void => {
+      if (this.sheet !== ticket) return
+      this.field = null
+      this.show({ kind: 'passkeyPhone', rpId: request.rpId, create: request.kind === 'create', qr: session.qr, status, error })
+    }
+    session.onStatus = (status) => render(status)
+    render('scan')
+    try {
+      this.finish(ticket, ok(await session.run()))
+    } catch (error) {
+      // Cancelled (Cancel, the page, or a timeout) has already been answered.
+      if (session.cancelled) return
+      // The phone's own answer (declined, no passkey, already registered) goes back to the site.
+      if (error instanceof WebAuthnError) return this.finish(ticket, replyFor(error))
+      render('error', error instanceof Error ? error.message : 'Your phone couldn’t complete the request.')
+    } finally {
+      if (this.phone === session) this.phone = null
+    }
+  }
+
   private dismiss(): void {
-    if (this.sheet && (this.state?.kind === 'passkeyCreate' || this.state?.kind === 'passkeyGet'))
+    if (this.phone) {
+      this.phone.cancel()
+      this.phone = null
+    }
+    if (this.sheet && (this.state?.kind === 'passkeyCreate' || this.state?.kind === 'passkeyGet' || this.state?.kind === 'passkeyPhone'))
       return this.finish(this.sheet, NOT_ALLOWED)
     if (this.state?.kind === 'save') return this.answerSave('later')
     this.close()
@@ -614,7 +652,7 @@ export class AutofillController {
       const wc = this.sheet?.wc ?? this.saving?.wc
       const page = (wc && !wc.isDestroyed() && this.host.pageBounds(wc)) || this.windowBounds()
       width = SHEET_WIDTH
-      if (state.kind === 'passkeyCreate' || state.kind === 'passkeyGet') {
+      if (state.kind === 'passkeyCreate' || state.kind === 'passkeyGet' || state.kind === 'passkeyPhone') {
         // Passkey sheets drop from the top centre of the page, like other browsers'.
         x = page.x + (page.width - width) / 2
       } else {

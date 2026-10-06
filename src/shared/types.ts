@@ -336,6 +336,11 @@ export type AutofillState =
   | { kind: 'passkeyCreate'; rpId: string; userName: string; other: boolean }
   /** A site wants you to sign in with a passkey. */
   | { kind: 'passkeyGet'; rpId: string; passkeys: { id: string; userName: string; displayName: string }[]; other: boolean }
+  /** Using a passkey from a phone: scan the QR code, then confirm on the phone (FIDO hybrid). */
+  | { kind: 'passkeyPhone'; rpId: string; create: boolean; qr: string; status: PhoneStatus; error?: string }
+
+/** Where a phone passkey request is: showing the code, connecting to the phone, waiting for you on it. */
+export type PhoneStatus = 'scan' | 'connecting' | 'confirm' | 'error'
 
 /** A saved password, as Settings lists it (never with the password). */
 export interface LoginSummary {
@@ -489,6 +494,7 @@ export type Command =
   | { type: 'autofill.passkeyCreate' }
   | { type: 'autofill.passkeyChoose'; id: string }
   | { type: 'autofill.passkeyOther' }
+  | { type: 'autofill.passkeyPhone' }
   /** Translate the page into your language, or back to the original. */
   | { type: 'page.translate'; tabId: string }
   | { type: 'app.openTranslationSettings' }
