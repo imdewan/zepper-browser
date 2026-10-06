@@ -191,8 +191,9 @@ const MEDIA_SETTLE_MS = 2500
  */
 const MEDIA_METADATA_SCRIPT = `(() => {
   const m = navigator.mediaSession && navigator.mediaSession.metadata
+  // A call's streams (camera, screen, other people) aren't media.
   const playing = Array.from(document.querySelectorAll('video, audio')).some(
-    (el) => !el.paused && !el.ended && !el.muted && el.volume > 0 && el.readyState >= 2 && (!isFinite(el.duration) || el.duration >= 20)
+    (el) => !el.srcObject && !el.paused && !el.ended && !el.muted && el.volume > 0 && el.readyState >= 2 && (!isFinite(el.duration) || el.duration >= 20)
   )
   if (!(m && m.title) && !playing) return null
   const art = m ? (m.artwork || []).slice().sort((a, b) => parseInt(b.sizes || '0') - parseInt(a.sizes || '0'))[0] : null
@@ -203,7 +204,7 @@ const MEDIA_METADATA_SCRIPT = `(() => {
 const AUTO_PIP_SCRIPT = `(async () => {
   if (document.pictureInPictureElement) return 'already'
   const video = Array.from(document.querySelectorAll('video')).find(
-    (v) => !v.paused && !v.ended && !v.muted && v.volume > 0 && v.readyState >= 2 && v.videoWidth >= 160 && !v.disablePictureInPicture
+    (v) => !v.srcObject && !v.paused && !v.ended && !v.muted && v.volume > 0 && v.readyState >= 2 && v.videoWidth >= 160 && !v.disablePictureInPicture
   )
   if (!video) return 'none'
   await video.requestPictureInPicture()
@@ -241,6 +242,10 @@ const MIN_REVEAL_EDGE = 4
 
 /** How long a playing tab must stay out of view before its video floats. */
 const PIP_DELAY_MS = 250
+/** window.open's name for a page's floating call window (see documentPipShim in the page preload). */
+const DOCUMENT_PIP_FRAME = 'zepper-document-pip'
+/** Calls the page's "enterpictureinpicture" handler (Meet's own floating call window), as Chrome does on leaving a call. */
+const ENTER_PIP_SCRIPT = `(() => { const enter = window[Symbol.for('zepper.enterPictureInPicture')]; return enter ? enter() : false })()`
 
 /** Skips the floating (or playing, or first) video/audio element by some seconds; true when it found one. */
 function mediaSeekScript(seconds: number): string {
@@ -548,6 +553,10 @@ export class Browser {
   private readonly popups = new Map<BrowserWindow, string>()
   /** When each tab's page last had a click or key press (for pop-up blocking). */
   private readonly lastInput = new Map<number, number>()
+  /** Pages' floating call windows (Document Picture-in-Picture), by the tab that opened each. */
+  private readonly docPips = new Map<string, BrowserWindow>()
+  /** Tabs whose floating call window Zepper asked for when you left them: it closes when you come back. */
+  private readonly autoDocPips = new Set<string>()
   /** What each tab's frames are capturing (camera, microphone, screen), by frame. */
   private readonly captureFrames = new Map<string, Map<string, CaptureState>>()
   /** When each page last opened a window on its own (no click), for spotting pop-up floods. */
@@ -1628,6 +1637,10 @@ export class Browser {
       this.activeSpaceId = tab.spaceId
     }
     if (this.pip.activeTabId === id) this.pip.exit()
+    if (this.autoDocPips.has(id)) {
+      this.autoDocPips.delete(id)
+      this.docPips.get(id)?.close()
+    }
     if (this.swipeOffset !== 0) {
       this.stopSwipeAnimation()
       this.swipeOffset = 0
@@ -1658,6 +1671,17 @@ export class Browser {
     const tab = this.tab(tabId)
     const wc = this.views.get(tabId)?.webContents
     const view = this.views.get(tabId)
+    // A call (camera or microphone on): the site's own floating call window, as Chrome opens it, not
+    // Zepper's player (which would show your screen-share preview or one participant).
+    if (tab?.capture && wc) {
+      if (!tab.capture.camera && !tab.capture.microphone) return
+      await new Promise((resolve) => setTimeout(resolve, PIP_DELAY_MS))
+      if (this.windowClosed || wc.isDestroyed() || this.activeTabId === tabId || this.attached.has(tabId) || this.docPips.has(tabId)) return
+      this.autoDocPips.add(tabId)
+      const opened = await wc.executeJavaScript(ENTER_PIP_SCRIPT, true).catch(() => false)
+      if (!opened) this.autoDocPips.delete(tabId)
+      return
+    }
     if (!tab?.audible || tab.muted || !wc || !view) return
     if (this.attached.has(tabId)) return
     // Give quick tab flicks (⌃Tab cycling, a glance at another tab) a moment, so the player only
@@ -3283,7 +3307,8 @@ export class Browser {
       // Only media gets the now-playing card and the offer to pause the rest: not a sound that's over in
       // a moment (a notification ping), nor one with no player behind it (a ringtone, call audio).
       setTimeout(() => {
-        if (wc.isDestroyed() || !this.tab(tabId)?.audible) return
+        // A call (camera, microphone or screen in use) isn't media either.
+        if (wc.isDestroyed() || !this.tab(tabId)?.audible || this.tab(tabId)?.capture) return
         void this.refreshMedia(tabId, wc, true).then((media) => media && this.offerToPauseOthers(tabId))
       }, MEDIA_SETTLE_MS)
     })
@@ -3345,7 +3370,10 @@ export class Browser {
     wc.on('input-event', (_event, input) => {
       if (USER_INPUT.has(input.type)) this.lastInput.set(wcId, Date.now())
     })
-    wc.on('did-create-window', (win) => this.adoptPopup(win, tabId))
+    wc.on('did-create-window', (win, details) => {
+      this.adoptPopup(win, tabId)
+      if (details.frameName === DOCUMENT_PIP_FRAME) this.floatDocumentPip(win, tabId)
+    })
     // A page (or frame) that goes elsewhere leaves its camera, microphone and screen behind.
     wc.on('did-start-navigation', (details) => {
       if (details.isMainFrame && !details.isSameDocument) this.clearCapture(tabId)
@@ -3404,6 +3432,11 @@ export class Browser {
 
   private handleWindowOpen(openerId: string, details: HandlerDetails): WindowOpenHandlerResponse {
     const openerContents = this.views.get(openerId)?.webContents
+    // A page's floating call window: only when you asked (a click) or Zepper did (leaving a call).
+    if (details.frameName === DOCUMENT_PIP_FRAME && openerContents) {
+      const asked = Date.now() - (this.lastInput.get(openerContents.id) ?? 0) <= USER_ACTIVATION_MS || this.autoDocPips.has(openerId)
+      return asked ? { action: 'allow', overrideBrowserWindowOptions: this.documentPipOptions(details.features) } : { action: 'deny' }
+    }
     if (openerContents && this.blocksPopup(openerContents)) {
       if (openerId === this.activeTabId || this.attached.has(openerId)) {
         const origin = originOf(openerContents.getURL())
@@ -3474,6 +3507,40 @@ export class Browser {
     recent.push(now)
     this.popupTimes.set(opener.id, recent)
     return recent.length > POPUP_BURST_LIMIT
+  }
+
+  /** The floating call window: the size the page asked for, bottom right, above everything (like Chrome's). */
+  private documentPipOptions(features: string): Electron.BrowserWindowConstructorOptions {
+    const size = (key: string, fallback: number): number => Number(new RegExp(`${key}=(\\d+)`).exec(features)?.[1]) || fallback
+    const width = size('width', 400)
+    const height = size('height', 300)
+    const area = screen.getDisplayMatching(this.win.getBounds()).workArea
+    const margin = Math.round(Math.max(20, area.width * 0.015))
+    return {
+      width,
+      height,
+      x: area.x + area.width - width - margin,
+      y: area.y + area.height - height - margin,
+      // A floating panel: stays above full-screen apps and on every desktop, and clicking it doesn't activate Zepper.
+      type: 'panel',
+      alwaysOnTop: true,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      backgroundColor: '#000000',
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegrationInSubFrames: true, safeDialogs: true }
+    }
+  }
+
+  private floatDocumentPip(win: BrowserWindow, tabId: string): void {
+    win.setAlwaysOnTop(true, 'floating')
+    this.docPips.get(tabId)?.close()
+    this.docPips.set(tabId, win)
+    win.once('closed', () => {
+      if (this.docPips.get(tabId) === win) this.docPips.delete(tabId)
+      this.autoDocPips.delete(tabId)
+    })
   }
 
   /** A choice you made in Zepper's own UI for a page (a prompt, the share picker) counts as a click there. */

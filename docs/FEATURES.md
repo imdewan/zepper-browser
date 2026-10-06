@@ -111,7 +111,7 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
 
 - **Now-playing card** for audio in other tabs: play/pause, mute, hide. It offers to pause other tabs when something new starts. Only media counts (a video or audio player, or a page that says what's playing), not notification sounds or call audio.
 - **Picture-in-picture:**
-  - automatic when you leave a playing video;
+  - automatic when you leave a playing video; leaving a call (camera or microphone on) opens the site's own floating call window instead, as Chrome does (Google Meet), and it closes when you come back;
   - a rounded, resizable floating player;
   - ±10s, play/pause and mute controls, plus keyboard shortcuts.
 - **Protected video:** opt-in Google Widevine, through castLabs' Electron, with VMP signing.

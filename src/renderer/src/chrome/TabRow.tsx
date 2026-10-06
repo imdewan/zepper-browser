@@ -139,7 +139,7 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
 
         {tab.capture && <CaptureIndicator capture={tab.capture} />}
 
-        {(tab.audible || tab.muted) && (
+        {((tab.audible && !tab.capture) || tab.muted) && (
           <button
             className={cx('tab-button', 'audio', tab.muted ? 'muted' : 'playing')}
             title={tab.muted ? 'Unmute tab' : 'Mute tab'}

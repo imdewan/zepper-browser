@@ -7,7 +7,7 @@ import { BrowserWindow, WebContentsView, screen, type Rectangle, type WebContent
  */
 const MARK_SCRIPT = `(() => {
   const playing = Array.from(document.querySelectorAll('video')).filter(
-    (v) => !v.paused && !v.ended && v.readyState >= 2 && v.videoWidth >= 160
+    (v) => !v.srcObject && !v.paused && !v.ended && v.readyState >= 2 && v.videoWidth >= 160
   )
   const area = (v) => v.getBoundingClientRect().width * v.getBoundingClientRect().height
   const video = playing.sort((a, b) => area(b) - area(a))[0]

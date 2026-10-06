@@ -427,6 +427,78 @@ function captureShim(eventName: string): void {
 
 const CAPTURE_CHANNEL = 'zepper:capture'
 
+/** window.open's name for a page's floating window (Zepper keeps it on top), and the key for "switching away". */
+const DOCUMENT_PIP_FRAME = 'zepper-document-pip'
+const ENTER_PIP_KEY = 'zepper.enterPictureInPicture'
+
+/**
+ * Document Picture-in-Picture (a call's floating window: Meet, Teams, Zoom) as Chrome does it (runs in
+ * the page's world). Electron hands back a window it never shows; this opens a real one (a small
+ * window Zepper keeps on top) and fires "enter" as Chrome would. It also remembers the page's
+ * "enterpictureinpicture" handler, so Zepper can call it when you switch away from a call, as Chrome
+ * does. Patched functions are Proxies, so they still look native.
+ */
+function documentPipShim(frameName: string, triggerKey: string): void {
+  type Pip = EventTarget & { requestWindow?: unknown }
+  const pip = (window as unknown as { documentPictureInPicture?: Pip }).documentPictureInPicture
+  const proto = pip && (Object.getPrototypeOf(pip) as object)
+  let current: Window | null = null
+  if (proto) {
+    const request = Object.getOwnPropertyDescriptor(proto, 'requestWindow')
+    if (typeof request?.value === 'function') {
+      Object.defineProperty(proto, 'requestWindow', {
+        ...request,
+        value: new Proxy(request.value as (options?: { width?: number; height?: number }) => Promise<Window>, {
+          apply(_target, self: EventTarget, args: [{ width?: number; height?: number } | undefined]) {
+            const options = args[0] ?? {}
+            const width = Math.round(Math.min(Math.max(options.width ?? 400, 240), 1200))
+            const height = Math.round(Math.min(Math.max(options.height ?? 300, 160), 900))
+            if (current && !current.closed) current.close()
+            const opened = window.open('', frameName, `popup,width=${width},height=${height}`)
+            if (!opened) return Promise.reject(new DOMException('Picture-in-picture isn’t allowed now.', 'NotAllowedError'))
+            current = opened
+            opened.addEventListener('pagehide', () => {
+              if (current === opened) current = null
+            })
+            const event = new Event('enter')
+            Object.defineProperty(event, 'window', { value: opened })
+            self.dispatchEvent(event)
+            return Promise.resolve(opened)
+          }
+        })
+      })
+    }
+    const property = Object.getOwnPropertyDescriptor(proto, 'window')
+    if (property?.get) {
+      Object.defineProperty(proto, 'window', {
+        ...property,
+        get: new Proxy(property.get, { apply: () => (current && !current.closed ? current : null) })
+      })
+    }
+  }
+  const sessionProto = navigator.mediaSession && (Object.getPrototypeOf(navigator.mediaSession) as object)
+  const setHandler = sessionProto && Object.getOwnPropertyDescriptor(sessionProto, 'setActionHandler')
+  let enter: ((details: { action: string }) => void) | null = null
+  if (sessionProto && typeof setHandler?.value === 'function') {
+    Object.defineProperty(sessionProto, 'setActionHandler', {
+      ...setHandler,
+      value: new Proxy(setHandler.value as (action: string, handler: unknown) => void, {
+        apply(target, self, args: [string, unknown]) {
+          if (args[0] === 'enterpictureinpicture') enter = typeof args[1] === 'function' ? (args[1] as typeof enter) : null
+          return Reflect.apply(target, self, args)
+        }
+      })
+    })
+  }
+  Object.defineProperty(window, Symbol.for(triggerKey), {
+    value: () => {
+      if (!enter) return false
+      enter({ action: 'enterpictureinpicture' })
+      return true
+    }
+  })
+}
+
 const DRM_NEEDED_CHANNEL = 'zepper:drm-needed'
 /** Fired on the document (shared by the page's world and ours) when the page asks for Widevine. */
 const DRM_NEEDED_EVENT = 'zepper-drm-needed'
@@ -546,6 +618,7 @@ function applyCompat(): void {
     const captureEvent = `zepper-capture-${crypto.randomUUID()}`
     document.addEventListener(captureEvent, (event) => ipcRenderer.send(CAPTURE_CHANNEL, String((event as CustomEvent).detail)))
     contextBridge.executeInMainWorld({ func: captureShim, args: [captureEvent] })
+    if (window === window.top) contextBridge.executeInMainWorld({ func: documentPipShim, args: [DOCUMENT_PIP_FRAME, ENTER_PIP_KEY] })
     if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
     if (config.globalPrivacyControl) contextBridge.executeInMainWorld({ func: privacyControlShim })
     if (config.brand)
