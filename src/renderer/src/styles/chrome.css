@@ -408,6 +408,10 @@ button.site-button.insecure:hover {
   opacity: 0.8;
   white-space: nowrap;
   overflow: hidden;
+}
+
+/* Only an address too long for the pill fades out at its end. */
+.url-pill-host.overflowing {
   mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
 }
 
@@ -422,23 +426,30 @@ button.site-button.insecure:hover {
 
 /* Copy URL: appears on hover, where the blocked count used to be. */
 .url-pill-copy {
-  width: 24px;
+  width: 0;
   height: 24px;
   flex: none;
+  /* Takes no room until you hover the pill (the gap before it is cancelled too). */
+  margin-left: -6px;
   margin-right: -4px;
   border-radius: 7px;
   display: grid;
   place-items: center;
+  overflow: hidden;
   color: var(--text-2);
   opacity: 0;
   transition:
     opacity 0.12s ease,
+    width 0.15s ease,
+    margin 0.15s ease,
     background-color 0.1s ease,
     color 0.1s ease;
 }
 
 .url-pill:hover .url-pill-copy,
 .url-pill-copy.copied {
+  width: 24px;
+  margin-left: 0;
   opacity: 1;
 }
 

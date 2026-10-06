@@ -133,6 +133,19 @@ function UrlPill({ tab, ai }: { tab: Tab | null; ai: boolean }): React.JSX.Eleme
   // Plain HTTP: an open padlock (with "Not secure" in its tooltip and the site panel), not a word that crowds the address.
   const insecure = tab?.url.startsWith('http://')
   const pill = useRef<HTMLDivElement>(null)
+  const hostRef = useRef<HTMLSpanElement>(null)
+  const [overflowing, setOverflowing] = useState(false)
+  const host = tab ? hostOf(tab.url) : ''
+  // The fade at the end only when the address doesn't fit.
+  useEffect(() => {
+    const el = hostRef.current
+    if (!el) return
+    const check = (): void => setOverflowing(el.scrollWidth > el.clientWidth + 1)
+    check()
+    const observer = new ResizeObserver(check)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [host])
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef(0)
   const copy = (e: React.MouseEvent): void => {
@@ -162,7 +175,9 @@ function UrlPill({ tab, ai }: { tab: Tab | null; ai: boolean }): React.JSX.Eleme
           >
             {secure ? <IconLock size={12} /> : insecure ? <IconLockOpen size={12} /> : <IconGlobe size={12} />}
           </button>
-          <span className="url-pill-host">{hostOf(tab.url)}</span>
+          <span ref={hostRef} className={cx('url-pill-host', overflowing && 'overflowing')}>
+            {hostOf(tab.url)}
+          </span>
           {(tab.language || tab.translation) && (
             <button
               className={cx('url-pill-translate', tab.translation && 'on', tab.translation === 'working' && 'working')}
