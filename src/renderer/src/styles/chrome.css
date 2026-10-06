@@ -292,22 +292,9 @@
   }
 }
 
-/* With the Update button too, the buttons start sharing the row sooner (all fit at full size from 230px). */
-@container (max-width: 229.5px) {
-  .top-row:has(.update-button) {
-    gap: 0;
-  }
-  .top-row:has(.update-button) .extensions-button {
-    margin-left: 8px;
-  }
-  .top-row:has(.update-button) .update-button {
-    width: 22px;
-    height: 22px;
-    margin: 0 2px;
-  }
-  .top-row:has(.update-button) .icon-button {
-    width: clamp(18px, calc((100cqw - 104px) / 4), 28px);
-  }
+/* With the Update button (which stands in for extensions, back and forward), the row is traffic
+   lights, the button and reload: it fits whole, icon and word, down to the narrowest sidebar. */
+@container (max-width: 215.5px) {
   .top-row:has(.update-button) .private-badge {
     display: none;
   }
@@ -332,14 +319,14 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 24px;
-  margin-right: 4px;
-  padding: 0 9px 0 7px;
-  border-radius: 12px;
+  gap: 4px;
+  height: 22px;
+  margin-right: 2px;
+  padding: 0 8px 0 6px;
+  border-radius: 11px;
   background: color-mix(in srgb, var(--accent) 90%, #000);
   color: #fff;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   -webkit-app-region: no-drag;
   transition:
@@ -353,19 +340,6 @@
 
 .update-button:active {
   transform: scale(0.96);
-}
-
-/* A narrow sidebar has no room for the word: the button keeps its colour and icon (the tooltip says the rest). */
-@container (max-width: 300px) {
-  .update-button {
-    width: 24px;
-    justify-content: center;
-    padding: 0;
-  }
-
-  .update-button span {
-    display: none;
-  }
 }
 
 .icon-button {

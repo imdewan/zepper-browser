@@ -123,7 +123,7 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
 
 ## Updates
 
-- Zepper checks for a new version in the background and downloads it. An **Update** button then stays in the sidebar until you click it, which restarts into the new version; quitting installs it too.
+- Zepper checks for a new version in the background and downloads it. An **Update** button then stays at the top of the sidebar until you click it, which restarts into the new version; quitting installs it too. Until then it takes the place of the extensions, back and forward buttons (⌘[ and ⌘] still work).
 - About Zepper (or Zepper › Check for Updates…) checks straight away and shows where it's at; so does Settings → General, which can also turn background downloads off.
 - Installed somewhere Zepper can't replace itself (straight from the disk image, say), the button opens the download page instead.
 

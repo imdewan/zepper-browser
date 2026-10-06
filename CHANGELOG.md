@@ -18,6 +18,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
+- The Update button always shows its word, however narrow the sidebar: while an update waits, it takes the place of the extensions, back and forward buttons (⌘[ and ⌘] still go back and forward).
 - The downloads panel no longer has Clear list or Remove from list (Move to Trash and Cancel stay), and shows a clearer empty state.
 
 ### Fixed

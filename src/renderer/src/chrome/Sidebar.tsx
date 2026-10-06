@@ -70,7 +70,10 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
   )
 }
 
-/** Top row: traffic lights, extensions, the Update button when there is one, then back, forward and reload. */
+/**
+ * Top row: traffic lights, extensions, then back, forward and reload. When an update is waiting, its
+ * button takes the place of extensions, back and forward (⌘[ and ⌘] still work) so it fits in full.
+ */
 function TopRow({
   tab,
   isPrivate,
@@ -85,10 +88,11 @@ function TopRow({
   const extensionsRef = useRef<HTMLButtonElement>(null)
   const extensions = useExtensions()
   const pinned = useSnapshotPinnedExtensions(extensions)
+  const updating = update.state === 'ready' || update.state === 'manual'
   return (
     <div className="top-row drag">
       <div className="traffic-light-space" />
-      {!isPrivate && (
+      {!isPrivate && !updating && (
         <>
           <button
             ref={extensionsRef}
@@ -118,27 +122,31 @@ function TopRow({
       )}
       <div className="top-row-spacer" />
       {/* Like Chrome's: stays until you update. */}
-      {(update.state === 'ready' || update.state === 'manual') && (
+      {updating && (
         <button
           className="update-button"
           title={update.state === 'ready' ? `Restart to update to Zepper ${update.version}` : `Download Zepper ${update.version}`}
           onClick={() => zepper.send({ type: 'app.restartToUpdate' })}
         >
-          <IconUpdate size={14} />
+          <IconUpdate size={13} />
           <span>Update</span>
         </button>
       )}
-      <button className="icon-button" title="Back (⌘[)" disabled={!tab?.canGoBack} onClick={() => zepper.send({ type: 'nav.back' })}>
-        <IconBack size={17} />
-      </button>
-      <button
-        className="icon-button"
-        title="Forward (⌘])"
-        disabled={!tab?.canGoForward}
-        onClick={() => zepper.send({ type: 'nav.forward' })}
-      >
-        <IconForward size={17} />
-      </button>
+      {!updating && (
+        <>
+          <button className="icon-button" title="Back (⌘[)" disabled={!tab?.canGoBack} onClick={() => zepper.send({ type: 'nav.back' })}>
+            <IconBack size={17} />
+          </button>
+          <button
+            className="icon-button"
+            title="Forward (⌘])"
+            disabled={!tab?.canGoForward}
+            onClick={() => zepper.send({ type: 'nav.forward' })}
+          >
+            <IconForward size={17} />
+          </button>
+        </>
+      )}
       <button className="icon-button" title="Reload (⌘R)" disabled={!tab} onClick={() => zepper.send({ type: 'nav.reload' })}>
         <IconReload size={16} />
       </button>
