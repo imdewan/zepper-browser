@@ -4,15 +4,6 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
-### Added
-
-- Essentials can have an emoji instead of the site's icon (Change Icon… in their menu).
-
-### Fixed
-
-- The floating video player showed no controls and couldn't be dragged in the installed app.
-- Rearranging Essentials only worked at the start or end of the grid; drops now land wherever you point, gaps between tiles included.
-
 ## [0.1.0] - 2026-10-06
 
 The first public version.
@@ -23,6 +14,7 @@ The first public version.
 - Automatic updates: new versions download in the background, an Update button restarts into them, and quitting installs them too.
 - Screen sharing like Chrome's: choose a tab, a window or a whole screen, with the tab's sound or the Mac's (macOS 14.2 and later).
 - Tabs show when they're using the camera, microphone or screen.
+- Essentials can be rearranged anywhere in the grid and given an emoji instead of the site's icon.
 - Pop-up blocking that only stops floods: windows you open are never blocked, and sites can open a couple on their own. Always Allow from the notice, or Allow, Auto or Block per site from the lock icon.
 - Settings for updates (status, Check Now, background downloads), each site's permissions (with a reset), and what macOS lets Zepper use.
 - Spaces with gradient themes and optional separate sign-ins (profiles).
