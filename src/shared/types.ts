@@ -504,6 +504,8 @@ export type Command =
   /** Translate the page into your language, or back to the original. */
   | { type: 'page.translate'; tabId: string }
   | { type: 'app.openTranslationSettings' }
+  /** System Settings › Privacy & Security › Camera or Microphone. */
+  | { type: 'app.openMediaPrivacySettings'; kind: 'camera' | 'microphone' }
   /** Summarise the current page, or answer a question about it (with earlier questions and answers). */
   | { type: 'ui.openAssistant'; anchor?: Rect }
   | { type: 'assistant.run'; requestId: string; question?: string; history?: [string, string][] }

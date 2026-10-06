@@ -143,7 +143,8 @@ export class Hub {
     servePageConfig(
       services.settings,
       () => this.userAgent,
-      (url) => services.adblock.protects(url, 'fingerprinting')
+      (url) => services.adblock.protects(url, 'fingerprinting'),
+      (sender, origin) => this.owner(sender)?.blockedPermissions(origin) ?? []
     )
     // Passkeys: pages' WebAuthn requests, answered by the window showing the page.
     ipcMain.handle(WEBAUTHN_CHANNEL, async (event, kind: string, options: string) => {

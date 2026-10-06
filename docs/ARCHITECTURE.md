@@ -53,6 +53,8 @@ The **main process owns all state**. Renderers never change it directly:
 
 Each space has a `profile`. `'default'` is Electron's default session, which Essentials and extensions also use. Any other value is a persistent partition (`persist:space-<id>`) with its own cookies, storage and cache. `Hub.profileSession()` creates sessions on demand, and `Hub.attachSession()` wires every one up the same way: ad blocking, permissions, certificates, the page preload, headers and downloads.
 
+Permission requests (camera, microphone, location, notifications…) show Zepper's prompt unless the site already has a decision. Electron's permission checks can only answer yes or no, so a page would see every undecided permission as "denied", and sites that look before they ask (Google Meet, Zoom, Teams) would report themselves blocked. The page preload makes undecided permissions read as "prompt" in `navigator.permissions` (and `Notification.permission` as "default"), from the list of the site's refusals it's given at load; device names stay hidden until you allow. Allowing the camera or microphone also asks macOS for access, or points you to System Settings if it was refused there.
+
 A tab's page can't change session. When a tab moves to a space with a different profile, it is reloaded in the right one (`Browser.rehome`).
 
 ### Pinned area and folders

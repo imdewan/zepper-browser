@@ -109,6 +109,13 @@ export class SitePermissions {
     return LISTED.map(({ key, label }) => ({ permission: key, label, state: this.get(origin, key) }))
   }
 
+  /** The permissions this site has been refused (pages see "denied" for these, "prompt" for the rest). */
+  blocked(origin: string): string[] {
+    return Object.entries(this.data[origin] ?? {})
+      .filter(([, state]) => state === 'block')
+      .map(([key]) => key)
+  }
+
   isAlwaysAllowed(permission: string): boolean {
     return ALWAYS_ALLOW.has(permission)
   }

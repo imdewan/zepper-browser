@@ -33,6 +33,7 @@ interface PageConfig {
   fingerprintSeed: number | null
   brand: { name: string; major: string; full: string } | null
   passkeys: boolean
+  blockedPermissions: string[]
 }
 
 /** navigator.userAgentData names the browser brand the request headers do (runs in the page's world). */
@@ -186,6 +187,76 @@ function fingerprintShim(seed: number): void {
   }
 }
 
+/**
+ * Permissions you haven't decided on read as "prompt" (runs in the page's world). Electron's
+ * permission checks can only answer yes or no, so the page would see "denied" and sites that look
+ * before they ask (Meet, Zoom, Teams…) would say they're blocked instead of asking. Notification.
+ * permission likewise reads "default". Patched getters are Proxies, so they still look native.
+ */
+function permissionsShim(blocked: string[]): void {
+  // Permissions API names → Zepper's site setting keys (those Zepper asks you about).
+  const KEYS: Record<string, string> = {
+    camera: 'camera',
+    microphone: 'microphone',
+    geolocation: 'geolocation',
+    notifications: 'notifications',
+    push: 'notifications',
+    'clipboard-read': 'clipboard-read',
+    midi: 'midi',
+    'idle-detection': 'idle-detection',
+    'window-management': 'window-management',
+    'window-placement': 'window-management'
+  }
+  const undecided = (key: string | undefined): boolean => key !== undefined && !blocked.includes(key)
+  const keyOf = new WeakMap<object, string>()
+
+  const permissions = (globalThis as unknown as { Permissions?: { prototype: object } }).Permissions?.prototype
+  const query = permissions && Object.getOwnPropertyDescriptor(permissions, 'query')
+  if (permissions && typeof query?.value === 'function') {
+    Object.defineProperty(permissions, 'query', {
+      ...query,
+      value: new Proxy(query.value as (descriptor: { name?: string; sysex?: boolean }) => Promise<object>, {
+        apply(target, self, args: [{ name?: string; sysex?: boolean }]) {
+          const descriptor = args[0]
+          const key = descriptor?.name === 'midi' && descriptor.sysex ? 'midiSysex' : KEYS[String(descriptor?.name)]
+          return Reflect.apply(target, self, args).then((status) => {
+            if (key) keyOf.set(status, key)
+            return status
+          })
+        }
+      })
+    })
+  }
+
+  const status = (globalThis as unknown as { PermissionStatus?: { prototype: object } }).PermissionStatus?.prototype
+  const state = status && Object.getOwnPropertyDescriptor(status, 'state')
+  if (status && state?.get) {
+    Object.defineProperty(status, 'state', {
+      ...state,
+      get: new Proxy(state.get, {
+        apply(target, self: object, args) {
+          const value = Reflect.apply(target, self, args) as string
+          return value === 'denied' && undecided(keyOf.get(self)) ? 'prompt' : value
+        }
+      })
+    })
+  }
+
+  const notification = (globalThis as unknown as { Notification?: object }).Notification
+  const permission = notification && Object.getOwnPropertyDescriptor(notification, 'permission')
+  if (notification && permission?.get) {
+    Object.defineProperty(notification, 'permission', {
+      ...permission,
+      get: new Proxy(permission.get, {
+        apply(target, self, args) {
+          const value = Reflect.apply(target, self, args) as string
+          return value === 'denied' && undecided('notifications') ? 'default' : value
+        }
+      })
+    })
+  }
+}
+
 /** Global Privacy Control's JavaScript signal (runs in the page's world). */
 function privacyControlShim(): void {
   Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: () => true, configurable: true, enumerable: true })
@@ -335,6 +406,7 @@ function applyCompat(): void {
   if (location.hostname === 'chromewebstore.google.com') hideSwitchToChrome()
   try {
     const config = ipcRenderer.sendSync(PAGE_CONFIG_CHANNEL) as PageConfig
+    contextBridge.executeInMainWorld({ func: permissionsShim, args: [config.blockedPermissions ?? []] })
     if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
     if (config.globalPrivacyControl) contextBridge.executeInMainWorld({ func: privacyControlShim })
     if (config.brand)

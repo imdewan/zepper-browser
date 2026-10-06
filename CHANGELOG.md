@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- Google Meet, Zoom, Teams and other sites that check before asking said the camera and microphone were blocked instead of asking for them. Undecided permissions now read as "prompt", and allowing the camera or microphone also asks macOS for access.
+
 ## [0.1.0] - 2026-10-06
 
 The first public version.

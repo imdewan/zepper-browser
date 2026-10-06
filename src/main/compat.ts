@@ -1,7 +1,8 @@
-import { ipcMain } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import type { Settings } from '@shared/settings'
 import type { SettingsStore } from './settings-store'
 import { fingerprintSeed } from './shields'
+import { originOf } from './site'
 
 /**
  * Site compatibility: which browser we present as, and the Google sign-in fix.
@@ -35,6 +36,8 @@ export interface PageConfig {
   brand: { name: string; major: string; full: string } | null
   /** Answer WebAuthn (passkeys) with Zepper's password manager: top-level secure pages. */
   passkeys: boolean
+  /** Permissions this frame's site was refused; any other undecided one reads as "prompt", not "denied". */
+  blockedPermissions: string[]
 }
 
 const FIREFOX_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0'
@@ -91,7 +94,12 @@ export function clientHintHeaders(headers: Record<string, string>, ua: string): 
   return next
 }
 
-export function servePageConfig(settings: SettingsStore, currentUa: () => string, protects: (pageUrl: string) => boolean): void {
+export function servePageConfig(
+  settings: SettingsStore,
+  currentUa: () => string,
+  protects: (pageUrl: string) => boolean,
+  blockedPermissions: (sender: WebContents, origin: string) => string[]
+): void {
   ipcMain.on(PAGE_CONFIG_CHANNEL, (event) => {
     let pageUrl = ''
     let siteUrl = ''
@@ -123,7 +131,8 @@ export function servePageConfig(settings: SettingsStore, currentUa: () => string
             full: process.versions.chrome
           }
         : null,
-      passkeys: topLevel && /^https:|^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(pageUrl)
+      passkeys: topLevel && /^https:|^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(pageUrl),
+      blockedPermissions: pageUrl ? blockedPermissions(event.sender, originOf(pageUrl)) : []
     }
     event.returnValue = config
   })

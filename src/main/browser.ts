@@ -11,6 +11,7 @@ import {
   screen,
   session,
   shell,
+  systemPreferences,
   type AuthInfo,
   type Certificate,
   type ContextMenuParams,
@@ -823,7 +824,7 @@ export class Browser {
     const origin = originOf(details.requestingUrl ?? wc.getURL())
     const states = keys.map((k) => this.permissions.get(origin, k))
     if (states.includes('block')) return callback(false)
-    if (states.every((s) => s === 'allow')) return callback(true)
+    if (states.every((s) => s === 'allow')) return this.grant(keys, callback)
     this.prompts.push({
       id: ++this.promptSeq,
       origin,
@@ -841,6 +842,36 @@ export class Browser {
       wc.once('destroyed', () => this.dropPrompts((p) => p.webContentsId === id))
     }
     this.showNextPrompt()
+  }
+
+  /**
+   * Allows a request. The camera and microphone also need macOS's permission: it's asked for here,
+   * so its prompt comes straight after ours, and if it was refused before you're told where to turn it on.
+   */
+  private grant(keys: string[], callback: (granted: boolean) => void): void {
+    const media = (['camera', 'microphone'] as const).filter((kind) => keys.includes(kind))
+    if (process.platform !== 'darwin' || media.length === 0) return callback(true)
+    void (async () => {
+      for (const kind of media) {
+        const status = systemPreferences.getMediaAccessStatus(kind)
+        if (status === 'not-determined') await systemPreferences.askForMediaAccess(kind).catch(() => false)
+        else if (status === 'denied' || status === 'restricted') {
+          this.toast({
+            id: `system-${kind}`,
+            message: `macOS is blocking Zepper’s ${kind}`,
+            description: 'Turn on Zepper in Privacy & Security, then reload the page.',
+            action: { label: 'Open Settings', command: { type: 'app.openMediaPrivacySettings', kind } },
+            timeout: 8000
+          })
+        }
+      }
+      callback(true)
+    })()
+  }
+
+  /** Permissions the site was refused, for the page's own view of its permissions. */
+  blockedPermissions(origin: string): string[] {
+    return this.permissions.blocked(origin)
   }
 
   checkPermission(permission: string, requestingOrigin: string, details: PermissionCheckHandlerHandlerDetails): boolean {
@@ -1246,6 +1277,10 @@ export class Browser {
         return void this.translatePage(command.tabId)
       case 'app.openTranslationSettings':
         return void shell.openExternal('x-apple.systempreferences:com.apple.Localization-Settings.extension')
+      case 'app.openMediaPrivacySettings':
+        return void shell.openExternal(
+          `x-apple.systempreferences:com.apple.preference.security?Privacy_${command.kind === 'camera' ? 'Camera' : 'Microphone'}`
+        )
       case 'ui.openAssistant':
         return this.openAssistant(command.anchor)
       case 'assistant.run':
@@ -3813,11 +3848,14 @@ export class Browser {
     if (!prompt) return
     const state: PermissionState = allow ? 'allow' : 'block'
     for (const key of prompt.keys) this.permissions.set(prompt.origin, key, state)
-    prompt.callback(allow)
-    // Resolve other queued requests the decision now covers.
-    for (const other of this.prompts.filter((p) => p.origin === prompt.origin && p.keys.every((k) => prompt.keys.includes(k)))) {
-      other.callback(allow)
+    // Requests the decision now covers (queued behind this one) are answered with it.
+    const covered = this.prompts.filter((p) => p.origin === prompt.origin && p.keys.every((k) => prompt.keys.includes(k)))
+    const answer = (granted: boolean): void => {
+      prompt.callback(granted)
+      for (const other of covered) other.callback(granted)
     }
+    if (allow) this.grant(prompt.keys, answer)
+    else answer(false)
     this.prompts = this.prompts.filter((p) => !(p.origin === prompt.origin && p.keys.every((k) => prompt.keys.includes(k))))
     setTimeout(() => {
       this.showNextPrompt()
