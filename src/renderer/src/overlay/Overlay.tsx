@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
-import { SEARCH_ENGINES } from '@shared/settings'
+import { PEEK_AREA_EXTRA, SEARCH_ENGINES } from '@shared/settings'
 import { prefersDarkUi, themeAccent } from '@shared/theme'
 import type { AboutInfo, FindResult, OverlayMode, PopoverSpec, ToastSpec, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
@@ -141,7 +141,7 @@ export function Overlay(): React.JSX.Element | null {
   // During a right-hand peek this view sits at the window's right edge; rects sent to main are in window coordinates.
   const peekOffset =
     peek === 'shown' && !wantsFull && snapshot?.settings.sidebarPosition === 'right'
-      ? snapshot.windowSize.width - (snapshot.sidebarWidth + 24)
+      ? snapshot.windowSize.width - (snapshot.sidebarWidth + PEEK_AREA_EXTRA)
       : 0
   useEffect(() => setViewOffsetX(peekOffset), [peekOffset])
   const mode: OverlayMode = wantsFull ? 'full' : peek ? 'peek' : toasts.length > 0 || find || captureResult ? 'corner' : 'hidden'

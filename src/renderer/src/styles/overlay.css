@@ -701,8 +701,9 @@
   border-radius: 12px;
   overflow: hidden;
   background: var(--panel);
+  /* Fades out within the overlay's peek area (PEEK_AREA_EXTRA past the sidebar), so it isn't cut off. */
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.35),
+    0 10px 28px rgba(0, 0, 0, 0.3),
     0 0 0 0.5px var(--panel-border);
 }
 

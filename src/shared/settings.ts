@@ -12,6 +12,12 @@ export const USER_AGENT_LABELS: Record<UserAgentChoice, string> = {
 
 export type PipSize = 'small' | 'medium' | 'large'
 
+/**
+ * How far the overlay reaches past the sidebar while it peeks in compact mode: room for the card's
+ * 6px inset and its shadow to fade out (a shadow cut off at the overlay's edge shows as a hard line).
+ */
+export const PEEK_AREA_EXTRA = 40
+
 /** Share of the screen's width the floating player starts at. */
 export const PIP_WIDTH: Record<PipSize, number> = { small: 0.18, medium: 0.25, large: 0.33 }
 

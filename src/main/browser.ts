@@ -31,7 +31,7 @@ import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { PIP_WIDTH, PROTECTIONS, type Protection, type Settings } from '@shared/settings'
+import { PEEK_AREA_EXTRA, PIP_WIDTH, PROTECTIONS, type Protection, type Settings } from '@shared/settings'
 import { DEFAULT_THEME } from '@shared/theme'
 import {
   IPC,
@@ -4540,7 +4540,7 @@ export class Browser {
       return
     }
     this.overlay.setVisible(true)
-    const peekWidth = this.sidebarWidth + 24
+    const peekWidth = this.sidebarWidth + PEEK_AREA_EXTRA
     const right = this.settings.sidebarPosition === 'right'
     this.overlay.setBounds(
       this.overlayMode === 'full'
