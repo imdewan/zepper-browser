@@ -427,41 +427,53 @@ function applyCosmetics(): void {
   watchDomForGenericRules()
 }
 
-/** Asks for generic hiding rules matching the classes, ids and links on the page, as it changes. */
+/**
+ * Asks for generic hiding rules matching the classes, ids and links on the page, as it changes: the
+ * whole page once it has loaded, then only what each change adds or alters, in idle time.
+ */
 function watchDomForGenericRules(): void {
   const seen = { classes: new Set<string>(), ids: new Set<string>(), hrefs: new Set<string>() }
-  let timer = 0
+  // A page churning out new names can't make this unbounded: past this, it stops watching.
+  const PAGE_CAP = 50_000
+  const PER_FLUSH = 2000
+  const pending = new Set<Element>()
+  let scheduled = false
+  let observer: MutationObserver | null = null
+  const full = (): boolean => seen.classes.size + seen.ids.size + seen.hrefs.size > PAGE_CAP
 
-  const collect = (root: ParentNode): { classes: string[]; ids: string[]; hrefs: string[] } => {
-    const fresh = { classes: [] as string[], ids: [] as string[], hrefs: [] as string[] }
-    // A page churning out new names can't make this unbounded: a cap per flush and per page.
-    if (seen.classes.size + seen.ids.size + seen.hrefs.size > 50_000) return fresh
-    const elements = root.querySelectorAll('[class],[id],a[href]')
-    for (let i = 0; i < elements.length && i < 4000 && fresh.classes.length + fresh.ids.length + fresh.hrefs.length < 2000; i++) {
-      const el = elements[i]
-      for (const name of el.classList) {
-        if (fresh.classes.length >= 2000) break
-        if (!seen.classes.has(name)) {
-          seen.classes.add(name)
-          fresh.classes.push(name)
-        }
-      }
-      if (el.id && !seen.ids.has(el.id)) {
-        seen.ids.add(el.id)
-        fresh.ids.push(el.id)
-      }
-      const href = el instanceof HTMLAnchorElement ? el.getAttribute('href') : null
-      if (href && !seen.hrefs.has(href)) {
-        seen.hrefs.add(href)
-        fresh.hrefs.push(href)
+  const note = (el: Element, fresh: { classes: string[]; ids: string[]; hrefs: string[] }): void => {
+    for (const name of el.classList) {
+      if (!seen.classes.has(name)) {
+        seen.classes.add(name)
+        fresh.classes.push(name)
       }
     }
-    return fresh
+    if (el.id && !seen.ids.has(el.id)) {
+      seen.ids.add(el.id)
+      fresh.ids.push(el.id)
+    }
+    const href = el instanceof HTMLAnchorElement ? el.getAttribute('href') : null
+    if (href && !seen.hrefs.has(href)) {
+      seen.hrefs.add(href)
+      fresh.hrefs.push(href)
+    }
   }
 
   const flush = async (): Promise<void> => {
-    timer = 0
-    const fresh = collect(document)
+    scheduled = false
+    const fresh = { classes: [] as string[], ids: [] as string[], hrefs: [] as string[] }
+    let checked = 0
+    for (const el of pending) {
+      pending.delete(el)
+      note(el, fresh)
+      if (++checked >= PER_FLUSH) break
+    }
+    // More left over (a big change): the rest next time round.
+    if (pending.size > 0) schedule()
+    if (full()) {
+      observer?.disconnect()
+      pending.clear()
+    }
     if (fresh.classes.length + fresh.ids.length + fresh.hrefs.length === 0) return
     try {
       const response = (await ipcRenderer.invoke(COSMETICS_DOM_CHANNEL, { url: location.href, ...fresh })) as CosmeticsResponse
@@ -471,18 +483,34 @@ function watchDomForGenericRules(): void {
     }
   }
 
-  const schedule = (): void => {
-    if (!timer) timer = window.setTimeout(() => void flush(), 250)
+  function schedule(): void {
+    if (scheduled) return
+    scheduled = true
+    // When the page is idle, but within a second.
+    const run = (): void => void flush()
+    window.requestIdleCallback(run, { timeout: 1000 })
+  }
+
+  const add = (root: Element): void => {
+    if (root.matches('[class],[id],a[href]')) pending.add(root)
+    for (const el of root.querySelectorAll('[class],[id],a[href]')) pending.add(el)
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    void flush()
-    new MutationObserver(schedule).observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class', 'id']
+    if (document.documentElement) add(document.documentElement)
+    schedule()
+    observer = new MutationObserver((records) => {
+      if (full()) return
+      for (const record of records) {
+        if (record.type === 'attributes') {
+          if (record.target instanceof Element) pending.add(record.target)
+        } else {
+          for (const node of record.addedNodes) if (node instanceof Element) add(node)
+        }
+      }
+      if (pending.size > 0) schedule()
     })
+    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'id'] })
   })
 }
 

@@ -9,6 +9,7 @@ import {
   nativeImage,
   nativeTheme,
   screen,
+  session,
   shell,
   type AuthInfo,
   type Certificate,
@@ -148,6 +149,9 @@ function makeTab(fields: Partial<Tab> & Pick<Tab, 'kind' | 'url'>): Tab {
 }
 
 /** Reads the page's Media Session metadata (title, artist, artwork) if it publishes any. */
+const MEDIA_REFRESH_MS = 3000
+/** Closed tabs remembered for Reopen Closed Tab. */
+const MAX_CLOSED = 50
 const MEDIA_METADATA_SCRIPT = `(() => {
   const m = navigator.mediaSession && navigator.mediaSession.metadata
   if (!m) return null
@@ -446,6 +450,8 @@ export class Browser {
   private showingPrompt: number | null = null
   private lastFindText = ''
   private peeking = false
+  /** The corner region's size: just what the overlay shows there (it would swallow clicks on the page). */
+  private cornerSize = { ...CORNER_REGION }
   /** The mode the overlay itself last asked for (it knows what it's showing). */
   private overlayReported: OverlayMode = 'hidden'
   private peekCheck: NodeJS.Timeout | null = null
@@ -481,6 +487,10 @@ export class Browser {
   private readonly httpsFirst = new Set<string>()
   /** Tabs with a "not responding" question open. */
   private readonly hungTabs = new Set<string>()
+  /** Tabs whose video went into Chromium's own picture-in-picture (iframes). */
+  private readonly nativePipTabs = new Set<string>()
+  /** When each tab's media metadata was last read. */
+  private readonly mediaReadAt = new Map<string, number>()
   /** Pages whose permission prompts are dropped when they go away. */
   private readonly promptWatched = new WeakSet<WebContents>()
   /** Pages showing the system print dialog (they're waiting on it, not hung). */
@@ -1033,7 +1043,6 @@ export class Browser {
     this.popups.clear()
     // Child views' pages outlive their window unless closed.
     if (!this.overlay.webContents.isDestroyed()) this.overlay.webContents.close()
-    if (this.kind === 'private') void this.ses.clearStorageData().catch(() => {})
     this.hub.windowClosed(this)
   }
 
@@ -1081,6 +1090,10 @@ export class Browser {
     if (!includeSpace || !current) return base
     // The same space in a window of its own: its look and sign-ins, but none of its tabs.
     return { ...base, space: { ...current, id: randomUUID(), lastTabId: null, pinnedItems: [], collapsedPins: false } }
+  }
+
+  session(): Session {
+    return this.ses
   }
 
   window(): BrowserWindow {
@@ -1175,6 +1188,12 @@ export class Browser {
         return this.openPalette(command.mode)
       case 'ui.closePalette':
         return this.closePalette(command.refocus)
+      case 'ui.overlayCorner':
+        this.cornerSize = {
+          width: Math.max(1, Math.min(CORNER_REGION.width, Math.round(command.width))),
+          height: Math.max(1, Math.min(2000, Math.round(command.height)))
+        }
+        return this.overlayMode === 'corner' ? this.layoutOverlay() : undefined
       case 'ui.overlayMode':
         this.overlayReported = command.mode
         // The overlay isn't showing the peek card (it may never have heard about it): stop peeking,
@@ -1377,9 +1396,10 @@ export class Browser {
         view.webContents.setWebRTCIPHandlingPolicy(next.blockFingerprinting ? 'default_public_interface_only' : 'default')
       }
     }
-    nativeTheme.themeSource = next.colorScheme
+    // Setting these again makes macOS and the ad blocker redo work, so only when they changed.
+    if (nativeTheme.themeSource !== next.colorScheme) nativeTheme.themeSource = next.colorScheme
     setSearchEngine(next.searchEngine)
-    this.adblock.setEnabled(next.adblock)
+    if (!prev || prev.adblock !== next.adblock) this.adblock.setEnabled(next.adblock)
     const layoutChanged =
       !prev ||
       prev.contentGap !== next.contentGap ||
@@ -1490,7 +1510,8 @@ export class Browser {
     this.broadcast()
     this.showNextPrompt()
     this.showNextDialog()
-    this.runInFrames(view.webContents, EXIT_AUTO_PIP_SCRIPT, false)
+    // Back on a tab whose video Chromium's picture-in-picture took: bring it back into the page.
+    if (this.nativePipTabs.delete(id)) this.runInFrames(view.webContents, EXIT_AUTO_PIP_SCRIPT, false)
   }
 
   /** Arc-style auto picture-in-picture: a playing video floats when you leave its tab. */
@@ -1513,7 +1534,10 @@ export class Browser {
       this.syncAttachedViews()
       return
     }
-    if (!entered) entered = await this.runInFrames(wc, AUTO_PIP_SCRIPT, true, 'pip')
+    if (!entered) {
+      entered = await this.runInFrames(wc, AUTO_PIP_SCRIPT, true, 'pip')
+      if (entered) this.nativePipTabs.add(tabId)
+    }
     if (!app.isPackaged) console.info(`[pip] picture-in-picture for ${tab.title}: ${entered ? 'entered' : 'no playing video'}`)
   }
 
@@ -1716,6 +1740,11 @@ export class Browser {
     this.detachPinned(tab.id)
     this.tabs = this.tabs.filter((t) => t !== tab)
     this.openers.delete(tab.id)
+    this.mediaReadAt.delete(tab.id)
+    this.mediaTipShown.delete(tab.id)
+    this.nativePipTabs.delete(tab.id)
+    // Reopen Closed Tab remembers the last batches, not every tab ever closed.
+    if (this.closed.length > MAX_CLOSED) this.closed.splice(0, this.closed.length - MAX_CLOSED)
     for (const space of this.spaces) if (space.lastTabId === tab.id) space.lastTabId = null
     if (wasActive) {
       if (next) this.activateTab(next.id)
@@ -3002,10 +3031,18 @@ export class Browser {
       this.applySiteZoom(wc, url)
       if (this.kind !== 'private') this.history.record(url, wc.getTitle())
     })
+    // In-page address changes are visits once they settle: maps and infinite scroll rewrite the
+    // address constantly, and every step would otherwise be a visit.
+    let inPageVisit: NodeJS.Timeout | null = null
     wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
       if (!isMainFrame) return
       update({ url, ...navState() })
-      if (this.kind !== 'private') this.history.record(url, wc.getTitle())
+      if (this.kind === 'private') return
+      if (inPageVisit) clearTimeout(inPageVisit)
+      inPageVisit = setTimeout(() => {
+        inPageVisit = null
+        if (!wc.isDestroyed() && wc.getURL() === url) this.history.record(url, wc.getTitle())
+      }, 2000)
     })
     wc.on('audio-state-changed', (event) => {
       update({ audible: event.audible, audibleAt: Date.now() })
@@ -3134,9 +3171,14 @@ export class Browser {
   private async refreshMedia(tabId: string, wc: WebContents): Promise<void> {
     const tab = this.tab(tabId)
     if (!tab) return
+    // Players that tick their title every second would ask every second: at most every few seconds.
+    const last = this.mediaReadAt.get(tabId) ?? 0
+    if (tab.media && Date.now() - last < MEDIA_REFRESH_MS) return
+    this.mediaReadAt.set(tabId, Date.now())
     let meta: { title: string; artist: string; artwork: string | null } | null
     try {
-      meta = await wc.executeJavaScript(MEDIA_METADATA_SCRIPT, true)
+      // Reading metadata needs no user gesture, so the page isn't handed one.
+      meta = await wc.executeJavaScript(MEDIA_METADATA_SCRIPT, false)
     } catch {
       meta = null
     }
@@ -4140,7 +4182,8 @@ export class Browser {
   }
 
   private async clearProfile(profile: string): Promise<void> {
-    const ses = this.hub.profileSession(profile)
+    // Just the profile's storage: not set up as a browsing session (extensions and all) only to be cleared.
+    const ses = profile === DEFAULT_PROFILE ? session.defaultSession : session.fromPartition(`persist:space-${profile}`)
     await ses.clearStorageData().catch(() => {})
     await ses.clearCache().catch(() => {})
   }
@@ -4460,7 +4503,7 @@ export class Browser {
         ? { x: 0, y: 0, width, height }
         : this.overlayMode === 'peek'
           ? { x: right ? width - peekWidth : 0, y: 0, width: peekWidth, height }
-          : { x: width - CORNER_REGION.width, y: 0, ...CORNER_REGION }
+          : { x: width - this.cornerSize.width, y: 0, width: this.cornerSize.width, height: Math.min(height, this.cornerSize.height) }
     )
   }
 

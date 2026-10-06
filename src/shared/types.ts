@@ -535,6 +535,8 @@ export type Command =
   | { type: 'history.clear'; since: number }
   | { type: 'settings.update'; patch: Partial<Settings> }
   | { type: 'ui.openSettings'; section?: string }
+  /** The size of what the overlay shows in the window's corner (toasts, find bar), so only that takes clicks. */
+  | { type: 'ui.overlayCorner'; width: number; height: number }
   | { type: 'ui.peekSidebar'; show: boolean }
   | { type: 'ui.dismissOverlay' }
   | { type: 'ui.createSpace' }

@@ -18,14 +18,6 @@ function dayLabel(time: number): string {
   return dayFormat.format(time)
 }
 
-function faviconFor(url: string): string | null {
-  try {
-    return `${new URL(url).origin}/favicon.ico`
-  } catch {
-    return null
-  }
-}
-
 /** ⌘Y: everything you've visited, newest first, grouped by day, searchable. */
 export function HistoryPanel({ meaning, onClose }: { meaning: boolean; onClose: () => void }): React.JSX.Element {
   const [query, setQuery] = useState('')
@@ -156,7 +148,7 @@ export function HistoryPanel({ meaning, onClose }: { meaning: boolean; onClose: 
                   <span className="history-time">
                     {dayLabel(entry.lastVisit) === 'Today' ? timeFormat.format(entry.lastVisit) : dayLabel(entry.lastVisit).split(',')[0]}
                   </span>
-                  <Favicon src={faviconFor(entry.url)} size={16} />
+                  <Favicon src={null} size={16} />
                   <span className="history-title">{entry.title || entry.url}</span>
                   <span className="history-host">{hostOf(entry.url)}</span>
                 </div>
@@ -172,7 +164,7 @@ export function HistoryPanel({ meaning, onClose }: { meaning: boolean; onClose: 
               {group.items.map((entry) => (
                 <div key={entry.url} role="button" className="history-row" title={entry.url} onClick={() => open(entry.url)}>
                   <span className="history-time">{timeFormat.format(entry.lastVisit)}</span>
-                  <Favicon src={faviconFor(entry.url)} size={16} />
+                  <Favicon src={null} size={16} />
                   <span className="history-title">{entry.title || entry.url}</span>
                   <span className="history-host">{hostOf(entry.url)}</span>
                   <button

@@ -7,13 +7,25 @@ export interface Visit {
   lastVisit: number
 }
 
+interface EntryIndex {
+  title: string
+  haystack: string
+  bare: string
+  page: { protocol: string; host: string; pathname: string; search: string } | null
+  host: string
+  path: string
+}
+
 const MAX_ENTRIES = 10_000
+/** How long after a visit the page's title is still recorded. */
+const TITLE_SETTLE_MS = 60_000
 
 /** Browsing history used for URL bar suggestions. */
 export class History {
   private readonly file = new JsonFile<Visit[]>('history.json', 3000)
   private readonly entries = new Map<string, Visit>()
   private readonly forgetListeners = new Set<(urls: string[]) => void>()
+  private readonly index = new WeakMap<Visit, EntryIndex>()
 
   constructor() {
     for (const visit of this.file.read() ?? []) this.entries.set(visit.url, visit)
@@ -32,9 +44,13 @@ export class History {
     this.save()
   }
 
+  /**
+   * A page's title settled after the visit. Only shortly after it: a background tab ticking its title
+   * (an unread count, a timer) would otherwise rewrite history every few seconds, forever.
+   */
   updateTitle(url: string, title: string): void {
     const existing = this.entries.get(url)
-    if (existing && title && existing.title !== title) {
+    if (existing && title && existing.title !== title && (!existing.title || Date.now() - existing.lastVisit < TITLE_SETTLE_MS)) {
       existing.title = title
       this.save()
     }
@@ -51,14 +67,10 @@ export class History {
     const now = Date.now()
     const candidates = new Map<string, { url: string; title: string; visits: number; lastVisit: number; root: boolean }>()
     for (const visit of this.entries.values()) {
-      let page: URL
-      try {
-        page = new URL(visit.url)
-      } catch {
-        continue
-      }
-      const host = page.host.replace(/^www\./, '')
-      const path = `${host}${page.pathname.replace(/\/$/, '')}${page.search}`
+      const index = this.indexOf(visit)
+      if (!index.page) continue
+      const page = index.page
+      const { host, path } = index
       // A beginning of a host completes to the site; with a slash, to the page.
       const completion = !query.includes('/') && host.startsWith(query) ? host : path.toLowerCase().startsWith(query) ? path : null
       if (!completion) continue
@@ -120,6 +132,33 @@ export class History {
       .map((site) => site.best)
   }
 
+  /** Each entry's search text and parsed address, worked out once (searching runs on every keystroke). */
+  private indexOf(visit: Visit): EntryIndex {
+    const cached = this.index.get(visit)
+    if (cached && cached.title === visit.title) return cached
+    let page: EntryIndex['page'] = null
+    let host = ''
+    let path = ''
+    try {
+      const url = new URL(visit.url)
+      page = { protocol: url.protocol, host: url.host, pathname: url.pathname, search: url.search }
+      host = url.host.replace(/^www\./, '')
+      path = `${host}${url.pathname.replace(/\/$/, '')}${url.search}`
+    } catch {
+      // Not a URL Zepper can complete to.
+    }
+    const entry: EntryIndex = {
+      title: visit.title,
+      haystack: `${visit.url} ${visit.title}`.toLowerCase(),
+      bare: visit.url.replace(/^https?:\/\/(www\.)?/, '').toLowerCase(),
+      page,
+      host,
+      path
+    }
+    this.index.set(visit, entry)
+    return entry
+  }
+
   /** Ranks entries matching every token, favouring host prefixes, frequency and recency. */
   search(text: string, limit: number): Visit[] {
     const tokens = text.toLowerCase().split(/\s+/).filter(Boolean)
@@ -127,9 +166,8 @@ export class History {
     const now = Date.now()
     const scored: { visit: Visit; score: number }[] = []
     for (const visit of this.entries.values()) {
-      const haystack = `${visit.url} ${visit.title}`.toLowerCase()
+      const { haystack, bare } = this.indexOf(visit)
       if (!tokens.every((t) => haystack.includes(t))) continue
-      const bare = visit.url.replace(/^https?:\/\/(www\.)?/, '').toLowerCase()
       const ageDays = (now - visit.lastVisit) / 86_400_000
       let score = Math.log2(1 + visit.visits) * 10 - Math.min(ageDays, 90) * 0.3
       if (bare.startsWith(tokens[0])) score += 40
@@ -184,10 +222,11 @@ export class History {
   }
 
   private save(): void {
+    // Over the limit: back down to 90% of it, so the trim (a sort) doesn't run on every visit.
     if (this.entries.size > MAX_ENTRIES) {
       const sorted = [...this.entries.values()].sort((a, b) => b.lastVisit - a.lastVisit)
       this.entries.clear()
-      for (const v of sorted.slice(0, MAX_ENTRIES)) this.entries.set(v.url, v)
+      for (const v of sorted.slice(0, Math.floor(MAX_ENTRIES * 0.9))) this.entries.set(v.url, v)
     }
     this.file.schedule([...this.entries.values()])
   }

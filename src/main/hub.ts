@@ -170,9 +170,27 @@ export class Hub {
     this.refreshDefaultBrowser()
 
     nativeTheme.on('updated', () => this.applyAppIcon())
-    services.settings.onChange(() => {
-      this.applyAppIcon()
-      this.applySettings()
+    services.settings.onChange((next, prev) => {
+      // Sliders change settings many times a second: only redo what the change touched.
+      if (next.appIcon !== prev.appIcon) this.applyAppIcon()
+      const touched = (keys: (keyof typeof next)[]): boolean => keys.some((key) => next[key] !== prev[key])
+      if (
+        touched([
+          'widevine',
+          'bangs',
+          'adblock',
+          'adblockAllowlist',
+          'siteExceptions',
+          'hideCookieBanners',
+          'httpsUpgrade',
+          'cleanLinks',
+          'blockCrossSiteCookies',
+          'secureDns',
+          'userAgent',
+          'customUserAgent'
+        ])
+      )
+        this.applySettings()
     })
     this.applyAppIcon()
     this.applySettings()
@@ -224,6 +242,13 @@ export class Hub {
 
   windowClosed(browser: Browser): void {
     this.browsers.delete(browser)
+    // A private window's session ends with it: its cache too (not only cookies and storage), and Zepper stops holding it.
+    if (browser.kind === 'private') {
+      const ses = browser.session()
+      void Promise.all([ses.clearStorageData(), ses.clearCache(), ses.clearCodeCaches({}), ses.clearHostResolverCache()]).catch(() => {})
+      this.sessions.delete(ses)
+      this.services.adblock.detachSession(ses)
+    }
     // Other windows stay open when the main one closes (it has saved its spaces and tabs);
     // Zepper quits with the last window.
     if (browser === this.main) this.main = null

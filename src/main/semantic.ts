@@ -36,7 +36,7 @@ function decode(base64: string): Float32Array {
 }
 
 export class SemanticHistory {
-  private readonly file = new JsonFile<Stored>('history-meaning.json', 5000)
+  private readonly file = new JsonFile<Stored>('history-meaning.json', 60_000)
   private data: Stored
   private readonly queue = new Set<string>()
   private embedding = false

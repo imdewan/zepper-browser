@@ -2194,7 +2194,10 @@
   background: var(--panel);
 }
 
+/* Long histories: rows off screen aren't laid out or painted. */
 .history-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 36px;
   height: 36px;
   padding: 0 6px 0 8px;
   border-radius: 9px;

@@ -123,16 +123,21 @@ interface CapturedCert {
   trusted: boolean
 }
 
+const MAX_CERTIFICATES = 256
+
 /** Remembers the certificate each host presented, for the site info panel. */
 export class CertificateStore {
   private readonly certs = new Map<string, CapturedCert>()
 
   attach(session: Session): void {
     session.setCertificateVerifyProc((request, callback) => {
+      // Most recent hosts only (every ad and CDN host checks one): kept in order of last use, capped.
+      this.certs.delete(request.hostname)
       this.certs.set(request.hostname, {
         certificate: request.certificate,
         trusted: request.verificationResult === 'net::OK'
       })
+      if (this.certs.size > MAX_CERTIFICATES) this.certs.delete(this.certs.keys().next().value!)
       // -3: use Chromium's own verification result.
       callback(-3)
     })

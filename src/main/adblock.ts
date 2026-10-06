@@ -36,9 +36,17 @@ interface RequestDetails {
 /** Sign-in frames that need their cookies even when embedded on another site. */
 const SIGN_IN_FRAMES = new Set(['accounts.google.com', 'login.microsoftonline.com', 'login.live.com', 'appleid.apple.com'])
 
+/** Recent answers: every request asks for its page's site several times. */
+const siteCache = new Map<string, string>()
+
 function siteOf(url: string): string {
+  const cached = siteCache.get(url)
+  if (cached !== undefined) return cached
   const { domain, hostname } = parse(url)
-  return domain || hostname || ''
+  const site = domain || hostname || ''
+  if (siteCache.size >= 512) siteCache.delete(siteCache.keys().next().value!)
+  siteCache.set(url, site)
+  return site
 }
 
 /** The top-level page a request or frame belongs to; ad blocking is decided per site. */
@@ -216,6 +224,13 @@ export class AdBlock {
     this.sessions.add(session)
     session.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, this.onBeforeRequest)
     session.webRequest.onHeadersReceived({ urls: ['<all_urls>'] }, this.onHeadersReceived)
+  }
+
+  /** A private window's session is done with: let it go. */
+  detachSession(session: Session): void {
+    if (!this.sessions.delete(session)) return
+    session.webRequest.onBeforeRequest(null)
+    session.webRequest.onHeadersReceived(null)
   }
 
   private readonly onBeforeRequest = (details: OnBeforeRequestListenerDetails, callback: (response: CallbackResponse) => void): void => {

@@ -11,6 +11,9 @@ import { CreateSpaceDialog } from './CreateSpaceDialog'
 import { FindBar } from './FindBar'
 import { Palette } from './Palette'
 import { Peek } from './Peek'
+
+/** Room around the corner's content: its offset from the window edge, plus its shadows. */
+const CORNER_MARGIN = { x: 18 + 32, y: 16 + 36 }
 import { SettingsPanel } from './SettingsPanel'
 import { AboutPanel } from './AboutPanel'
 import { DownloadsPanel } from './DownloadsPanel'
@@ -137,6 +140,26 @@ export function Overlay(): React.JSX.Element | null {
     zepper.send({ type: 'ui.overlayMode', mode })
   }, [mode])
 
+  // The corner region is sized to what's in it (with room for shadows), so the rest of the page keeps its clicks.
+  // It exists once the first snapshot has arrived (nothing renders before it).
+  const corner = useRef<HTMLDivElement>(null)
+  const rendered = snapshot !== null
+  useEffect(() => {
+    const el = corner.current
+    if (!el) return
+    const observer = new ResizeObserver(() => {
+      const box = el.getBoundingClientRect()
+      if (box.width === 0 && box.height === 0) return
+      zepper.send({
+        type: 'ui.overlayCorner',
+        width: Math.ceil(box.width) + CORNER_MARGIN.x,
+        height: Math.ceil(box.height) + CORNER_MARGIN.y
+      })
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [rendered])
+
   const closePalette = useCallback(() => {
     setExiting(true)
     setPalette(null)
@@ -251,7 +274,7 @@ export function Overlay(): React.JSX.Element | null {
         )}
       </AnimatePresence>
       <AnimatePresence>{capture && <CaptureOverlay key="capture" session={capture} onDone={() => setCapture(null)} />}</AnimatePresence>
-      <div className={cx('corner', peek === 'shown' && !wantsFull && 'corner-in-peek')}>
+      <div ref={corner} className={cx('corner', peek === 'shown' && !wantsFull && 'corner-in-peek')}>
         <AnimatePresence>{find && <FindBar key="find" result={find.result} focusKey={find.key} onClose={closeFind} />}</AnimatePresence>
         <AnimatePresence>
           {captureResult && <CaptureResult key="capture-result" result={captureResult} onDismiss={() => setCaptureResult(null)} />}
