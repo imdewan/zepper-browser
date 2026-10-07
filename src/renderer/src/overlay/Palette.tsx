@@ -106,8 +106,10 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
   }
 
   const onKeyDown = (e: React.KeyboardEvent): void => {
-    const down = e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')
-    const up = e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')
+    // Tab and Shift-Tab step through suggestions too, as in Chrome and Firefox.
+    const tab = e.key === 'Tab' && results.length > 0
+    const down = e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n') || (tab && !e.shiftKey)
+    const up = e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p') || (tab && e.shiftKey)
     // With just the suggested part selected (as it is when it appears), Backspace removes the suggestion
     // and keeps what you typed. Any other selection (⌘A, say) is deleted as usual, in onChange.
     if ((e.key === 'Backspace' || e.key === 'Delete') && completion) {
@@ -118,7 +120,7 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
         return
       }
     }
-    if (completion && (e.key === 'ArrowRight' || e.key === 'End' || e.key === 'Tab')) {
+    if (completion && (e.key === 'ArrowRight' || e.key === 'End')) {
       // Take the completion as typed.
       e.preventDefault()
       setText(completion)
