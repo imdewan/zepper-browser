@@ -307,7 +307,9 @@ function ImportStep(): React.JSX.Element {
       </div>
       <p className="ob-note">
         Open tabs come in as tabs in your space (other windows get spaces of their own, and Arc&rsquo;s spaces stay spaces); they load when
-        you open them. {sources?.some((s) => s.blocked) && 'Allow… opens Privacy & Security: turn on Zepper there and reopen it. '}
+        you open them.{' '}
+        {sources?.some((s) => s.blocked) &&
+          'Allow… opens Privacy & Security: turn on Zepper there and reopen it (already on? Remove Zepper with − and add it again: macOS may be remembering an older Zepper). '}
         Passwords in Apple Passwords or Safari?{' '}
         <button className="ob-link" disabled={busy !== null} onClick={() => void fromFile()}>
           Import a passwords file

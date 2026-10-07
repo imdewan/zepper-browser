@@ -388,7 +388,7 @@ function ImportPanel({ onDone, onClose }: { onDone: (notice: string) => void; on
           <p className="pw-hint">
             macOS asks you to allow access to the browser’s key in your Keychain; choose Allow.
             {sources.some((s) => s.blocked) &&
-              ' For browsers macOS protects, turn on Zepper in Privacy & Security › Full Disk Access, then reopen this panel.'}
+              ' For browsers macOS protects, turn on Zepper in Privacy & Security › Full Disk Access, then reopen this panel (already on? Remove Zepper with − and add it again: macOS may be remembering an older Zepper).'}
           </p>
         </div>
       )}
