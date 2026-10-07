@@ -4,6 +4,14 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- In full screen, where the traffic lights come down with the menu bar instead, a sidebar button takes their place at the top of the sidebar, beside Extensions.
+
+### Fixed
+
+- The floating sidebar (compact mode) closed when you moved the pointer onto its traffic lights.
+
 ## [0.1.4] - 2026-10-07
 
 ### Added

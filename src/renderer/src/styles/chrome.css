@@ -240,6 +240,11 @@
   margin-left: 12px;
 }
 
+/* Full screen: the sidebar button stands where the traffic lights were, extensions beside it. */
+.top-row .sidebar-toggle + .extensions-button {
+  margin-left: 0;
+}
+
 /* Optional row of pinned extensions under the address bar. */
 .extensions-row {
   flex: none;

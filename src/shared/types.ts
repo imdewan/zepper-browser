@@ -167,6 +167,8 @@ export interface Snapshot {
   compact: boolean
   focused: boolean
   fullscreen: boolean
+  /** The window is in macOS full screen, where the traffic lights leave the sidebar (they come down with the menu bar). */
+  fullScreenWindow: boolean
   adblockEnabled: boolean
   settings: Settings
   /** Window type: the main window, a temporary window, or a private window. */
@@ -600,6 +602,11 @@ export type Command =
   /** The size of what the overlay shows in the window's corner (toasts, find bar), so only that takes clicks. */
   | { type: 'ui.overlayCorner'; width: number; height: number }
   | { type: 'ui.peekSidebar'; show: boolean }
+  /**
+   * The pointer left the peek card. The traffic lights are macOS's own buttons over the card, so the
+   * card can't tell they're under the pointer: if they are, it stays until the pointer moves off them.
+   */
+  | { type: 'ui.peekLeft' }
   | { type: 'ui.dismissOverlay' }
   | { type: 'ui.createSpace' }
   | { type: 'pip.back' }
@@ -654,6 +661,10 @@ export type UiEvent =
   /** The page went away before you chose. */
   | { type: 'share.close'; id: number }
   | { type: 'peek.show' }
+  /** The pointer is on the traffic lights: the peek card stays. */
+  | { type: 'peek.hold' }
+  /** The pointer went from the traffic lights off the card: it leaves, as when the pointer leaves it. */
+  | { type: 'peek.leave' }
   | { type: 'overlay.dismiss' }
 
 export interface ZepperApi {

@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import type { Snapshot } from '@shared/types'
+import type { Snapshot, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
+import { useUiEvents } from '../useSnapshot'
 import { Background } from '../chrome/App'
 import { Sidebar } from '../chrome/Sidebar'
 
@@ -35,6 +36,23 @@ export function Peek({ snapshot, onHide, onShow }: PeekProps): React.JSX.Element
     }, NEVER_ENTERED_MS)
     return () => window.clearTimeout(timer.current)
   }, [])
+  // Leaving: shortly after, unless the pointer comes back (or main says it's on the traffic lights).
+  const leave = useCallback((): void => {
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      zepper.send({ type: 'ui.peekLights', visible: false })
+      hide.current()
+    }, HIDE_DELAY_MS)
+  }, [])
+  useUiEvents(
+    useCallback(
+      (event: UiEvent) => {
+        if (event.type === 'peek.hold') window.clearTimeout(timer.current)
+        else if (event.type === 'peek.leave') leave()
+      },
+      [leave]
+    )
+  )
   const right = snapshot.settings.sidebarPosition === 'right'
   const space = snapshot.spaces.find((s) => s.id === snapshot.activeSpaceId) ?? snapshot.spaces[0]
   const offscreen = right ? '110%' : '-110%'
@@ -56,11 +74,8 @@ export function Peek({ snapshot, onHide, onShow }: PeekProps): React.JSX.Element
         onShow()
       }}
       onMouseLeave={() => {
-        window.clearTimeout(timer.current)
-        timer.current = window.setTimeout(() => {
-          zepper.send({ type: 'ui.peekLights', visible: false })
-          onHide()
-        }, HIDE_DELAY_MS)
+        leave()
+        zepper.send({ type: 'ui.peekLeft' })
       }}
     >
       <div className="peek-card">

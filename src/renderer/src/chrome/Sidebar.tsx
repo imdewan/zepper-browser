@@ -18,6 +18,7 @@ import {
   IconReload,
   IconSearch,
   IconSettings,
+  IconSidebar,
   IconSparkle,
   IconTranslate,
   IconUpdate
@@ -52,6 +53,8 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
         isPrivate={snapshot.kind === 'private'}
         extensionsRow={snapshot.settings.extensionsRow}
         update={snapshot.update}
+        fullScreen={snapshot.fullScreenWindow}
+        compact={snapshot.compact}
       />
       <UrlPill tab={activeTab} ai={snapshot.intelligence.ai} />
       {snapshot.settings.extensionsRow && snapshot.kind !== 'private' && <ExtensionsRow />}
@@ -73,17 +76,23 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
 /**
  * Top row: traffic lights, extensions, then back, forward and reload. When an update is waiting, its
  * button takes the place of extensions, back and forward (⌘[ and ⌘] still work) so it fits in full.
+ * In full screen the traffic lights come down with the menu bar instead, and a sidebar button takes
+ * their place.
  */
 function TopRow({
   tab,
   isPrivate,
   extensionsRow,
-  update
+  update,
+  fullScreen,
+  compact
 }: {
   tab: Tab | null
   isPrivate: boolean
   extensionsRow: boolean
   update: UpdateStatus
+  fullScreen: boolean
+  compact: boolean
 }): React.JSX.Element {
   const extensionsRef = useRef<HTMLButtonElement>(null)
   const extensions = useExtensions()
@@ -91,7 +100,17 @@ function TopRow({
   const updating = update.state === 'ready' || update.state === 'manual'
   return (
     <div className="top-row drag">
-      <div className="traffic-light-space" />
+      {fullScreen ? (
+        <button
+          className="icon-button sidebar-toggle"
+          title={compact ? 'Keep the sidebar open (⌘S)' : 'Hide the sidebar (⌘S)'}
+          onClick={() => zepper.send({ type: 'ui.toggleCompact' })}
+        >
+          <IconSidebar size={16} />
+        </button>
+      ) : (
+        <div className="traffic-light-space" />
+      )}
       {!isPrivate && !updating && (
         <>
           <button
