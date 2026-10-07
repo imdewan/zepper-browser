@@ -286,4 +286,3 @@ function SplitPanes({ snapshot }: { snapshot: Snapshot }): React.JSX.Element | n
     </>
   )
 }
-

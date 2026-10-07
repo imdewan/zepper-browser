@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-07
+
 ### Added
 
 - Every window comes back when you reopen Zepper, as in Chrome: where it was, with its spaces and tabs (not just the main window's). Quitting no longer asks first, since nothing's lost; a window you close yourself is forgotten, and private windows never come back.
@@ -25,6 +27,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
+- In full screen, the traffic lights were missing from the strip that slides down with the menu bar when the sidebar was hidden (compact mode). They're always there in full screen now.
 - Save Image As…, Save Link As… and Save Video As… saved straight to Downloads instead of asking where, as they do in Chrome. They ask now, with the file's name filled in; other downloads still follow Settings › Downloads.
 - Turning on the extensions row (Settings › Extensions) showed nothing until you'd pinned an extension. It shows all your extensions until you pin some, then just the pinned ones.
 - Sites couldn't get your location (Google Maps: "Your precise location could not be determined"): macOS was never asked to let Zepper use it, so requests waited and timed out. The first time a site you allow wants your location, macOS now asks, and if macOS is blocking Zepper you're told where to turn it on.
@@ -102,7 +105,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/imdewan/zepper-browser/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/imdewan/zepper-browser/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/imdewan/zepper-browser/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/imdewan/zepper-browser/compare/v0.1.0...v0.1.1

@@ -863,6 +863,7 @@ export class Browser {
     if (this.savedWindow?.maximized) this.win.maximize()
     this.win.on('focus', () => this.broadcast())
     // macOS puts the traffic lights back at their default spot after full screen.
+    this.win.on('enter-full-screen', () => this.showTrafficLights(true))
     this.win.on('leave-full-screen', () => this.showTrafficLights(!this.compact || this.peeking))
     this.win.on('blur', () => this.broadcast())
     this.win.on('closed', () => this.destroy())
@@ -4428,10 +4429,17 @@ export class Browser {
   /**
    * Shows or hides the traffic lights and puts them in the sidebar's top row: the docked
    * sidebar, or the peek card (inset from the window edge). macOS forgets custom positions
-   * after visibility and full-screen changes, so the position is applied every time.
+   * after visibility and full-screen changes, so the position is applied every time. In full
+   * screen they're always there, where macOS puts them in the strip that slides down with the
+   * menu bar (otherwise that strip comes down empty, in compact mode).
    */
   private showTrafficLights(visible: boolean): void {
     if (!this.win || this.win.isDestroyed()) return
+    if (this.win.isFullScreen()) {
+      this.win.setWindowButtonVisibility(true)
+      this.win.setWindowButtonPosition(null)
+      return
+    }
     this.win.setWindowButtonVisibility(visible)
     if (!visible) return
     const inset = this.peeking ? PEEK_INSET : 0

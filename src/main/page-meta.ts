@@ -56,7 +56,7 @@ export function parseHead(html: string, pageUrl: string): PageMeta {
     plain.find((i) => i.type === 'image/svg+xml' || /\.svg(\?|$)/i.test(i.href!)) ??
     plain.sort((a, b) => size(b.sizes) - size(a.sizes))[0] ??
     icons.find((i) => i.rel.includes('apple-touch-icon'))
-  let favicon: string | null = null
+  let favicon: string | null
   try {
     favicon = new URL(best?.href ?? '/favicon.ico', pageUrl).href
   } catch {
