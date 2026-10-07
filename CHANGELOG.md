@@ -6,7 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
-- Memory Saver works the way Chrome's and Brave's does, so tabs stay loaded far longer. Its modes are Moderate, Balanced (the default) and Maximum: a tab unloads after 6, 4 or 2 hours out of sight (it was 15 minutes to 4 hours), or sooner when your Mac runs short of memory. Time your Mac is asleep or locked no longer counts, so coming back finds your tabs as you left them, and tabs you keep coming back to, pinned tabs, sites allowed to send notifications and tabs with something typed and not sent stay loaded.
+- Memory Saver works the way Chrome's and Brave's does, so tabs stay loaded far longer. Its modes are Moderate, Balanced (the default) and Maximum: a tab unloads after 6, 4 or 2 hours out of sight (it was 15 minutes to 4 hours), or sooner when your Mac runs short of memory. Time your Mac is asleep or locked no longer counts, so coming back finds your tabs as you left them, and tabs you keep coming back to, pinned tabs, tabs that update out of sight (an unread count), sites allowed to send notifications and tabs with something typed and not sent stay loaded.
 
 ### Fixed
 

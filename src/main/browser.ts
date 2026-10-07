@@ -259,6 +259,8 @@ const MEMORY_SAVER_MODES: Record<MemorySaverMode, { afterMs: number; maxRevisits
 const RECENTLY_AUDIBLE_MS = 60_000
 /** Even when memory runs short, a tab seen this recently stays (Chrome's ten minutes). */
 const RECENTLY_SEEN_MS = 10 * 60_000
+/** A page counts as settled (done loading, not just finishing its title) this long after it stops loading. */
+const SETTLED_AFTER_MS = 5000
 /** macOS's memory pressure level when it's critical (kern.memorystatus_vm_pressure_level: 1, 2 or 4). */
 const CRITICAL_MEMORY_PRESSURE = 4
 /** Title-and-icon fetches for unopened tabs at once. */
@@ -567,6 +569,10 @@ export class Browser {
   private readonly revisits = new Map<string, number>()
   /** Tabs with typing that hasn't been sent (the frames it's in), which Memory Saver leaves alone. */
   private readonly typedIn = new Map<string, Set<string>>()
+  /** Tabs that changed their title or icon out of sight, once loaded (an unread count: still in use). */
+  private readonly updatedInBackground = new Set<string>()
+  /** When each tab's page last finished loading. */
+  private readonly settledAt = new Map<string, number>()
   /** When Memory Saver last looked, on a clock that stops while the Mac sleeps. */
   private memoryCheckedAt = performance.now()
   /** When each tab's media metadata was last read. */
@@ -2131,22 +2137,26 @@ export class Browser {
       this.unseenFor.set(tab.id, unseen)
       if (unseen >= mode.afterMs && !this.keepsLoaded(tab, mode.maxRevisits)) this.freeMemory(tab)
     }
-    for (const map of [this.unseenFor, this.revisits, this.typedIn]) for (const id of map.keys()) if (!present.has(id)) map.delete(id)
+    for (const map of [this.unseenFor, this.revisits, this.typedIn, this.settledAt, this.updatedInBackground]) {
+      for (const id of map.keys()) if (!present.has(id)) map.delete(id)
+    }
     void this.relieveMemoryPressure()
   }
 
   /**
-   * Tabs Memory Saver leaves alone, as Chrome does: ones you keep coming back to, pinned ones, and ones
-   * playing (or lately), in a call or floating, capturing, with DevTools open, allowed to send you
-   * notifications, or holding typing that hasn't been sent. When memory is short (`urgent`), pinned and
-   * often-visited tabs can go too.
+   * Tabs Memory Saver leaves alone, as Chrome does: pinned ones, ones playing (or lately), in a call or
+   * floating, capturing, with DevTools open, or holding typing that hasn't been sent. On a timer (not
+   * when memory is short, `urgent`), also ones you keep coming back to, ones allowed to send you
+   * notifications, and ones that changed their title or icon out of sight.
    */
   private keepsLoaded(tab: Tab, maxRevisits: number, urgent = false): boolean {
     const wc = this.views.get(tab.id)?.webContents
     if (!wc || wc.isDestroyed()) return true
     const url = wc.getURL()
+    const notifies = /^https?:/.test(url) && this.permissions.get(originOf(url), 'notifications') === 'allow'
     return (
-      (!urgent && (tab.pinned !== null || (this.revisits.get(tab.id) ?? 0) > maxRevisits)) ||
+      (!urgent && ((this.revisits.get(tab.id) ?? 0) > maxRevisits || notifies || this.updatedInBackground.has(tab.id))) ||
+      tab.pinned !== null ||
       tab.audible ||
       Date.now() - tab.audibleAt < RECENTLY_AUDIBLE_MS ||
       !!tab.capture ||
@@ -2154,14 +2164,14 @@ export class Browser {
       this.docPips.has(tab.id) ||
       this.nativePipTabs.has(tab.id) ||
       this.typedIn.has(tab.id) ||
-      wc.isDevToolsOpened() ||
-      (/^https?:/.test(url) && this.permissions.get(originOf(url), 'notifications') === 'allow')
+      wc.isDevToolsOpened()
     )
   }
 
   private freeMemory(tab: Tab): void {
     this.destroyView(tab)
     this.unseenFor.delete(tab.id)
+    this.updatedInBackground.delete(tab.id)
     this.broadcast()
   }
 
@@ -3413,8 +3423,12 @@ export class Browser {
     })
     wc.once('destroyed', () => this.dropDialogs(tabId))
     wc.on('did-start-loading', () => update({ loading: true }))
-    wc.on('did-stop-loading', () => update({ loading: false, ...navState() }))
+    wc.on('did-stop-loading', () => {
+      this.settledAt.set(tabId, Date.now())
+      update({ loading: false, ...navState() })
+    })
     wc.on('page-title-updated', (_event, title) => {
+      this.noteBackgroundUpdate(tabId, wc)
       update({ title })
       if (this.tab(tabId)?.media) void this.refreshMedia(tabId, wc)
       if (this.kind !== 'private') this.history.updateTitle(wc.getURL(), title)
@@ -3424,6 +3438,7 @@ export class Browser {
       // A pinned tab pinned before its page loaded learns its icon once it's on its pinned page.
       const tab = this.tab(tabId)
       if (favicon && tab?.pinned && !tab.pinned.favicon && stripHash(tab.url) === stripHash(tab.pinned.url)) tab.pinned.favicon = favicon
+      this.noteBackgroundUpdate(tabId, wc)
       update({ favicon })
     })
     wc.on('did-navigate', (_event, url) => {
@@ -3531,7 +3546,10 @@ export class Browser {
     })
     // A page (or frame) that goes elsewhere leaves its camera, microphone and screen behind.
     wc.on('did-start-navigation', (details) => {
-      if (details.isMainFrame && !details.isSameDocument) this.clearCapture(tabId)
+      if (details.isMainFrame && !details.isSameDocument) {
+        this.clearCapture(tabId)
+        this.updatedInBackground.delete(tabId)
+      }
       // Another page, or another view in an app: what was typed was sent or left behind.
       if (details.isMainFrame) this.typedIn.delete(tabId)
     })
@@ -3543,6 +3561,16 @@ export class Browser {
       this.popupTimes.delete(wcId)
       this.captureFrames.delete(tabId)
     })
+  }
+
+  /**
+   * A page out of sight changed its title or icon after it had loaded (as Chrome counts it, not while
+   * loading): an unread count or a new message, so it's still doing something for you.
+   */
+  private noteBackgroundUpdate(tabId: string, wc: WebContents): void {
+    if (tabId === this.activeTabId || this.attached.has(tabId) || wc.isLoading()) return
+    const settled = this.settledAt.get(tabId)
+    if (settled !== undefined && Date.now() - settled >= SETTLED_AFTER_MS) this.updatedInBackground.add(tabId)
   }
 
   /** The page preload says you've typed something in a frame (or sent it). */
