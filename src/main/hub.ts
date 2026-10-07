@@ -288,21 +288,25 @@ export class Hub {
   }
 
   /**
-   * A tab dragged out of a window's sidebar and let go: over another window, it joins that one;
-   * anywhere else outside its window, it gets a window of its own there (with your spaces), as in
-   * Chrome. Either way its page keeps running. Let go back over its own window, nothing happens.
+   * A tab dragged out of a window's sidebar and let go somewhere nothing took it: over another
+   * window, it joins that one; anywhere else, its own window's page included, it gets a window of
+   * its own there (with your spaces), as Chrome detaches a tab dragged off its tab strip. Either way
+   * its page keeps running. Let go back in its own sidebar, nothing happens.
    */
   tearOffTab(from: Browser, tabId: string): void {
     if (from.kind === 'private' || !from.hasTab(tabId)) return
     const point = screen.getCursorScreenPoint()
+    const inside = (r: Electron.Rectangle | null): boolean =>
+      !!r && point.x >= r.x && point.x < r.x + r.width && point.y >= r.y && point.y < r.y + r.height
     const over = (browser: Browser): boolean => {
       const win = browser.window()
-      if (win.isDestroyed() || !win.isVisible() || win.isMinimized()) return false
-      const r = win.getBounds()
-      return point.x >= r.x && point.x < r.x + r.width && point.y >= r.y && point.y < r.y + r.height
+      return !win.isDestroyed() && win.isVisible() && !win.isMinimized() && inside(win.getBounds())
     }
-    if (over(from)) return
-    const other = [...this.browsers].find((browser) => browser !== from && browser.kind !== 'private' && over(browser))
+    if (inside(from.sidebarScreenRect())) return
+    // The window in front under the pointer (the source's own page counts as "elsewhere").
+    const front = BrowserWindow.getFocusedWindow()
+    const others = [...this.browsers].filter((browser) => browser !== from && browser.kind !== 'private' && over(browser))
+    const other = over(from) ? undefined : (others.find((browser) => browser.window() === front) ?? others[0])
     if (other) {
       const moving = from.releaseTab(tabId)
       if (moving) other.adoptTab(moving, other.currentSpaceId(), null)

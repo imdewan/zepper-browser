@@ -1296,17 +1296,19 @@ export class Browser {
     this.pip?.exit()
     this.autofill?.destroy()
     for (const dispose of this.disposers) dispose()
-    for (const view of this.views.values()) {
-      if (!view.webContents.isDestroyed()) view.webContents.close()
+    // Pages that closed themselves first (quitting, closing the window) are already gone.
+    const close = (wc: WebContents | undefined): void => {
+      if (wc && !wc.isDestroyed()) wc.close()
     }
+    for (const view of this.views.values()) close(view.webContents)
     this.views.clear()
     this.tabByWebContents.clear()
     for (const popup of this.popups.keys()) if (!popup.isDestroyed()) popup.destroy()
     this.popups.clear()
     // Child views' pages outlive their window unless closed.
-    if (!this.overlay.webContents.isDestroyed()) this.overlay.webContents.close()
+    close(this.overlay.webContents)
     if (this.swipeArrowTimer) clearTimeout(this.swipeArrowTimer)
-    if (this.swipeArrow && !this.swipeArrow.webContents.isDestroyed()) this.swipeArrow.webContents.close()
+    close(this.swipeArrow?.webContents)
     this.hub.windowClosed(this)
   }
 
@@ -1433,6 +1435,7 @@ export class Browser {
       case 'item.drop':
         return this.dropItem(command.item, command.target)
       case 'tab.tearOff':
+        if (!app.isPackaged) console.info('[tabs] tear-off requested at', screen.getCursorScreenPoint())
         return this.hub.tearOffTab(this, command.tabId)
       case 'tab.openDropped':
         return this.openDropped(command.urls, command.target, command.ontoTabId)
@@ -2052,6 +2055,16 @@ export class Browser {
 
   hasTab(id: string): boolean {
     return !!this.tab(id)
+  }
+
+  /** Where the sidebar is on screen (docked, or peeking out in compact mode); null when hidden. */
+  sidebarScreenRect(): Rectangle | null {
+    if (this.win.isDestroyed()) return null
+    const bounds = this.win.getContentBounds()
+    const width = this.compact ? (this.peeking ? this.sidebarWidth + PEEK_AREA_EXTRA : 0) : this.sidebarWidth
+    if (width === 0) return null
+    const right = this.settings.sidebarPosition === 'right'
+    return { x: right ? bounds.x + bounds.width - width : bounds.x, y: bounds.y, width, height: bounds.height }
   }
 
   /** The space this window is showing. */
