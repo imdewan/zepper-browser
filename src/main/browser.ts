@@ -601,6 +601,8 @@ export class Browser {
   private readonly closingGently = new Map<number, { leave: boolean; stayed: () => void }>()
   /** Tabs Memory Saver is closing. */
   private readonly freeing = new Set<string>()
+  /** Addresses you chose Save Image/Link/Video As… for: their download asks where to save, as in Chrome. */
+  private readonly saveAsUrls = new Set<string>()
   /** The back/forward history of tabs that aren't loaded (saved last time, or kept as they unloaded). */
   private readonly savedHistory = new Map<string, TabHistory>()
   /**
@@ -1053,12 +1055,22 @@ export class Browser {
     return keys.every((k) => this.permissions.get(originOf(requestingOrigin), k) === 'allow')
   }
 
+  /** Save Image/Link/Video As…: downloads it, asking where to save it (see handleDownload). */
+  private saveAs(wc: WebContents, url: string): void {
+    if (!url) return
+    this.saveAsUrls.add(url)
+    // A download that never starts (a dead link) doesn't leave it waiting.
+    setTimeout(() => this.saveAsUrls.delete(url), 30_000)
+    wc.downloadURL(url)
+  }
+
   handleDownload(item: DownloadItem, source?: WebContents | null): void {
     const { downloadAsk, downloadPath } = this.settings
     const folder = downloadPath && existsSync(downloadPath) ? downloadPath : app.getPath('downloads')
     const path = uniquePath(join(folder, item.getFilename()))
-    // Without a save path, Electron asks where to save it.
-    if (downloadAsk) item.setSaveDialogOptions({ defaultPath: path })
+    // Save … As always asks where; other downloads follow Settings. Without a save path, Electron asks.
+    const chosen = [item.getURL(), ...item.getURLChain()].some((url) => this.saveAsUrls.delete(url))
+    if (downloadAsk || chosen) item.setSaveDialogOptions({ defaultPath: path })
     else item.setSavePath(path)
     const name = basename(path)
     // The site you were on (a download link often points at a CDN with an unhelpful name).
@@ -5149,7 +5161,7 @@ export class Browser {
         },
         { label: 'Open Link in Private Window', click: () => void this.hub.openWindow('private', params.linkURL) },
         { type: 'separator' },
-        { label: 'Save Link As…', click: () => wc.downloadURL(params.linkURL) },
+        { label: 'Save Link As…', click: () => this.saveAs(wc, params.linkURL) },
         { label: 'Copy Link', click: () => clipboard.writeText(stripTracking(params.linkURL)) },
         { type: 'separator' }
       )
@@ -5159,7 +5171,7 @@ export class Browser {
         { label: 'Open Image in New Tab', click: () => this.openTab(params.srcURL, { background: true }) },
         { label: 'Copy Image', click: () => wc.copyImageAt(params.x, params.y) },
         { label: 'Copy Image Address', click: () => clipboard.writeText(params.srcURL) },
-        { label: 'Save Image As…', click: () => wc.downloadURL(params.srcURL) },
+        { label: 'Save Image As…', click: () => this.saveAs(wc, params.srcURL) },
         { type: 'separator' }
       )
     }
@@ -5168,7 +5180,7 @@ export class Browser {
       items.push(
         { label: `Open ${noun} in New Tab`, click: () => this.openTab(params.srcURL, { background: true, afterTabId: tabId }) },
         { label: `Copy ${noun} Address`, click: () => clipboard.writeText(params.srcURL) },
-        { label: `Save ${noun} As…`, click: () => wc.downloadURL(params.srcURL) },
+        { label: `Save ${noun} As…`, click: () => this.saveAs(wc, params.srcURL) },
         { type: 'separator' }
       )
     }
