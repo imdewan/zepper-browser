@@ -85,7 +85,7 @@ import { tidyGroups } from './tidy'
 import { AiError, intelligence } from './ai'
 import { resolveInput, searchEngineName, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
 import { nextZoom } from './zoom'
-import { requestLocationAccess } from './native'
+import { fileTypeIcon, requestLocationAccess } from './native'
 import { CAPTURE_TARGETS_SCRIPT, captureArea, captureFullPage, pngWithDensity, type CaptureTargets } from './capture'
 
 /** Height reserved for the traffic lights when the sidebar is on the right. */
@@ -1216,10 +1216,14 @@ export class Browser {
   private async dragDownload(sender: WebContents, id: string): Promise<void> {
     const path = this.hub.downloads.pathOf(id)
     if (!path) return
-    const icon = await app.getFileIcon(path, { size: 'normal' }).catch(() => nativeImage.createEmpty())
     if (sender.isDestroyed()) return
+    // The dragged file's own kind of icon (Electron's app.getFileIcon crashes on this build).
+    const typeIcon = fileTypeIcon(extname(path).slice(1).toLowerCase(), 64)
+    const icon = typeIcon
+      ? nativeImage.createFromDataURL(typeIcon)
+      : nativeImage.createFromPath(join(app.getAppPath(), 'build', 'icon.png'))
     this.setOverlayMode('hidden')
-    sender.startDrag({ file: path, icon: icon.isEmpty() ? nativeImage.createFromPath(join(app.getAppPath(), 'build', 'icon.png')) : icon })
+    sender.startDrag({ file: path, icon })
   }
 
   /** The window's own UI (sidebar, overlay, picture-in-picture controls), as opposed to web pages. */
@@ -1619,6 +1623,10 @@ export class Browser {
         return void this.hub.downloads[command.action](command.id)
       case 'downloads.clear':
         return this.hub.downloads.clear()
+      case 'downloads.openFolder': {
+        const { downloadPath } = this.settings
+        return void shell.openPath(downloadPath && existsSync(downloadPath) ? downloadPath : app.getPath('downloads'))
+      }
       case 'extension.setEnabled':
         return void this.extensions?.setEnabled(command.id, command.enabled)
       case 'extension.remove':

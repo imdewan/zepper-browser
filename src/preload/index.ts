@@ -21,6 +21,7 @@ const api: ZepperApi = {
   historyMeaning: (query: string) => ipcRenderer.invoke(IPC.historyMeaning, query),
   extensions: () => ipcRenderer.invoke(IPC.extensions),
   vault: (request) => ipcRenderer.invoke(IPC.vault, request),
+  downloadIcon: (id) => ipcRenderer.invoke(IPC.downloadIcon, id),
   pathForFile: (file) => {
     try {
       return webUtils.getPathForFile(file)

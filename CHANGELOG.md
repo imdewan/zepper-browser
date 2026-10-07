@@ -13,6 +13,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
+- The downloads panel is cleaner: each file with its Finder icon, downloads under way at the top, the rest by day (Today, Yesterday, Earlier) with size, site and when, and a Show in Finder button for the folder.
 - Settings › Privacy shows whether macOS lets Zepper use your location (with a way to change it), next to the camera, microphone and screen.
 - Swiping back and forward works like Chrome's: the page stays still while an arrow slides in from its edge with your fingers, a ring filling as you go; once letting go will navigate, the circle fills in the space's colour. Letting go then goes straight there, without the page lurching and springing back as it did.
 - In the command bar, → (at the end of what you've typed) puts the highlighted suggestion in the field without going there, so you can keep editing it: a search's words, or a page's address. Tab and Shift-Tab step through suggestions, as in Chrome and Firefox.

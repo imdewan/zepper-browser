@@ -1,8 +1,9 @@
 import { dialog, shell, type DownloadItem } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, extname } from 'node:path'
 import type { DownloadEntry } from '@shared/types'
+import { fileTypeIcon } from './native'
 import { JsonFile } from './persist'
 
 /** Files that run code when opened. */
@@ -18,6 +19,8 @@ const NOTIFY_MS = 250
  * never written to disk).
  */
 export class Downloads {
+  /** File-type icons (data URLs), by extension. */
+  private readonly icons = new Map<string, string | null>()
   private readonly file = new JsonFile<DownloadEntry[]>('downloads.json', 1000)
   private entries: DownloadEntry[]
   private readonly active = new Map<string, DownloadItem>()
@@ -28,6 +31,15 @@ export class Downloads {
     this.entries = (this.file.read() ?? []).map((e) =>
       e.state === 'progressing' || e.state === 'paused' ? { ...e, state: 'interrupted' } : e
     )
+  }
+
+  /** A download's icon as Finder shows it for its kind of file (a data URL), cached by kind. */
+  iconOf(id: string): string | null {
+    const entry = this.entries.find((e) => e.id === id)
+    if (!entry) return null
+    const kind = extname(entry.filename).slice(1).toLowerCase()
+    if (!this.icons.has(kind)) this.icons.set(kind, fileTypeIcon(kind, 72))
+    return this.icons.get(kind) ?? null
   }
 
   /** Where a finished download is on disk (null if it isn't there any more). */

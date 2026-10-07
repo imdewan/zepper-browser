@@ -21,6 +21,8 @@ export interface CredentialsAddon {
   locationAccess(): string
   /** Shows macOS's location prompt if Zepper has never been asked; resolves with the answer (JSON). */
   requestLocationAccess(): Promise<string>
+  /** The icon Finder shows for a kind of file ("pdf"), as a PNG data URL ('' if none). */
+  fileTypeIcon(extension: string, size: number): string
 }
 
 let addon: CredentialsAddon | null | undefined
@@ -85,5 +87,17 @@ export async function requestLocationAccess(): Promise<'allowed' | 'denied' | 'a
     return status === 'granted' ? 'allowed' : status === 'not-determined' ? 'ask' : 'denied'
   } catch {
     return 'ask'
+  }
+}
+
+/**
+ * The icon Finder shows for a kind of file, by extension (a PNG data URL), or null. Electron's own
+ * app.getFileIcon crashes on this Electron build, so it comes from the native addon.
+ */
+export function fileTypeIcon(extension: string, size = 64): string | null {
+  try {
+    return credentialsAddon()?.fileTypeIcon?.(extension, size) || null
+  } catch {
+    return null
   }
 }

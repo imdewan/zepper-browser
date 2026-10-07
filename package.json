@@ -27,7 +27,7 @@
     "dist:browser": "node scripts/dist-browser.mjs",
     "brand:dev": "node scripts/brand-dev-runtime.mjs",
     "build:native": "mkdir -p build/bin && swiftc -O -parse-as-library -swift-version 5 -target arm64-apple-macos26.0 native/zepper-ai/main.swift -o build/bin/zepper-ai && npm run build:credentials",
-    "build:credentials": "node-gyp rebuild -C native/credentials --arch=arm64 && mkdir -p build/bin && cp native/credentials/build/Release/zepper_credentials.node build/bin/",
+    "build:credentials": "node-gyp rebuild -C native/credentials --arch=arm64 && mkdir -p build/bin && rm -f build/bin/zepper_credentials.node && cp native/credentials/build/Release/zepper_credentials.node build/bin/",
     "vmp:signup": ".evs/bin/python -m castlabs_evs.account signup",
     "vmp:login": ".evs/bin/python -m castlabs_evs.account reauth",
     "vmp:sign": ".evs/bin/python -m castlabs_evs.vmp sign-pkg node_modules/electron/dist",

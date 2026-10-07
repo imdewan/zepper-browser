@@ -241,6 +241,9 @@ function createMock(): ZepperApi {
     pathForFile(): string {
       return ''
     },
+    async downloadIcon(): Promise<string | null> {
+      return null
+    },
     async vault<T extends VaultRequest>(request: T): Promise<VaultReplies[T['type']]> {
       const replies: Partial<VaultReplies> = {
         list: {

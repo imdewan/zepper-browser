@@ -5,6 +5,7 @@
 #import <Foundation/Foundation.h>
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <Security/Security.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include "bridge.h"
 
 /** verifyOwner(reason: string): Promise<string> — "true", "false" (cancelled or failed) or "\"unavailable\"" (no way to verify). */
@@ -65,4 +66,47 @@ napi_value ReadKeychain(napi_env env, napi_callback_info info) {
     Finish(tsfn, secret ? Json(@[ secret ]) : @"null", true);
   });
   return promise;
+}
+
+/**
+ * fileTypeIcon(extension: string, size: number): string — the icon Finder shows for a kind of file
+ * ("pdf", "zip"…), as a PNG data URL ('' if macOS has none). Drawn here, on the main thread, because
+ * Electron's own app.getFileIcon crashes on this Electron build.
+ */
+napi_value FileTypeIcon(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  NSString *extension = argc > 0 ? [NSString stringWithUTF8String:ArgString(env, argv[0]).c_str()] : @"";
+  double points = 64;
+  if (argc > 1) napi_get_value_double(env, argv[1], &points);
+  points = MAX(16, MIN(points, 512));
+  NSString *url = @"";
+  @autoreleasepool {
+    UTType *type = extension.length > 0 ? [UTType typeWithFilenameExtension:extension] : nil;
+    NSImage *icon = [[NSWorkspace sharedWorkspace] iconForContentType:type ?: UTTypeData];
+    if (icon) {
+      NSSize size = NSMakeSize(points, points);
+      NSBitmapImageRep *bitmap = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nullptr
+                                                                         pixelsWide:(NSInteger)points
+                                                                         pixelsHigh:(NSInteger)points
+                                                                      bitsPerSample:8
+                                                                    samplesPerPixel:4
+                                                                           hasAlpha:YES
+                                                                           isPlanar:NO
+                                                                     colorSpaceName:NSDeviceRGBColorSpace
+                                                                        bytesPerRow:0
+                                                                       bitsPerPixel:0];
+      bitmap.size = size;
+      [NSGraphicsContext saveGraphicsState];
+      NSGraphicsContext.currentContext = [NSGraphicsContext graphicsContextWithBitmapImageRep:bitmap];
+      [icon drawInRect:NSMakeRect(0, 0, points, points) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1];
+      [NSGraphicsContext restoreGraphicsState];
+      NSData *png = [bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+      if (png) url = [@"data:image/png;base64," stringByAppendingString:[png base64EncodedStringWithOptions:0]];
+    }
+  }
+  napi_value result;
+  napi_create_string_utf8(env, url.UTF8String, NAPI_AUTO_LENGTH, &result);
+  return result;
 }

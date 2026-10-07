@@ -580,6 +580,8 @@ export type Command =
   | { type: 'tab.openDropped'; urls: string[]; target: DropTarget | null; ontoTabId?: string }
   | { type: 'download.action'; id: string; action: 'open' | 'reveal' | 'pause' | 'resume' | 'cancel' | 'remove' | 'trash' }
   | { type: 'downloads.clear' }
+  /** Opens the folder downloads go to, in Finder. */
+  | { type: 'downloads.openFolder' }
   | { type: 'settings.chooseDownloadFolder' }
   | { type: 'ui.downloads' }
   | { type: 'ui.openHistory' }
@@ -671,6 +673,8 @@ export interface ZepperApi {
   vault<T extends VaultRequest>(request: T): Promise<VaultReplies[T['type']]>
   /** Where a file dropped on Zepper's UI is on disk ('' when it isn't a file there). */
   pathForFile(file: File): string
+  /** A download's file icon, as Finder shows it (a data URL), or null. */
+  downloadIcon(id: string): Promise<string | null>
 }
 
 /** An installed extension, for Settings → Extensions. */
@@ -769,5 +773,6 @@ export const IPC = {
   extensions: 'zepper:extensions',
   history: 'zepper:history',
   historyMeaning: 'zepper:history-meaning',
-  vault: 'zepper:vault'
+  vault: 'zepper:vault',
+  downloadIcon: 'zepper:download-icon'
 } as const

@@ -16,7 +16,8 @@
           "-framework Security",
           "-framework LocalAuthentication",
           "-framework CoreBluetooth",
-          "-framework CoreLocation"
+          "-framework CoreLocation",
+          "-framework UniformTypeIdentifiers"
         ]
       }
     }
