@@ -4,9 +4,12 @@
 //    only from the (integrity-checked) asar, and cookies encrypted on disk.
 // 2. VMP-sign with castLabs EVS so Widevine licence servers (Netflix, Crunchyroll…) accept
 //    the app. Flipping fuses rewrites the framework binary, so it has to happen first.
-// 3. Re-seal with an ad-hoc signature: VMP signing adds a .sig file inside the framework, which
-//    breaks the seal the fuses step made, and a downloaded app with a broken seal is reported
-//    as "damaged". Apple code signing (when there's a Developer ID) replaces this afterwards.
+// 3. Re-seal: VMP signing adds a .sig file inside the framework, which breaks the seal the fuses
+//    step made, and a downloaded app with a broken seal is reported as "damaged". It's signed with
+//    the "Zepper Signing" certificate when this Mac has it (see "Signing releases" in the README), so macOS
+//    knows each update as the same app: the Keychain and camera/microphone permissions carry over
+//    instead of asking again. Without it, an ad-hoc signature (a new app to macOS every build).
+//    Apple code signing (when there's a Developer ID) replaces this afterwards.
 const { execFileSync } = require('node:child_process')
 const { existsSync } = require('node:fs')
 const { join } = require('node:path')
@@ -29,7 +32,21 @@ exports.default = async function afterPack(context) {
   vmpSign(context.appOutDir)
 
   const app = join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
-  execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'inherit' })
+  const identity = signingIdentity()
+  if (identity === '-') console.warn(`  • No "${SIGNING_IDENTITY}" certificate: signed ad hoc, so updates ask for the Keychain again.`)
+  execFileSync('codesign', ['--force', '--deep', '--sign', identity, app], { stdio: 'inherit' })
+}
+
+/** The certificate releases are signed with (a self-signed code-signing certificate in the login keychain). */
+const SIGNING_IDENTITY = process.env.ZEPPER_SIGNING_IDENTITY || 'Zepper Signing'
+
+function signingIdentity() {
+  try {
+    const found = execFileSync('security', ['find-identity', '-p', 'codesigning'], { encoding: 'utf8' })
+    return found.includes(`"${SIGNING_IDENTITY}"`) ? SIGNING_IDENTITY : '-'
+  } catch {
+    return '-'
+  }
 }
 
 function vmpSign(appOutDir) {

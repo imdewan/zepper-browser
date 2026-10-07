@@ -166,6 +166,10 @@ npm run vmp:sign       # sign the development runtime
 
 Run `npm run vmp:sign` again after reinstalling Electron, and `npm run vmp:login` when the login expires. `npm run dist` signs packaged builds for you.
 
+### Signing releases
+
+`npm run dist` signs the app with a code-signing certificate named **Zepper Signing** when your login keychain has one, so macOS sees every update as the same app: the Keychain and camera and microphone permissions carry over instead of asking again. Without it, builds are signed ad hoc and each update asks again. To make one: Keychain Access → Certificate Assistant → Create a Certificate…, with Identity Type **Self-Signed Root** and Certificate Type **Code Signing**. Every release has to be signed with the same certificate, so keep a backup of it (exported as a password-protected `.p12`). To use a different name, set `ZEPPER_SIGNING_IDENTITY`.
+
 <details>
 <summary><b>Keyboard shortcuts</b></summary>
 <br>
