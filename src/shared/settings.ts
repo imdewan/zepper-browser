@@ -26,6 +26,8 @@ export type SearchEngineId = 'google' | 'duckduckgo' | 'bing' | 'brave' | 'kagi'
 export type SecureDns = 'off' | 'automatic' | 'cloudflare' | 'quad9' | 'google'
 
 /** Protections that can be turned off for one site from the lock icon. */
+export type MemorySaverMode = 'moderate' | 'balanced' | 'maximum'
+
 export type Protection = 'ads' | 'cookieBanners' | 'fingerprinting' | 'crossSiteCookies' | 'httpsUpgrade' | 'cleanLinks'
 
 export const PROTECTIONS: { key: Protection; label: string; setting: keyof Settings }[] = [
@@ -66,8 +68,8 @@ export interface Settings {
   newTabPosition: 'top' | 'bottom'
   /** Memory Saver: tabs you haven't looked at for a while give back their memory (they reload when opened). */
   memorySaver: boolean
-  /** After how many minutes unseen (15, 60 or 240). */
-  memorySaverAfter: 15 | 60 | 240
+  /** How soon tabs unload, as in Chrome and Brave: Moderate (after 6 hours unseen), Balanced (4) or Maximum (2). */
+  memorySaverMode: MemorySaverMode
   pinnedCloseBehavior: PinnedCloseBehavior
   closeSelectsRecent: boolean
   /** Reopen last session's open (unpinned) tabs when Zepper starts. */
@@ -171,7 +173,7 @@ export const DEFAULT_SETTINGS: Settings = {
   transparency: 0.5,
   newTabPosition: 'top',
   memorySaver: true,
-  memorySaverAfter: 60,
+  memorySaverMode: 'balanced',
   pinnedCloseBehavior: 'reset-unload-switch',
   closeSelectsRecent: true,
   restoreTabs: true,

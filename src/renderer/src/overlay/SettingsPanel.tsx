@@ -19,6 +19,7 @@ import {
   PROTECTIONS,
   SEARCH_ENGINES,
   USER_AGENT_LABELS,
+  type MemorySaverMode,
   type PinnedCloseBehavior,
   type SearchEngineId,
   type SecureDns,
@@ -32,6 +33,13 @@ import { cx, isMac } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
 import { PasswordsSettings } from './PasswordsSettings'
 import { Toggle } from './Toggle'
+
+/** What each Memory Saver mode does (Chrome's and Brave's timings). */
+const MEMORY_SAVER_HINTS: Record<MemorySaverMode, string> = {
+  moderate: 'Tabs unload after 6 hours out of sight, or sooner if your Mac runs short of memory.',
+  balanced: 'Recommended. Tabs unload after 4 hours out of sight, or sooner if your Mac runs short of memory.',
+  maximum: 'Tabs unload after 2 hours out of sight, or sooner if your Mac runs short of memory.'
+}
 
 /** Languages Apple's on-device translation supports. */
 const TRANSLATION_LANGUAGES = [
@@ -384,19 +392,19 @@ export function SettingsPanel({
                 </Row>
                 <Row
                   label="Memory Saver"
-                  hint="Tabs you haven’t looked at for a while give back their memory and reload when you open them. Tabs playing sound, in a call or in picture-in-picture stay."
+                  hint="Tabs you haven’t looked at for a while give back their memory and reload when you open them. Time your Mac is asleep or locked doesn’t count. Tabs you keep coming back to, pinned tabs, and tabs playing sound, in a call or with something typed stay."
                 >
                   <Toggle checked={settings.memorySaver} onChange={(memorySaver) => set({ memorySaver })} />
                 </Row>
-                <Row label="Free a tab’s memory after" hint="How long a tab has to go unseen first.">
+                <Row label="How soon" hint={MEMORY_SAVER_HINTS[settings.memorySaverMode]}>
                   <Segmented
-                    value={String(settings.memorySaverAfter) as '15' | '60' | '240'}
+                    value={settings.memorySaverMode}
                     options={[
-                      ['15', '15 min'],
-                      ['60', '1 hour'],
-                      ['240', '4 hours']
+                      ['moderate', 'Moderate'],
+                      ['balanced', 'Balanced'],
+                      ['maximum', 'Maximum']
                     ]}
-                    onChange={(value) => set({ memorySaverAfter: Number(value) as 15 | 60 | 240 })}
+                    onChange={(memorySaverMode) => set({ memorySaverMode })}
                   />
                 </Row>
                 <Row label="Closing a pinned tab" hint="What ⌘W does on pinned tabs and Essentials.">

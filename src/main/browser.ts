@@ -8,6 +8,7 @@ import {
   dialog,
   nativeImage,
   nativeTheme,
+  powerMonitor,
   screen,
   session,
   desktopCapturer,
@@ -37,7 +38,7 @@ import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { PEEK_AREA_EXTRA, PIP_WIDTH, PROTECTIONS, type Protection, type Settings } from '@shared/settings'
+import { PEEK_AREA_EXTRA, PIP_WIDTH, PROTECTIONS, type MemorySaverMode, type Protection, type Settings } from '@shared/settings'
 import { DEFAULT_THEME } from '@shared/theme'
 import {
   IPC,
@@ -245,6 +246,21 @@ const MIN_REVEAL_EDGE = 4
 const PIP_DELAY_MS = 250
 /** How often Memory Saver looks for tabs to unload. */
 const MEMORY_SAVER_CHECK_MS = 60_000
+/**
+ * Chrome's Memory Saver modes (Brave's too): how long a tab stays out of sight before it unloads, and
+ * how many times you can come back to a tab before it counts as one you use and always stays.
+ */
+const MEMORY_SAVER_MODES: Record<MemorySaverMode, { afterMs: number; maxRevisits: number }> = {
+  moderate: { afterMs: 6 * 3_600_000, maxRevisits: 5 },
+  balanced: { afterMs: 4 * 3_600_000, maxRevisits: 15 },
+  maximum: { afterMs: 2 * 3_600_000, maxRevisits: 15 }
+}
+/** A tab that played sound this recently stays (Chrome's minute). */
+const RECENTLY_AUDIBLE_MS = 60_000
+/** Even when memory runs short, a tab seen this recently stays (Chrome's ten minutes). */
+const RECENTLY_SEEN_MS = 10 * 60_000
+/** macOS's memory pressure level when it's critical (kern.memorystatus_vm_pressure_level: 1, 2 or 4). */
+const CRITICAL_MEMORY_PRESSURE = 4
 /** Title-and-icon fetches for unopened tabs at once. */
 const META_FETCHES = 3
 /** window.open's name for a page's floating call window (see documentPipShim in the page preload). */
@@ -545,6 +561,14 @@ export class Browser {
   private readonly hungTabs = new Set<string>()
   /** Tabs whose video went into Chromium's own picture-in-picture (iframes). */
   private readonly nativePipTabs = new Set<string>()
+  /** Memory Saver: how long each loaded tab has been out of sight while you were at the Mac. */
+  private readonly unseenFor = new Map<string, number>()
+  /** Memory Saver: how many times you've come back to each tab this session. */
+  private readonly revisits = new Map<string, number>()
+  /** Tabs with typing that hasn't been sent (the frames it's in), which Memory Saver leaves alone. */
+  private readonly typedIn = new Map<string, Set<string>>()
+  /** When Memory Saver last looked, on a clock that stops while the Mac sleeps. */
+  private memoryCheckedAt = performance.now()
   /** When each tab's media metadata was last read. */
   private readonly mediaReadAt = new Map<string, number>()
   /** Pages whose permission prompts are dropped when they go away. */
@@ -1655,6 +1679,10 @@ export class Browser {
     if (tab.spaceId && tab.spaceId !== this.activeSpaceId) {
       this.activeSpaceId = tab.spaceId
     }
+    if (previousId !== id) {
+      this.unseenFor.delete(id)
+      if (!options.keepRecency) this.revisits.set(id, (this.revisits.get(id) ?? 0) + 1)
+    }
     if (this.pip.activeTabId === id) this.pip.exit()
     if (this.autoDocPips.has(id)) {
       this.autoDocPips.delete(id)
@@ -2079,30 +2107,78 @@ export class Browser {
   }
 
   /**
-   * Memory Saver (as in Chrome and Brave): tabs you haven't looked at for a while give back their memory.
-   * They keep their place, title and icon (shown with Chrome's inactive ring) and reload when you open
-   * them. Tabs on screen, playing (or lately), in a call or floating stay.
+   * Memory Saver, as Chrome and Brave do it: a tab out of sight for the mode's time (6, 4 or 2 hours)
+   * gives back its memory, keeping its place, title and icon (with Chrome's inactive ring), and reloads
+   * when you open it. That time only counts while you're at the Mac: the clock stops while it sleeps,
+   * and time with the screen locked is left out, so coming back finds your tabs as you left them.
+   * When the Mac runs short of memory, the tab you used least recently goes sooner.
    */
   private saveMemory(): void {
+    const now = performance.now()
+    const elapsed = now - this.memoryCheckedAt
+    this.memoryCheckedAt = now
     if (!this.settings.memorySaver || this.windowClosed) return
-    const limit = this.settings.memorySaverAfter * 60_000
-    const now = Date.now()
-    let unloaded = false
+    const counting = powerMonitor.getSystemIdleState(60) !== 'locked'
+    const mode = MEMORY_SAVER_MODES[this.settings.memorySaverMode] ?? MEMORY_SAVER_MODES.balanced
+    const present = new Set<string>()
     for (const tab of this.tabs) {
-      if (!tab.loaded || tab.id === this.activeTabId || this.attached.has(tab.id)) continue
-      if (now - tab.lastActiveAt < limit) continue
-      const inUse =
-        tab.audible ||
-        now - tab.audibleAt < limit ||
-        tab.capture ||
-        this.pip.activeTabId === tab.id ||
-        this.docPips.has(tab.id) ||
-        this.nativePipTabs.has(tab.id)
-      if (inUse) continue
-      this.destroyView(tab)
-      unloaded = true
+      present.add(tab.id)
+      if (!tab.loaded || tab.id === this.activeTabId || this.attached.has(tab.id)) {
+        this.unseenFor.delete(tab.id)
+        continue
+      }
+      const unseen = (this.unseenFor.get(tab.id) ?? 0) + (counting ? elapsed : 0)
+      this.unseenFor.set(tab.id, unseen)
+      if (unseen >= mode.afterMs && !this.keepsLoaded(tab, mode.maxRevisits)) this.freeMemory(tab)
     }
-    if (unloaded) this.broadcast()
+    for (const map of [this.unseenFor, this.revisits, this.typedIn]) for (const id of map.keys()) if (!present.has(id)) map.delete(id)
+    void this.relieveMemoryPressure()
+  }
+
+  /**
+   * Tabs Memory Saver leaves alone, as Chrome does: ones you keep coming back to, pinned ones, and ones
+   * playing (or lately), in a call or floating, capturing, with DevTools open, allowed to send you
+   * notifications, or holding typing that hasn't been sent. When memory is short (`urgent`), pinned and
+   * often-visited tabs can go too.
+   */
+  private keepsLoaded(tab: Tab, maxRevisits: number, urgent = false): boolean {
+    const wc = this.views.get(tab.id)?.webContents
+    if (!wc || wc.isDestroyed()) return true
+    const url = wc.getURL()
+    return (
+      (!urgent && (tab.pinned !== null || (this.revisits.get(tab.id) ?? 0) > maxRevisits)) ||
+      tab.audible ||
+      Date.now() - tab.audibleAt < RECENTLY_AUDIBLE_MS ||
+      !!tab.capture ||
+      this.pip.activeTabId === tab.id ||
+      this.docPips.has(tab.id) ||
+      this.nativePipTabs.has(tab.id) ||
+      this.typedIn.has(tab.id) ||
+      wc.isDevToolsOpened() ||
+      (/^https?:/.test(url) && this.permissions.get(originOf(url), 'notifications') === 'allow')
+    )
+  }
+
+  private freeMemory(tab: Tab): void {
+    this.destroyView(tab)
+    this.unseenFor.delete(tab.id)
+    this.broadcast()
+  }
+
+  /** The Mac is short of memory: the tab you used least recently (out of sight a while) unloads now. */
+  private async relieveMemoryPressure(): Promise<void> {
+    if ((await memoryPressure()) < CRITICAL_MEMORY_PRESSURE || this.windowClosed) return
+    const tab = this.tabs
+      .filter(
+        (t) =>
+          t.loaded &&
+          t.id !== this.activeTabId &&
+          !this.attached.has(t.id) &&
+          (this.unseenFor.get(t.id) ?? 0) >= RECENTLY_SEEN_MS &&
+          !this.keepsLoaded(t, Infinity, true)
+      )
+      .sort((a, b) => a.lastActiveAt - b.lastActiveAt)[0]
+    if (tab) this.freeMemory(tab)
   }
 
   /**
@@ -3456,6 +3532,8 @@ export class Browser {
     // A page (or frame) that goes elsewhere leaves its camera, microphone and screen behind.
     wc.on('did-start-navigation', (details) => {
       if (details.isMainFrame && !details.isSameDocument) this.clearCapture(tabId)
+      // Another page, or another view in an app: what was typed was sent or left behind.
+      if (details.isMainFrame) this.typedIn.delete(tabId)
     })
     wc.on('did-frame-navigate', (_event, _url, _code, _status, isMainFrame, processId, routingId) => {
       if (!isMainFrame) this.setFrameCapture(tabId, `${processId}:${routingId}`, null)
@@ -3465,6 +3543,18 @@ export class Browser {
       this.popupTimes.delete(wcId)
       this.captureFrames.delete(tabId)
     })
+  }
+
+  /** The page preload says you've typed something in a frame (or sent it). */
+  onTyping(wc: WebContents, frame: WebFrameMain | null, typing: boolean): void {
+    const tabId = this.tabByWebContents.get(wc.id)
+    if (!tabId || !frame) return
+    const frames = this.typedIn.get(tabId) ?? new Set<string>()
+    const key = `${frame.processId}:${frame.routingId}`
+    if (typing) frames.add(key)
+    else frames.delete(key)
+    if (frames.size > 0) this.typedIn.set(tabId, frames)
+    else this.typedIn.delete(tabId)
   }
 
   /** The page preload says what a frame is capturing now (camera, microphone, screen). */
@@ -5293,6 +5383,13 @@ function systemAudioCapture(): boolean {
   if (process.platform !== 'darwin') return false
   const [major = 0, minor = 0] = process.getSystemVersion().split('.').map(Number)
   return major > 14 || (major === 14 && minor >= 2)
+}
+
+/** macOS's memory pressure level: 1 normal, 2 warning, 4 critical (0 if it can't be read). */
+function memoryPressure(): Promise<number> {
+  return new Promise((resolve) =>
+    execFile('sysctl', ['-n', 'kern.memorystatus_vm_pressure_level'], (error, stdout) => resolve(error ? 0 : Number(stdout.trim()) || 0))
+  )
 }
 
 function safeHost(url: string): string {

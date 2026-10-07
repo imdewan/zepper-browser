@@ -176,6 +176,9 @@ export class Hub {
     ipcMain.on('zepper:capture', (event, detail: unknown) =>
       this.owner(event.sender)?.onCapture(event.sender, event.senderFrame, String(detail))
     )
+    ipcMain.on('zepper:typing', (event, typing: unknown) =>
+      this.owner(event.sender)?.onTyping(event.sender, event.senderFrame, typing === true)
+    )
     // Settings › Passwords (Zepper's own UI only).
     ipcMain.handle(IPC.vault, async (event, request: VaultRequest) => {
       const browser = this.uiOwner(event.sender)

@@ -1191,3 +1191,35 @@ function watchCredentials(): void {
 }
 
 watchCredentials()
+
+// ---- Unsent typing -----------------------------------------------------------------
+//
+// Memory Saver leaves a tab alone while you've typed something there that hasn't been sent (as
+// Chrome does), so a draft isn't lost. The browser hears when you type (at most every few seconds)
+// and when a form is sent; going to another page clears it on the browser's side.
+
+const TYPING_CHANNEL = 'zepper:typing'
+const TYPING_REPORT_MS = 5000
+
+function watchTyping(): void {
+  let reportedAt = 0
+  document.addEventListener(
+    'input',
+    (event) => {
+      if (!event.isTrusted || Date.now() - reportedAt < TYPING_REPORT_MS) return
+      reportedAt = Date.now()
+      ipcRenderer.send(TYPING_CHANNEL, true)
+    },
+    true
+  )
+  document.addEventListener(
+    'submit',
+    () => {
+      reportedAt = 0
+      ipcRenderer.send(TYPING_CHANNEL, false)
+    },
+    true
+  )
+}
+
+watchTyping()
