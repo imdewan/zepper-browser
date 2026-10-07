@@ -238,6 +238,9 @@ function createMock(): ZepperApi {
     async historyMeaning(): Promise<HistoryEntry[]> {
       return []
     },
+    pathForFile(): string {
+      return ''
+    },
     async vault<T extends VaultRequest>(request: T): Promise<VaultReplies[T['type']]> {
       const replies: Partial<VaultReplies> = {
         list: {

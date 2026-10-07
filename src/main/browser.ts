@@ -111,6 +111,13 @@ type PersistedTab = Pick<Tab, 'id' | 'kind' | 'spaceId' | 'url' | 'title' | 'fav
   history?: TabHistory
 }
 
+/** A tab on its way to another window: its page (if loaded) moves with it, still running. */
+export interface MovingTab {
+  tab: Tab
+  view: WebContentsView | null
+  history: TabHistory | null
+}
+
 /** Pages kept on each side of a tab's current page when its history is saved (Chrome keeps six). */
 const HISTORY_BACK = 10
 const HISTORY_FORWARD = 5
@@ -512,6 +519,8 @@ export interface WindowSeed {
   spaces?: Space[]
   activeSpaceId?: string
   essentials?: Tab[]
+  /** Each of your spaces' copy in the new window, by the original's id. */
+  spaceIds?: Record<string, string>
 }
 
 export class Browser {
@@ -599,6 +608,8 @@ export class Browser {
   private memoryCheckedAt = performance.now()
   /** Pages closing gently (see closeGently), by web contents: whether "Leave site?" is answered Leave. */
   private readonly closingGently = new Map<number, { leave: boolean; stayed: () => void }>()
+  /** Stops a window listening to a tab's page (it's moving to another window), by tab. */
+  private readonly unwire = new Map<string, () => void>()
   /** Tabs Memory Saver is closing. */
   private readonly freeing = new Set<string>()
   /** Addresses you chose Save Image/Link/Video As… for: their download asks where to save, as in Chrome. */
@@ -1196,7 +1207,19 @@ export class Browser {
 
   /** Commands from this window's own UI (chrome, overlay, player controls) only, never from web pages. */
   handleFromUi(sender: WebContents, command: Command): void {
-    if (this.isUi(sender)) this.handle(command)
+    if (!this.isUi(sender)) return
+    if (command.type === 'download.drag') return void this.dragDownload(sender, command.id)
+    this.handle(command)
+  }
+
+  /** A finished download dragged out of the panel as the file itself; the panel gets out of the way. */
+  private async dragDownload(sender: WebContents, id: string): Promise<void> {
+    const path = this.hub.downloads.pathOf(id)
+    if (!path) return
+    const icon = await app.getFileIcon(path, { size: 'normal' }).catch(() => nativeImage.createEmpty())
+    if (sender.isDestroyed()) return
+    this.setOverlayMode('hidden')
+    sender.startDrag({ file: path, icon: icon.isEmpty() ? nativeImage.createFromPath(join(app.getAppPath(), 'build', 'icon.png')) : icon })
   }
 
   /** The window's own UI (sidebar, overlay, picture-in-picture controls), as opposed to web pages. */
@@ -1345,7 +1368,7 @@ export class Browser {
           emoji: t.emoji
         })
       )
-    return { ...base, spaces, activeSpaceId: ids.get(this.activeSpaceId) ?? spaces[0].id, essentials }
+    return { ...base, spaces, activeSpaceId: ids.get(this.activeSpaceId) ?? spaces[0].id, essentials, spaceIds: Object.fromEntries(ids) }
   }
 
   session(): Session {
@@ -1409,6 +1432,10 @@ export class Browser {
         return void this.createSpace(command.name, command.icon, command.theme, command.profile ?? { mode: 'new' })
       case 'item.drop':
         return this.dropItem(command.item, command.target)
+      case 'tab.tearOff':
+        return this.hub.tearOffTab(this, command.tabId)
+      case 'tab.openDropped':
+        return this.openDropped(command.urls, command.target, command.ontoTabId)
       case 'folder.create':
         return this.createFolder(command.spaceId, command.parentId, command.tabIds)
       case 'folder.update':
@@ -2023,6 +2050,137 @@ export class Browser {
     this.unloadPinned(tab, true)
   }
 
+  hasTab(id: string): boolean {
+    return !!this.tab(id)
+  }
+
+  /** The space this window is showing. */
+  currentSpaceId(): string {
+    return this.activeSpaceId
+  }
+
+  /** The space a tab is in (null for none). */
+  spaceOfTab(id: string): string | null {
+    return this.tab(id)?.spaceId ?? null
+  }
+
+  /**
+   * Lets a tab go to another window (see adoptTab), as Chrome moves a dragged tab: its page keeps
+   * running. This window stops listening to it and tracking it. Only normal tabs, not from private
+   * windows (pinned tabs and Essentials belong to their space here).
+   */
+  releaseTab(id: string): MovingTab | null {
+    const tab = this.tab(id)
+    if (!tab || tab.kind !== 'normal' || this.kind === 'private') return null
+    const view = this.views.get(id) ?? null
+    if (this.pip?.activeTabId === id) this.pip.exit()
+    this.docPips.get(id)?.close()
+    const wasActive = this.activeTabId === id
+    const splitSibling = this.splitOf(id)?.tabIds.find((other) => other !== id)
+    this.leaveSplit(id)
+    const next = wasActive ? (this.tab(splitSibling) ?? this.pickNextTab(tab)) : undefined
+    const history = view ? null : (this.savedHistory.get(id) ?? null)
+    this.unwire.get(id)?.()
+    this.unwire.delete(id)
+    if (view) {
+      if (!this.win.isDestroyed()) this.win.contentView.removeChildView(view)
+      this.attached.delete(id)
+      this.views.delete(id)
+      this.tabByWebContents.delete(view.webContents.id)
+      // The extensions layer tracks the page with this window; the new one adds it with its own.
+      this.extensions?.apiFor(view.webContents.session)?.removeTab(view.webContents)
+    }
+    this.detachPinned(id)
+    this.tabs = this.tabs.filter((t) => t !== tab)
+    for (const map of [
+      this.savedHistory,
+      this.openers,
+      this.mediaReadAt,
+      this.unseenFor,
+      this.revisits,
+      this.typedIn,
+      this.settledAt,
+      this.captureFrames
+    ])
+      map.delete(id)
+    for (const set of [this.mediaTipShown, this.nativePipTabs, this.updatedInBackground, this.hungTabs, this.autoDocPips, this.metaTried])
+      set.delete(id)
+    for (const space of this.spaces) if (space.lastTabId === id) space.lastTabId = null
+    if (wasActive) {
+      if (next) this.activateTab(next.id)
+      else this.clearActiveTab()
+    }
+    this.syncAttachedViews()
+    this.broadcast()
+    return { tab, view, history }
+  }
+
+  /**
+   * Takes a tab another window let go (see releaseTab) into a space here, at a drop target if there
+   * is one, and shows it. Its page keeps running when the space has the same sign-ins; otherwise it
+   * reloads in this space's (a page can't change sign-ins), keeping its back and forward pages.
+   */
+  adoptTab({ tab, view, history }: MovingTab, spaceId: string, target: DropTarget | null): void {
+    tab.kind = 'normal'
+    tab.pinned = null
+    tab.spaceId = spaceId
+    tab.discarded = false
+    this.insertNormalTab(tab)
+    if (history) this.savedHistory.set(tab.id, history)
+    if (view && !view.webContents.isDestroyed()) {
+      const wc = view.webContents
+      if (wc.session === this.sessionFor(tab)) {
+        this.views.set(tab.id, view)
+        this.tabByWebContents.set(wc.id, tab.id)
+        view.setBorderRadius(this.settings.cornerRadius)
+        this.wire(tab.id, wc)
+        this.extensions?.apiFor(wc.session)?.addTab(wc, this.win)
+        tab.loaded = true
+      } else {
+        const moved = this.historyOfPage(wc)
+        if (moved) this.savedHistory.set(tab.id, moved)
+        this.closedHere.add(wc)
+        wc.close()
+        tab.loaded = false
+      }
+    } else {
+      tab.loaded = false
+    }
+    if (target && target.zone !== 'space') this.dropTab(tab.id, target)
+    this.activateTab(tab.id)
+    this.focusWindow()
+    this.broadcast()
+  }
+
+  /** Files or links dropped on the sidebar: tabs where they were dropped, or in the tab they were dropped on. */
+  private openDropped(urls: string[], target: DropTarget | null, ontoTabId?: string): void {
+    const usable = urls.filter((url) => /^(https?|file):/i.test(url)).slice(0, 20)
+    if (usable.length === 0) return
+    const onto = this.tab(ontoTabId)
+    let rest = usable
+    if (onto) {
+      void this.ensureView(onto)
+        .webContents.loadURL(usable[0])
+        .catch(() => {})
+      this.activateTab(onto.id)
+      rest = usable.slice(1)
+    }
+    let index = target && 'index' in target ? target.index : null
+    for (const url of rest) {
+      const tab = this.openTab(url, { background: true, spaceId: target?.spaceId })
+      if (target && target.zone !== 'space') {
+        this.dropTab(tab.id, index === null ? target : ({ ...target, index } as DropTarget))
+        if (index !== null) index++
+      }
+    }
+    if (!onto && rest.length > 0) {
+      const first = this.tabs.find((t) => t.url === rest[0] && t.spaceId === (target?.spaceId ?? this.activeSpaceId))
+      if (first) this.activateTab(first.id)
+    }
+    this.syncPinnedOrder()
+    this.broadcast()
+  }
+
   private removeTab(tab: Tab): void {
     const wasActive = this.activeTabId === tab.id
     // Closing a pane keeps the rest of its split on screen.
@@ -2495,6 +2653,8 @@ export class Browser {
 
   /** A tab or folder dropped somewhere in the sidebar (drag and drop). */
   private dropItem(item: { kind: 'tab' | 'folder'; id: string }, target: DropTarget): void {
+    // A tab from another window's sidebar moves here, still running.
+    if (item.kind === 'tab' && !this.tab(item.id)) return this.hub.moveTab(item.id, this, target)
     if (item.kind === 'folder') this.dropFolder(item.id, target)
     else this.dropTab(item.id, target)
     this.syncPinnedOrder()
@@ -3471,6 +3631,10 @@ export class Browser {
   private historyOf(tabId: string): TabHistory | null {
     const wc = this.views.get(tabId)?.webContents
     if (!wc || wc.isDestroyed()) return this.savedHistory.get(tabId) ?? null
+    return this.historyOfPage(wc)
+  }
+
+  private historyOfPage(wc: WebContents): TabHistory | null {
     const all = wc.navigationHistory.getAllEntries()
     const active = wc.navigationHistory.getActiveIndex()
     const start = Math.max(0, active - HISTORY_BACK)
@@ -3538,12 +3702,28 @@ export class Browser {
     this.views.delete(tab.id)
     for (const [wcId, id] of this.tabByWebContents) if (id === tab.id) this.tabByWebContents.delete(wcId)
     this.closedHere.add(view.webContents)
+    this.unwire.delete(tab.id)
     if (!view.webContents.isDestroyed()) view.webContents.close()
   }
 
   private wire(tabId: string, wc: WebContents): void {
     // Zepper and the extensions layer each watch a page's lifetime; more than Node's default ten is expected.
     wc.setMaxListeners(30)
+    // Every listener is noted, so the page can move to another window without this one still listening.
+    const listening: [string, (...args: unknown[]) => void][] = []
+    const on = ((event: string, listener: (...args: unknown[]) => void) => {
+      wc.on(event as never, listener as never)
+      listening.push([event, listener])
+      return wc
+    }) as WebContents['on']
+    const once = ((event: string, listener: (...args: unknown[]) => void) => {
+      wc.once(event as never, listener as never)
+      listening.push([event, listener])
+      return wc
+    }) as WebContents['once']
+    this.unwire.set(tabId, () => {
+      for (const [event, listener] of listening) wc.removeListener(event as never, listener as never)
+    })
     const update = (patch: Partial<Tab>): void => {
       const tab = this.tab(tabId)
       if (!tab) return
@@ -3555,9 +3735,11 @@ export class Browser {
       canGoForward: wc.navigationHistory.canGoForward()
     })
 
-    this.watchControlKey(wc)
+    on('before-input-event', (_event, input) => {
+      if (input.type === 'keyUp' && input.key === 'Control' && this.recentCycle) this.endRecentCycle()
+    })
     // Clicking into a split pane makes it the focused (active) tab.
-    wc.on('focus', () => {
+    on('focus', () => {
       if (tabId === this.activeTabId) return
       const split = this.splitOf(tabId)
       if (!split || split !== this.activeSplit()) return
@@ -3570,7 +3752,7 @@ export class Browser {
       this.broadcast()
     })
     // A page with unsaved changes asks before it's left, as in Chrome (Electron would otherwise cancel silently).
-    wc.on('will-prevent-unload', (event) => {
+    on('will-prevent-unload', (event) => {
       if (this.win.isDestroyed()) return event.preventDefault()
       const gentle = this.closingGently.get(wc.id)
       if (gentle) {
@@ -3593,26 +3775,26 @@ export class Browser {
       else this.closingTabs.delete(tabId)
     })
     // Dialogs belong to the page that asked; a new page (or a closed tab) cancels them.
-    wc.on('did-start-navigation', (details) => {
+    on('did-start-navigation', (details) => {
       if (!details.isMainFrame || details.isSameDocument) return
       this.dropDialogs(tabId)
       // A new page: its language is checked again once it loads, untranslated.
       this.stopTranslating(tabId)
       if (this.tab(tabId)?.language || this.tab(tabId)?.translation) update({ language: null, translation: null })
     })
-    wc.once('destroyed', () => this.dropDialogs(tabId))
-    wc.on('did-start-loading', () => update({ loading: true }))
-    wc.on('did-stop-loading', () => {
+    once('destroyed', () => this.dropDialogs(tabId))
+    on('did-start-loading', () => update({ loading: true }))
+    on('did-stop-loading', () => {
       this.settledAt.set(tabId, Date.now())
       update({ loading: false, ...navState() })
     })
-    wc.on('page-title-updated', (_event, title) => {
+    on('page-title-updated', (_event, title) => {
       this.noteBackgroundUpdate(tabId, wc)
       update({ title })
       if (this.tab(tabId)?.media) void this.refreshMedia(tabId, wc)
       if (this.kind !== 'private') this.history.updateTitle(wc.getURL(), title)
     })
-    wc.on('page-favicon-updated', (_event, favicons) => {
+    on('page-favicon-updated', (_event, favicons) => {
       const favicon = favicons[0] ?? null
       // A pinned tab pinned before its page loaded learns its icon once it's on its pinned page.
       const tab = this.tab(tabId)
@@ -3620,7 +3802,7 @@ export class Browser {
       this.noteBackgroundUpdate(tabId, wc)
       update({ favicon })
     })
-    wc.on('did-navigate', (_event, url) => {
+    on('did-navigate', (_event, url) => {
       const failed = this.errorPages.get(url)
       if (failed) {
         // Zepper's error page stands in for the address that failed: the tab keeps that address
@@ -3640,7 +3822,7 @@ export class Browser {
     // In-page address changes are visits once they settle: maps and infinite scroll rewrite the
     // address constantly, and every step would otherwise be a visit.
     let inPageVisit: NodeJS.Timeout | null = null
-    wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+    on('did-navigate-in-page', (_event, url, isMainFrame) => {
       if (!isMainFrame) return
       update({ url, ...navState() })
       if (this.kind === 'private') return
@@ -3650,7 +3832,7 @@ export class Browser {
         if (!wc.isDestroyed() && wc.getURL() === url) this.history.record(url, wc.getTitle())
       }, 2000)
     })
-    wc.on('audio-state-changed', (event) => {
+    on('audio-state-changed', (event) => {
       update({ audible: event.audible, audibleAt: Date.now() })
       if (!event.audible) return
       // Only media gets the now-playing card and the offer to pause the rest: not a sound that's over in
@@ -3661,17 +3843,17 @@ export class Browser {
         void this.refreshMedia(tabId, wc, true).then((media) => media && this.offerToPauseOthers(tabId))
       }, MEDIA_SETTLE_MS)
     })
-    wc.on('enter-html-full-screen', () => {
+    on('enter-html-full-screen', () => {
       this.htmlFullscreen = true
       this.layout()
       this.broadcast()
     })
-    wc.on('leave-html-full-screen', () => {
+    on('leave-html-full-screen', () => {
       this.htmlFullscreen = false
       this.layout()
       this.broadcast()
     })
-    wc.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
+    on('did-fail-load', (_event, code, description, url, isMainFrame) => {
       if (!isMainFrame || code === -3) return
       // A typed address goes to HTTPS first; a site without it gets plain HTTP instead of an error.
       const typed = normalizedUrl(url)
@@ -3690,7 +3872,7 @@ export class Browser {
       if (this.errorPages.size > 100) this.errorPages.delete(this.errorPages.keys().next().value!)
       wc.loadURL(page).catch(() => {})
     })
-    wc.on('render-process-gone', (_event, details) => {
+    on('render-process-gone', (_event, details) => {
       if (details.reason === 'clean-exit' || this.windowClosed) return
       const tab = this.tab(tabId)
       if (!tab || !tab.loaded) return
@@ -3701,30 +3883,30 @@ export class Browser {
       this.clearCapture(tabId)
       wc.loadURL(page).catch(() => {})
     })
-    wc.on('unresponsive', () => void this.onUnresponsive(tabId, wc))
+    on('unresponsive', () => void this.onUnresponsive(tabId, wc))
     // ⌘-scroll zooms like the menu does; pinch-to-zoom magnifies (Electron turns it off by default).
-    wc.on('zoom-changed', (_event, direction) => this.zoomPage(wc, direction === 'in' ? 1 : -1))
-    wc.on('did-finish-load', () => {
+    on('zoom-changed', (_event, direction) => this.zoomPage(wc, direction === 'in' ? 1 : -1))
+    on('did-finish-load', () => {
       void wc.setVisualZoomLevelLimits(1, 3).catch(() => {})
       this.notePage(wc)
       void this.detectLanguage(tabId, wc)
     })
-    wc.on('found-in-page', (_event, result) => {
+    on('found-in-page', (_event, result) => {
       if (tabId !== this.activeTabId) return
       this.emit({ type: 'find.result', result: { active: result.activeMatchOrdinal, matches: result.matches } }, 'overlay')
     })
-    wc.on('context-menu', (_event, params) => this.pageContextMenu(tabId, wc, params))
+    on('context-menu', (_event, params) => this.pageContextMenu(tabId, wc, params))
     wc.setWindowOpenHandler((details) => this.handleWindowOpen(tabId, details))
     const wcId = wc.id
-    wc.on('input-event', (_event, input) => {
+    on('input-event', (_event, input) => {
       if (USER_INPUT.has(input.type)) this.lastInput.set(wcId, Date.now())
     })
-    wc.on('did-create-window', (win, details) => {
+    on('did-create-window', (win, details) => {
       this.adoptPopup(win, tabId)
       if (details.frameName === DOCUMENT_PIP_FRAME) this.floatDocumentPip(win, tabId)
     })
     // A page (or frame) that goes elsewhere leaves its camera, microphone and screen behind.
-    wc.on('did-start-navigation', (details) => {
+    on('did-start-navigation', (details) => {
       if (details.isMainFrame && !details.isSameDocument) {
         this.clearCapture(tabId)
         this.updatedInBackground.delete(tabId)
@@ -3732,10 +3914,10 @@ export class Browser {
       // Another page, or another view in an app: what was typed was sent or left behind.
       if (details.isMainFrame) this.typedIn.delete(tabId)
     })
-    wc.on('did-frame-navigate', (_event, _url, _code, _status, isMainFrame, processId, routingId) => {
+    on('did-frame-navigate', (_event, _url, _code, _status, isMainFrame, processId, routingId) => {
       if (!isMainFrame) this.setFrameCapture(tabId, `${processId}:${routingId}`, null)
     })
-    wc.once('destroyed', () => {
+    once('destroyed', () => {
       this.lastInput.delete(wcId)
       this.popupTimes.delete(wcId)
       this.captureFrames.delete(tabId)

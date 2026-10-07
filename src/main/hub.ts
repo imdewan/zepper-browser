@@ -3,6 +3,7 @@ import {
   components,
   ipcMain,
   nativeTheme,
+  screen,
   session,
   shell,
   systemPreferences,
@@ -13,6 +14,7 @@ import {
 } from 'electron'
 import { join } from 'node:path'
 import {
+  type DropTarget,
   IPC,
   type AccessState,
   type Command,
@@ -275,6 +277,47 @@ export class Hub {
     if (kind === 'main') this.main = browser
     browser.start(url)
     return browser
+  }
+
+  /** A tab dragged to another window's sidebar moves there, still running (see Browser.releaseTab). */
+  moveTab(tabId: string, to: Browser, target: DropTarget): void {
+    const from = [...this.browsers].find((browser) => browser !== to && browser.hasTab(tabId))
+    if (!from || from.kind === 'private' || to.kind === 'private') return
+    const moving = from.releaseTab(tabId)
+    if (moving) to.adoptTab(moving, target.spaceId, target)
+  }
+
+  /**
+   * A tab dragged out of a window's sidebar and let go: over another window, it joins that one;
+   * anywhere else outside its window, it gets a window of its own there (with your spaces), as in
+   * Chrome. Either way its page keeps running. Let go back over its own window, nothing happens.
+   */
+  tearOffTab(from: Browser, tabId: string): void {
+    if (from.kind === 'private' || !from.hasTab(tabId)) return
+    const point = screen.getCursorScreenPoint()
+    const over = (browser: Browser): boolean => {
+      const win = browser.window()
+      if (win.isDestroyed() || !win.isVisible() || win.isMinimized()) return false
+      const r = win.getBounds()
+      return point.x >= r.x && point.x < r.x + r.width && point.y >= r.y && point.y < r.y + r.height
+    }
+    if (over(from)) return
+    const other = [...this.browsers].find((browser) => browser !== from && browser.kind !== 'private' && over(browser))
+    if (other) {
+      const moving = from.releaseTab(tabId)
+      if (moving) other.adoptTab(moving, other.currentSpaceId(), null)
+      return
+    }
+    const seed = from.seedForNewWindow(true)
+    const space = from.spaceOfTab(tabId)
+    const moving = from.releaseTab(tabId)
+    if (!moving) return
+    // Where you let go (a new window is placed a little down and right of its seed).
+    seed.bounds = { ...seed.bounds, x: Math.round(point.x - 164), y: Math.round(point.y - 44) }
+    const browser = new Browser(this, 'blank', session.defaultSession, seed)
+    this.browsers.add(browser)
+    browser.start()
+    browser.adoptTab(moving, (space && seed.spaceIds?.[space]) || browser.currentSpaceId(), null)
   }
 
   windowClosed(browser: Browser): void {

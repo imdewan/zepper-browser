@@ -4,15 +4,48 @@ import { zepper } from '../bridge'
 
 /**
  * Drag and drop in the sidebar, Chrome-style: drag tabs and folders to reorder them, into
- * folders, between pinned and normal, onto Essentials, or onto a space. Uses HTML drag and
+ * folders, between pinned and normal, onto Essentials, or onto a space; drag a tab to another
+ * window's sidebar to move it there, or out of the window for a window of its own. Files and links
+ * dropped in open as tabs where they land (or in the tab they're dropped on). Uses HTML drag and
  * drop; this module tracks what's being dragged and which row shows the drop indicator.
  */
 
 export type DragItem = { kind: 'tab' | 'folder'; id: string }
 export type DropPosition = 'before' | 'after' | 'into'
 
-/** Marks drags that come from the sidebar (so links and files dragged in are ignored). */
+/** Marks drags that come from a sidebar (this window's, or another's). */
 const MIME = 'application/x-zepper-item'
+/** A tab from another window's sidebar: what it is only arrives with the drop. */
+const ELSEWHERE: DragItem = { kind: 'tab', id: '' }
+
+/** What's being dragged over: one of this sidebar's items, another window's, or files and links. */
+function incoming(e: React.DragEvent<HTMLElement>): 'item' | 'elsewhere' | 'external' | null {
+  const types = e.dataTransfer.types
+  if (types.includes(MIME)) return dragging ? 'item' : 'elsewhere'
+  if (types.includes('Files') || types.includes('text/uri-list')) return 'external'
+  return null
+}
+
+/** The files (as file: addresses) and links in a drop. */
+function droppedUrls(data: DataTransfer): string[] {
+  const files = Array.from(data.files)
+    .map((file) => zepper.pathForFile(file))
+    .filter(Boolean)
+    .map((path) => `file://${path.split('/').map(encodeURIComponent).join('/')}`)
+  if (files.length > 0) return files
+  return data
+    .getData('text/uri-list')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+}
+
+/** The middle of a row: a file or link dropped there opens in that tab rather than beside it. */
+const middle = (e: React.DragEvent<HTMLElement>): boolean => {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const ratio = (e.clientY - rect.top) / rect.height
+  return ratio > 0.25 && ratio < 0.75
+}
 
 let dragging: DragItem | null = null
 let hint: { key: string; position: DropPosition } | null = null
@@ -44,7 +77,10 @@ export function dragProps(item: DragItem): Pick<React.HTMLAttributes<HTMLElement
       e.dataTransfer.setData(MIME, JSON.stringify(item))
       notify()
     },
-    onDragEnd: () => {
+    onDragEnd: (e) => {
+      // Let go where nothing took it (outside the sidebar): the tab gets a window of its own, or
+      // joins the window it was let go over. Zepper checks where the pointer is.
+      if (item.kind === 'tab' && e.dataTransfer.dropEffect === 'none') zepper.send({ type: 'tab.tearOff', tabId: item.id })
       dragging = null
       setHint(null)
       notify()
@@ -65,6 +101,8 @@ interface DropOptions {
   horizontal?: boolean
   /** The whole element is one target (a space dot, the empty pinned area). */
   whole?: DropPosition
+  /** A tab's row: files and links dropped on its middle open in it. */
+  onto?: string
 }
 
 /** The indicator an element shows for a drop target that points at it (see DropOptions.hint). */
@@ -89,24 +127,44 @@ export function useDrop(options: DropOptions): {
     position,
     props: {
       onDragOver: (e) => {
-        if (!dragging || !e.dataTransfer.types.includes(MIME)) return
-        const at = positionAt(e)
-        if (!options.target(at, dragging, e)) return
+        const kind = incoming(e)
+        if (!kind) return
+        const intoTab = kind === 'external' && !!options.onto && middle(e)
+        const at = intoTab ? 'into' : positionAt(e)
+        if (!intoTab && !options.target(at, kind === 'item' ? dragging! : ELSEWHERE, e)) return
         e.preventDefault()
         e.stopPropagation()
-        e.dataTransfer.dropEffect = 'move'
-        setHint(options.hint ? options.hint(e) : { key: options.key, position: at })
+        e.dataTransfer.dropEffect = kind === 'external' ? 'copy' : 'move'
+        setHint(options.hint && !intoTab ? options.hint(e) : { key: options.key, position: at })
       },
       onDragLeave: (e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
         if (hint?.key === options.key || options.hint) setHint(null)
       },
       onDrop: (e) => {
-        if (!dragging) return
-        const target = options.target(positionAt(e), dragging, e)
+        const kind = incoming(e)
+        if (!kind) return
         e.preventDefault()
         e.stopPropagation()
-        if (target) zepper.send({ type: 'item.drop', item: dragging, target })
+        if (kind === 'external') {
+          const urls = droppedUrls(e.dataTransfer)
+          const intoTab = !!options.onto && middle(e)
+          const target = intoTab ? null : options.target(positionAt(e), ELSEWHERE, e)
+          if (urls.length > 0 && (intoTab || target))
+            zepper.send({ type: 'tab.openDropped', urls, target, ...(intoTab ? { ontoTabId: options.onto } : {}) })
+        } else {
+          // Another window's tab: what it is comes with the drop.
+          let item = dragging
+          if (!item) {
+            try {
+              item = JSON.parse(e.dataTransfer.getData(MIME)) as DragItem
+            } catch {
+              item = null
+            }
+          }
+          const target = item && options.target(positionAt(e), item, e)
+          if (item && target) zepper.send({ type: 'item.drop', item, target })
+        }
         dragging = null
         setHint(null)
         notify()

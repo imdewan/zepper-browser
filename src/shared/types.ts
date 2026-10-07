@@ -572,6 +572,12 @@ export type Command =
   | { type: 'find.query'; text: string; forward: boolean; findNext: boolean }
   | { type: 'find.stop' }
   | { type: 'download.show'; path: string }
+  /** Drag a finished download out as the file itself (onto a page to upload it, a tab, Finder…). */
+  | { type: 'download.drag'; id: string }
+  /** A tab dragged out of the sidebar and let go elsewhere: a window of its own (or the one it was let go over). */
+  | { type: 'tab.tearOff'; tabId: string }
+  /** Files or links dropped on the sidebar: new tabs where they were dropped, or onto a tab to open there. */
+  | { type: 'tab.openDropped'; urls: string[]; target: DropTarget | null; ontoTabId?: string }
   | { type: 'download.action'; id: string; action: 'open' | 'reveal' | 'pause' | 'resume' | 'cancel' | 'remove' | 'trash' }
   | { type: 'downloads.clear' }
   | { type: 'settings.chooseDownloadFolder' }
@@ -663,6 +669,8 @@ export interface ZepperApi {
   extensions(): Promise<ExtensionInfo[]>
   /** Zepper's password manager, for Settings › Passwords. */
   vault<T extends VaultRequest>(request: T): Promise<VaultReplies[T['type']]>
+  /** Where a file dropped on Zepper's UI is on disk ('' when it isn't a file there). */
+  pathForFile(file: File): string
 }
 
 /** An installed extension, for Settings → Extensions. */

@@ -82,7 +82,8 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
   const changed = isPinnedChanged(tab)
   const drop = useDrop({
     key: `tab:${tab.id}`,
-    target: (position, item) => (place && item.id !== tab.id ? dropBeside(place, position, item) : null)
+    target: (position, item) => (place && item.id !== tab.id ? dropBeside(place, position, item) : null),
+    onto: tab.id
   })
   const [resetHover, setResetHover] = useState(false)
   const metaHeld = useMetaKey(resetHover)

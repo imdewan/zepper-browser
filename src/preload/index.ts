@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { injectBrowserAction } from 'electron-chrome-extensions/browser-action'
 import { IPC, type Command, type Snapshot, type UiEvent, type ZepperApi } from '../shared/types'
 
@@ -20,7 +20,14 @@ const api: ZepperApi = {
   history: (query: string) => ipcRenderer.invoke(IPC.history, query),
   historyMeaning: (query: string) => ipcRenderer.invoke(IPC.historyMeaning, query),
   extensions: () => ipcRenderer.invoke(IPC.extensions),
-  vault: (request) => ipcRenderer.invoke(IPC.vault, request)
+  vault: (request) => ipcRenderer.invoke(IPC.vault, request),
+  pathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
+  }
 }
 
 contextBridge.exposeInMainWorld('zepper', api)

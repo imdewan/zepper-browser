@@ -30,6 +30,12 @@ export class Downloads {
     )
   }
 
+  /** Where a finished download is on disk (null if it isn't there any more). */
+  pathOf(id: string): string | null {
+    const entry = this.entries.find((e) => e.id === id)
+    return entry && entry.state === 'completed' && existsSync(entry.path) ? entry.path : null
+  }
+
   /** What a window shows: private windows see their own downloads too. */
   list(includePrivate: boolean): DownloadEntry[] {
     return includePrivate ? this.entries : this.entries.filter((e) => !e.private)

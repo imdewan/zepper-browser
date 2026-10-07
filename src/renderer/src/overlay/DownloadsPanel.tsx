@@ -101,8 +101,16 @@ export function DownloadsPanel({ downloads, onClose }: { downloads: DownloadEntr
                   key={d.id}
                   role="button"
                   className={cx('download-row', done && 'done', !running && !done && 'failed')}
-                  title={done ? `Open ${d.filename}` : d.filename}
+                  title={done ? `Open ${d.filename}, or drag it onto a page or a tab` : d.filename}
                   onClick={() => done && send(d.id, 'open')}
+                  // A finished download drags out as the file itself: onto a page to upload it, onto
+                  // the tabs to open it, or into Finder. The panel steps aside so the drop lands there.
+                  draggable={done}
+                  onDragStart={(e) => {
+                    e.preventDefault()
+                    zepper.send({ type: 'download.drag', id: d.id })
+                    onClose()
+                  }}
                 >
                   <span className="download-badge">{badge(d.filename)}</span>
                   <span className="download-text">
