@@ -4,6 +4,11 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Changed
+
+- Settings keeps its close button and the page's title in a bar at the top that stays put while the page scrolls.
+- Lists of sites in Settings (site permissions, sites with protections off, sites passwords are never saved for) stay short as they grow: sites in A–Z order, the first six with Show all, and a search field once there are more than ten.
+
 ## [0.1.3] - 2026-10-07
 
 ### Changed

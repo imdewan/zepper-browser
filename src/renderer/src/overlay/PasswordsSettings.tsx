@@ -4,6 +4,7 @@ import type { ImportResult, ImportSource, LoginSummary, VaultReplies } from '@sh
 import { zepper } from '../bridge'
 import { IconClose, IconCopy, IconKey, IconPasskey, IconPlus, IconSearch } from '../icons'
 import { cx } from '../util'
+import { SiteChips } from './SiteChips'
 import { Toggle } from './Toggle'
 
 /**
@@ -35,7 +36,6 @@ export function PasswordsSettings({ settings }: { settings: Settings }): React.J
 
   return (
     <>
-      <h2>Passwords</h2>
       <div className="settings-row">
         <div className="settings-row-text">
           <div className="settings-row-label">Offer to save and fill passwords</div>
@@ -156,8 +156,10 @@ export function PasswordsSettings({ settings }: { settings: Settings }): React.J
             <div className="settings-row-label">Never saved for</div>
             <div className="settings-row-hint">Zepper doesn’t offer to save passwords on these sites.</div>
           </div>
-          <div className="site-chips">
-            {settings.neverSavePasswords.map((domain) => (
+          <SiteChips
+            items={settings.neverSavePasswords}
+            site={(domain) => domain}
+            chip={(domain) => (
               <span key={domain} className="site-chip">
                 {domain}
                 <button
@@ -167,8 +169,8 @@ export function PasswordsSettings({ settings }: { settings: Settings }): React.J
                   <IconClose size={9} />
                 </button>
               </span>
-            ))}
-          </div>
+            )}
+          />
         </div>
       )}
     </>

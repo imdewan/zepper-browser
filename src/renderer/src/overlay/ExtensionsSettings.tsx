@@ -30,7 +30,6 @@ export function ExtensionsSettings({ settings }: { settings: Settings }): React.
 
   return (
     <>
-      <h2>Extensions</h2>
       <div className="settings-row">
         <div className="settings-row-text">
           <div className="settings-row-label">Show extensions row</div>

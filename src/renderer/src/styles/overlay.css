@@ -810,24 +810,47 @@
   box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.12);
 }
 
-.settings-body {
+.settings-main {
   flex: 1;
   min-width: 0;
-  position: relative;
-  padding: 22px 28px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
-.settings-body h2 {
-  margin: 0 0 14px;
+/* The page's title and the close button: always in view; a divider appears once the page scrolls. */
+.settings-bar {
+  flex: none;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px 0 28px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+
+.settings-bar.scrolled {
+  border-bottom-color: var(--separator);
+}
+
+.settings-bar h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   font-size: 16px;
   font-weight: 650;
 }
 
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  padding: 0 28px 22px;
+  overflow-y: auto;
+}
+
 .settings-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+  flex: none;
   width: 28px;
   height: 28px;
   border-radius: 8px;
@@ -916,6 +939,28 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.site-chip-search {
+  flex: none;
+  margin-bottom: 8px;
+}
+
+.site-chip-more {
+  padding: 0 10px;
+  color: var(--text-2);
+  transition: background-color 0.1s ease;
+}
+
+.site-chip-more:hover {
+  background: var(--element-hover);
+  color: var(--text);
+}
+
+.site-chip-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
 }
 
 .site-chip-detail {

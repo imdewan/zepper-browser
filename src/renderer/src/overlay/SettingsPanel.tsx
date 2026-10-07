@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowDownToLine,
   Hand,
@@ -32,6 +32,7 @@ import { IconClose } from '../icons'
 import { cx, isMac } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
 import { PasswordsSettings } from './PasswordsSettings'
+import { SiteChips } from './SiteChips'
 import { Toggle } from './Toggle'
 
 /** What each Memory Saver mode does (Chrome's and Brave's timings). */
@@ -68,7 +69,8 @@ type Section =
   'general' | 'appearance' | 'tabs' | 'media' | 'search' | 'downloads' | 'gestures' | 'privacy' | 'passwords' | 'extensions' | 'shortcuts'
 
 /** Sidebar sections, each with a Lucide glyph on a coloured square, like System Settings. */
-const SECTIONS: { id: Section; label: string; Icon: LucideIcon; color: string }[] = [
+/** The settings sections; `title` heads the page when it differs from the sidebar's label. */
+const SECTIONS: { id: Section; label: string; title?: string; Icon: LucideIcon; color: string }[] = [
   { id: 'general', label: 'General', Icon: Settings2, color: '#8e8e93' },
   { id: 'appearance', label: 'Appearance', Icon: Palette, color: '#5e5ce6' },
   { id: 'tabs', label: 'Tabs', Icon: Layers, color: '#ff9f0a' },
@@ -79,7 +81,7 @@ const SECTIONS: { id: Section; label: string; Icon: LucideIcon; color: string }[
   { id: 'privacy', label: 'Privacy', Icon: ShieldCheck, color: '#34c759' },
   { id: 'passwords', label: 'Passwords', Icon: KeyRound, color: '#636366' },
   { id: 'extensions', label: 'Extensions', Icon: Puzzle, color: '#ff453a' },
-  { id: 'shortcuts', label: 'Shortcuts', Icon: Keyboard, color: '#48484a' }
+  { id: 'shortcuts', label: 'Shortcuts', title: 'Keyboard Shortcuts', Icon: Keyboard, color: '#48484a' }
 ]
 
 const SHORTCUTS: [string, string][] = [
@@ -159,7 +161,16 @@ export function SettingsPanel({
   onClose
 }: SettingsPanelProps): React.JSX.Element {
   const [section, setSection] = useState<Section>(() => SECTIONS.find((s) => s.id === initialSection)?.id ?? 'general')
+  const current = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0]
+  const body = useRef<HTMLDivElement>(null)
+  // The bar's divider shows once the page scrolls under it.
+  const [scrolled, setScrolled] = useState(false)
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
+  const open = (next: Section): void => {
+    setSection(next)
+    body.current?.scrollTo({ top: 0 })
+    setScrolled(false)
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -187,7 +198,7 @@ export function SettingsPanel({
         <nav className="settings-nav">
           <div className="settings-title">Settings</div>
           {SECTIONS.map((s) => (
-            <button key={s.id} className={cx('settings-nav-item', section === s.id && 'active')} onClick={() => setSection(s.id)}>
+            <button key={s.id} className={cx('settings-nav-item', section === s.id && 'active')} onClick={() => open(s.id)}>
               <span className="settings-nav-icon" style={{ background: s.color }}>
                 <s.Icon size={12} strokeWidth={2.4} />
               </span>
@@ -195,511 +206,517 @@ export function SettingsPanel({
             </button>
           ))}
         </nav>
-        <div className="settings-body">
-          <button className="settings-close" title="Close (Esc)" onClick={onClose}>
-            <IconClose size={14} />
-          </button>
-          <motion.div
-            key={section}
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ type: 'spring', bounce: 0, duration: 0.25 }}
-          >
-            {section === 'general' && (
-              <>
-                <h2>General</h2>
-                <Row
-                  label="Default browser"
-                  hint={
-                    defaultBrowser
-                      ? 'Links you open in other apps open in Zepper.'
-                      : 'Open links from other apps (Mail, Slack, Notes…) in Zepper.'
-                  }
-                >
-                  {defaultBrowser ? (
-                    <span className="settings-status">Zepper is your default browser</span>
-                  ) : (
-                    <button className="panel-button" onClick={() => zepper.send({ type: 'app.makeDefaultBrowser' })}>
-                      Make Default
-                    </button>
-                  )}
-                </Row>
-                <Row
-                  label="Apple Intelligence features"
-                  hint={
-                    settings.aiFeatures && !intelligence.ai && !intelligence.translation
-                      ? (intelligence.reason ?? 'Not available on this Mac.')
-                      : 'Page summaries and questions, translation, history search by meaning and Tidy Tabs. Everything runs on your Mac.'
-                  }
-                >
-                  <Toggle checked={settings.aiFeatures} onChange={(aiFeatures) => set({ aiFeatures })} />
-                </Row>
-                <Row
-                  label="Offer to translate pages"
-                  hint="When a page isn’t in your language, a translate button appears in the address bar. Translation runs on your Mac."
-                >
-                  <Toggle
-                    checked={settings.aiFeatures && settings.offerTranslation}
-                    disabled={!settings.aiFeatures}
-                    onChange={(offerTranslation) => set({ offerTranslation })}
-                  />
-                </Row>
-                <Row label="Translate into" hint="Your Mac’s language, or another one.">
-                  <select value={settings.translateTo} onChange={(e) => set({ translateTo: e.target.value })}>
-                    <option value="">My Mac’s language</option>
-                    {TRANSLATION_LANGUAGES.map((code) => (
-                      <option key={code} value={code}>
-                        {new Intl.DisplayNames([navigator.language], { type: 'language' }).of(code)}
-                      </option>
-                    ))}
-                  </select>
-                </Row>
-                <Row
-                  label="New windows open"
-                  hint="⌘N. With your spaces: every space, with its sign-ins and Essentials, starting on the one you're in (pinned and open tabs stay in your main window)."
-                >
-                  <Segmented
-                    value={settings.newWindowSpace}
-                    options={[
-                      ['current', 'With your spaces'],
-                      ['empty', 'Empty']
-                    ]}
-                    onChange={(newWindowSpace) => set({ newWindowSpace })}
-                  />
-                </Row>
-                <UpdatesRow update={update} />
-                <Row
-                  label="Download updates automatically"
-                  hint="Zepper looks for a new version every few hours and gets it ready; an Update button then appears in the sidebar."
-                >
-                  <Toggle checked={settings.autoUpdate} disabled={update.state === 'off'} onChange={(autoUpdate) => set({ autoUpdate })} />
-                </Row>
-                <Row
-                  label="Import from another browser"
-                  hint="Open tabs (Arc’s spaces too), history and passwords from Chrome, Arc, Brave, Edge, Firefox, Safari and others."
-                >
-                  <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openOnboarding', step: 'import' })}>
-                    Import…
-                  </button>
-                </Row>
-                <Row label="Welcome and setup" hint="Import from other browsers, pick a look and see what Zepper can do.">
-                  <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openOnboarding' })}>
-                    Show Again
-                  </button>
-                </Row>
-              </>
-            )}
-
-            {section === 'appearance' && (
-              <>
-                <h2>Appearance</h2>
-                <Row label="Theme" hint="Websites follow this too.">
-                  <Segmented
-                    value={settings.colorScheme}
-                    options={[
-                      ['system', 'Auto'],
-                      ['light', 'Light'],
-                      ['dark', 'Dark']
-                    ]}
-                    onChange={(colorScheme) => set({ colorScheme })}
-                  />
-                </Row>
-                <Row label="App icon" hint="Auto follows your Mac’s icon style (System Settings › Appearance), like your other apps.">
-                  <Segmented
-                    value={settings.appIcon}
-                    options={[
-                      ['auto', 'Auto'],
-                      ['light', 'Light'],
-                      ['dark', 'Dark']
-                    ]}
-                    onChange={(appIcon) => set({ appIcon })}
-                  />
-                </Row>
-                <Row label="Sidebar position">
-                  <Segmented
-                    value={settings.sidebarPosition}
-                    options={[
-                      ['left', 'Left'],
-                      ['right', 'Right']
-                    ]}
-                    onChange={(sidebarPosition) => set({ sidebarPosition })}
-                  />
-                </Row>
-                <Row label="Tab density">
-                  <Segmented
-                    value={settings.density}
-                    options={[
-                      ['comfortable', 'Comfortable'],
-                      ['compact', 'Compact']
-                    ]}
-                    onChange={(density) => set({ density })}
-                  />
-                </Row>
-                <Row
-                  label="Transparency"
-                  hint={settings.transparency === 0 ? 'Solid window' : `${Math.round(settings.transparency * 100)}% see-through`}
-                >
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={settings.transparency}
-                    onChange={(e) => set({ transparency: Number(e.target.value) })}
-                  />
-                </Row>
-                <Row label="Content gap" hint={`${settings.contentGap}px around the page`}>
-                  <input
-                    type="range"
-                    min={0}
-                    max={16}
-                    step={1}
-                    value={settings.contentGap}
-                    onChange={(e) => set({ contentGap: Number(e.target.value) })}
-                  />
-                </Row>
-                <Row label="Corner radius" hint={`${settings.cornerRadius}px`}>
-                  <input
-                    type="range"
-                    min={0}
-                    max={18}
-                    step={1}
-                    value={settings.cornerRadius}
-                    onChange={(e) => set({ cornerRadius: Number(e.target.value) })}
-                  />
-                </Row>
-                <Row label="Essentials glow" hint="Tint the active Essential with its icon’s colour.">
-                  <Toggle checked={settings.essentialsGlow} onChange={(essentialsGlow) => set({ essentialsGlow })} />
-                </Row>
-                <Row label="Reduce motion" hint="Turn off animations.">
-                  <Toggle checked={settings.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })} />
-                </Row>
-              </>
-            )}
-
-            {section === 'tabs' && (
-              <>
-                <h2>Tabs</h2>
-                <Row label="New tabs open at">
-                  <Segmented
-                    value={settings.newTabPosition}
-                    options={[
-                      ['top', 'Top'],
-                      ['bottom', 'Bottom']
-                    ]}
-                    onChange={(newTabPosition) => set({ newTabPosition })}
-                  />
-                </Row>
-                <Row
-                  label="Memory Saver"
-                  hint="Tabs you haven’t looked at for a while give back their memory and reload when you open them. Time your Mac is asleep or locked doesn’t count. Tabs you keep coming back to, pinned tabs, and tabs playing sound, in a call or with something typed stay."
-                >
-                  <Toggle checked={settings.memorySaver} onChange={(memorySaver) => set({ memorySaver })} />
-                </Row>
-                <Row label="How soon" hint={MEMORY_SAVER_HINTS[settings.memorySaverMode]}>
-                  <Segmented
-                    value={settings.memorySaverMode}
-                    options={[
-                      ['moderate', 'Moderate'],
-                      ['balanced', 'Balanced'],
-                      ['maximum', 'Maximum']
-                    ]}
-                    onChange={(memorySaverMode) => set({ memorySaverMode })}
-                  />
-                </Row>
-                <Row label="Closing a pinned tab" hint="What ⌘W does on pinned tabs and Essentials.">
-                  <select
-                    value={settings.pinnedCloseBehavior}
-                    onChange={(e) => set({ pinnedCloseBehavior: e.target.value as PinnedCloseBehavior })}
+        <div className="settings-main">
+          {/* Stays put while the page scrolls, so closing is always one click away. */}
+          <header className={cx('settings-bar', scrolled && 'scrolled')}>
+            <h2>{current.title ?? current.label}</h2>
+            <button className="settings-close" title="Close (Esc)" onClick={onClose}>
+              <IconClose size={14} />
+            </button>
+          </header>
+          <div className="settings-body" ref={body} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
+            <motion.div
+              key={section}
+              initial={{ opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ type: 'spring', bounce: 0, duration: 0.25 }}
+            >
+              {section === 'general' && (
+                <>
+                  <Row
+                    label="Default browser"
+                    hint={
+                      defaultBrowser
+                        ? 'Links you open in other apps open in Zepper.'
+                        : 'Open links from other apps (Mail, Slack, Notes…) in Zepper.'
+                    }
                   >
-                    {Object.entries(PINNED_CLOSE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </Row>
-                <Row label="Reopen tabs from last time" hint="Your open tabs come back when Zepper starts. Pinned tabs always do.">
-                  <Toggle checked={settings.restoreTabs} onChange={(restoreTabs) => set({ restoreTabs })} />
-                </Row>
-                <Row label="Keep Essentials" hint="Essentials stay between launches. Turn off to start each launch with none.">
-                  <Toggle checked={settings.keepEssentials} onChange={(keepEssentials) => set({ keepEssentials })} />
-                </Row>
-                <Row
-                  label="Suggest closing tabs you haven’t opened in"
-                  hint="A card above your tabs offers to close them or put them in a folder."
-                >
-                  <select value={settings.staleTabDays} onChange={(e) => set({ staleTabDays: Number(e.target.value) })}>
-                    <option value={1}>A day</option>
-                    <option value={3}>3 days</option>
-                    <option value={7}>A week</option>
-                    <option value={14}>Two weeks</option>
-                    <option value={0}>Never</option>
-                  </select>
-                </Row>
-                <Row label="After closing a tab, go to the most recently used tab" hint="Otherwise the tab next to it.">
-                  <Toggle checked={settings.closeSelectsRecent} onChange={(closeSelectsRecent) => set({ closeSelectsRecent })} />
-                </Row>
-                <Row
-                  label="Tidy button"
-                  hint={
-                    tidy.kind === 'ai'
-                      ? 'Groups related tabs into folders with Apple Intelligence, on this Mac.'
-                      : `Groups tabs from the same site into folders. ${tidy.reason}`
-                  }
-                >
-                  <Toggle checked={settings.showTidy} onChange={(showTidy) => set({ showTidy })} />
-                </Row>
-              </>
-            )}
-
-            {section === 'media' && (
-              <>
-                <h2>Media</h2>
-                <Row label="Now playing in the sidebar" hint="Controls for media playing in a tab you’re not looking at.">
-                  <Toggle checked={settings.showMediaCard} onChange={(showMediaCard) => set({ showMediaCard })} />
-                </Row>
-                <Row label="When another tab starts playing" hint="What to do with media that’s already playing elsewhere.">
-                  <Segmented
-                    value={settings.otherMedia}
-                    options={[
-                      ['nothing', 'Keep playing'],
-                      ['offer', 'Offer to pause'],
-                      ['pause', 'Pause others']
-                    ]}
-                    onChange={(otherMedia) => set({ otherMedia })}
-                  />
-                </Row>
-                <Row label="Picture-in-picture when you leave a video" hint="A playing video floats in a mini player until you come back.">
-                  <Toggle checked={settings.autoPictureInPicture} onChange={(autoPictureInPicture) => set({ autoPictureInPicture })} />
-                </Row>
-                <Row label="Play protected content (Google Widevine)" hint={widevineHint(widevine)}>
-                  {settings.widevine && widevine.state === 'restart' && (
-                    <button className="settings-inline-button" onClick={() => zepper.send({ type: 'app.relaunch' })}>
-                      Restart now
-                    </button>
-                  )}
-                  <Toggle checked={settings.widevine && widevine.state !== 'unavailable'} onChange={(on) => set({ widevine: on })} />
-                </Row>
-                {!settings.widevine && (
-                  <Row label="Ask when a site needs it" hint="Offer to turn Widevine on when a page asks for it.">
-                    <Toggle checked={settings.widevinePrompt} onChange={(widevinePrompt) => set({ widevinePrompt })} />
+                    {defaultBrowser ? (
+                      <span className="settings-status">Zepper is your default browser</span>
+                    ) : (
+                      <button className="panel-button" onClick={() => zepper.send({ type: 'app.makeDefaultBrowser' })}>
+                        Make Default
+                      </button>
+                    )}
                   </Row>
-                )}
-                <Row label="Picture-in-picture size" hint="Relative to your screen. Resize the player to fine-tune it.">
-                  <Segmented
-                    value={settings.pipSize}
-                    options={[
-                      ['small', 'Small'],
-                      ['medium', 'Medium'],
-                      ['large', 'Large']
-                    ]}
-                    onChange={(pipSize) => set({ pipSize })}
-                  />
-                </Row>
-              </>
-            )}
-
-            {section === 'search' && (
-              <>
-                <h2>Search</h2>
-                <Row label="Search engine">
-                  <select value={settings.searchEngine} onChange={(e) => set({ searchEngine: e.target.value as SearchEngineId })}>
-                    {Object.entries(SEARCH_ENGINES).map(([id, engine]) => (
-                      <option key={id} value={id}>
-                        {engine.name}
-                      </option>
-                    ))}
-                  </select>
-                </Row>
-                <Row label="Search suggestions" hint="Ask the search engine for suggestions while you type.">
-                  <Toggle checked={settings.searchSuggestions} onChange={(searchSuggestions) => set({ searchSuggestions })} />
-                </Row>
-                <Row label="DuckDuckGo bangs" hint="Type !yt cats or !gh zepper to go straight to the site's search, without a detour.">
-                  <Toggle checked={settings.bangs} onChange={(bangs) => set({ bangs })} />
-                </Row>
-                <Row label="Recently visited sites" hint="An empty command bar lists sites you visited lately.">
-                  <Toggle checked={settings.paletteRecents} onChange={(paletteRecents) => set({ paletteRecents })} />
-                </Row>
-              </>
-            )}
-
-            {section === 'downloads' && (
-              <>
-                <h2>Downloads</h2>
-                <Row label="Save downloads to" hint={settings.downloadPath || 'Downloads folder'}>
-                  <button className="panel-button" onClick={() => zepper.send({ type: 'settings.chooseDownloadFolder' })}>
-                    Change…
-                  </button>
-                  {settings.downloadPath && (
-                    <button className="panel-button" onClick={() => set({ downloadPath: '' })}>
-                      Reset
+                  <Row
+                    label="Apple Intelligence features"
+                    hint={
+                      settings.aiFeatures && !intelligence.ai && !intelligence.translation
+                        ? (intelligence.reason ?? 'Not available on this Mac.')
+                        : 'Page summaries and questions, translation, history search by meaning and Tidy Tabs. Everything runs on your Mac.'
+                    }
+                  >
+                    <Toggle checked={settings.aiFeatures} onChange={(aiFeatures) => set({ aiFeatures })} />
+                  </Row>
+                  <Row
+                    label="Offer to translate pages"
+                    hint="When a page isn’t in your language, a translate button appears in the address bar. Translation runs on your Mac."
+                  >
+                    <Toggle
+                      checked={settings.aiFeatures && settings.offerTranslation}
+                      disabled={!settings.aiFeatures}
+                      onChange={(offerTranslation) => set({ offerTranslation })}
+                    />
+                  </Row>
+                  <Row label="Translate into" hint="Your Mac’s language, or another one.">
+                    <select value={settings.translateTo} onChange={(e) => set({ translateTo: e.target.value })}>
+                      <option value="">My Mac’s language</option>
+                      {TRANSLATION_LANGUAGES.map((code) => (
+                        <option key={code} value={code}>
+                          {new Intl.DisplayNames([navigator.language], { type: 'language' }).of(code)}
+                        </option>
+                      ))}
+                    </select>
+                  </Row>
+                  <Row
+                    label="New windows open"
+                    hint="⌘N. With your spaces: every space, with its sign-ins and Essentials, starting on the one you're in (pinned and open tabs stay in your main window)."
+                  >
+                    <Segmented
+                      value={settings.newWindowSpace}
+                      options={[
+                        ['current', 'With your spaces'],
+                        ['empty', 'Empty']
+                      ]}
+                      onChange={(newWindowSpace) => set({ newWindowSpace })}
+                    />
+                  </Row>
+                  <UpdatesRow update={update} />
+                  <Row
+                    label="Download updates automatically"
+                    hint="Zepper looks for a new version every few hours and gets it ready; an Update button then appears in the sidebar."
+                  >
+                    <Toggle
+                      checked={settings.autoUpdate}
+                      disabled={update.state === 'off'}
+                      onChange={(autoUpdate) => set({ autoUpdate })}
+                    />
+                  </Row>
+                  <Row
+                    label="Import from another browser"
+                    hint="Open tabs (Arc’s spaces too), history and passwords from Chrome, Arc, Brave, Edge, Firefox, Safari and others."
+                  >
+                    <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openOnboarding', step: 'import' })}>
+                      Import…
                     </button>
+                  </Row>
+                  <Row label="Welcome and setup" hint="Import from other browsers, pick a look and see what Zepper can do.">
+                    <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openOnboarding' })}>
+                      Show Again
+                    </button>
+                  </Row>
+                </>
+              )}
+
+              {section === 'appearance' && (
+                <>
+                  <Row label="Theme" hint="Websites follow this too.">
+                    <Segmented
+                      value={settings.colorScheme}
+                      options={[
+                        ['system', 'Auto'],
+                        ['light', 'Light'],
+                        ['dark', 'Dark']
+                      ]}
+                      onChange={(colorScheme) => set({ colorScheme })}
+                    />
+                  </Row>
+                  <Row label="App icon" hint="Auto follows your Mac’s icon style (System Settings › Appearance), like your other apps.">
+                    <Segmented
+                      value={settings.appIcon}
+                      options={[
+                        ['auto', 'Auto'],
+                        ['light', 'Light'],
+                        ['dark', 'Dark']
+                      ]}
+                      onChange={(appIcon) => set({ appIcon })}
+                    />
+                  </Row>
+                  <Row label="Sidebar position">
+                    <Segmented
+                      value={settings.sidebarPosition}
+                      options={[
+                        ['left', 'Left'],
+                        ['right', 'Right']
+                      ]}
+                      onChange={(sidebarPosition) => set({ sidebarPosition })}
+                    />
+                  </Row>
+                  <Row label="Tab density">
+                    <Segmented
+                      value={settings.density}
+                      options={[
+                        ['comfortable', 'Comfortable'],
+                        ['compact', 'Compact']
+                      ]}
+                      onChange={(density) => set({ density })}
+                    />
+                  </Row>
+                  <Row
+                    label="Transparency"
+                    hint={settings.transparency === 0 ? 'Solid window' : `${Math.round(settings.transparency * 100)}% see-through`}
+                  >
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={settings.transparency}
+                      onChange={(e) => set({ transparency: Number(e.target.value) })}
+                    />
+                  </Row>
+                  <Row label="Content gap" hint={`${settings.contentGap}px around the page`}>
+                    <input
+                      type="range"
+                      min={0}
+                      max={16}
+                      step={1}
+                      value={settings.contentGap}
+                      onChange={(e) => set({ contentGap: Number(e.target.value) })}
+                    />
+                  </Row>
+                  <Row label="Corner radius" hint={`${settings.cornerRadius}px`}>
+                    <input
+                      type="range"
+                      min={0}
+                      max={18}
+                      step={1}
+                      value={settings.cornerRadius}
+                      onChange={(e) => set({ cornerRadius: Number(e.target.value) })}
+                    />
+                  </Row>
+                  <Row label="Essentials glow" hint="Tint the active Essential with its icon’s colour.">
+                    <Toggle checked={settings.essentialsGlow} onChange={(essentialsGlow) => set({ essentialsGlow })} />
+                  </Row>
+                  <Row label="Reduce motion" hint="Turn off animations.">
+                    <Toggle checked={settings.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })} />
+                  </Row>
+                </>
+              )}
+
+              {section === 'tabs' && (
+                <>
+                  <Row label="New tabs open at">
+                    <Segmented
+                      value={settings.newTabPosition}
+                      options={[
+                        ['top', 'Top'],
+                        ['bottom', 'Bottom']
+                      ]}
+                      onChange={(newTabPosition) => set({ newTabPosition })}
+                    />
+                  </Row>
+                  <Row
+                    label="Memory Saver"
+                    hint="Tabs you haven’t looked at for a while give back their memory and reload when you open them. Time your Mac is asleep or locked doesn’t count. Tabs you keep coming back to, pinned tabs, and tabs playing sound, in a call or with something typed stay."
+                  >
+                    <Toggle checked={settings.memorySaver} onChange={(memorySaver) => set({ memorySaver })} />
+                  </Row>
+                  <Row label="How soon" hint={MEMORY_SAVER_HINTS[settings.memorySaverMode]}>
+                    <Segmented
+                      value={settings.memorySaverMode}
+                      options={[
+                        ['moderate', 'Moderate'],
+                        ['balanced', 'Balanced'],
+                        ['maximum', 'Maximum']
+                      ]}
+                      onChange={(memorySaverMode) => set({ memorySaverMode })}
+                    />
+                  </Row>
+                  <Row label="Closing a pinned tab" hint="What ⌘W does on pinned tabs and Essentials.">
+                    <select
+                      value={settings.pinnedCloseBehavior}
+                      onChange={(e) => set({ pinnedCloseBehavior: e.target.value as PinnedCloseBehavior })}
+                    >
+                      {Object.entries(PINNED_CLOSE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </Row>
+                  <Row label="Reopen tabs from last time" hint="Your open tabs come back when Zepper starts. Pinned tabs always do.">
+                    <Toggle checked={settings.restoreTabs} onChange={(restoreTabs) => set({ restoreTabs })} />
+                  </Row>
+                  <Row label="Keep Essentials" hint="Essentials stay between launches. Turn off to start each launch with none.">
+                    <Toggle checked={settings.keepEssentials} onChange={(keepEssentials) => set({ keepEssentials })} />
+                  </Row>
+                  <Row
+                    label="Suggest closing tabs you haven’t opened in"
+                    hint="A card above your tabs offers to close them or put them in a folder."
+                  >
+                    <select value={settings.staleTabDays} onChange={(e) => set({ staleTabDays: Number(e.target.value) })}>
+                      <option value={1}>A day</option>
+                      <option value={3}>3 days</option>
+                      <option value={7}>A week</option>
+                      <option value={14}>Two weeks</option>
+                      <option value={0}>Never</option>
+                    </select>
+                  </Row>
+                  <Row label="After closing a tab, go to the most recently used tab" hint="Otherwise the tab next to it.">
+                    <Toggle checked={settings.closeSelectsRecent} onChange={(closeSelectsRecent) => set({ closeSelectsRecent })} />
+                  </Row>
+                  <Row
+                    label="Tidy button"
+                    hint={
+                      tidy.kind === 'ai'
+                        ? 'Groups related tabs into folders with Apple Intelligence, on this Mac.'
+                        : `Groups tabs from the same site into folders. ${tidy.reason}`
+                    }
+                  >
+                    <Toggle checked={settings.showTidy} onChange={(showTidy) => set({ showTidy })} />
+                  </Row>
+                </>
+              )}
+
+              {section === 'media' && (
+                <>
+                  <Row label="Now playing in the sidebar" hint="Controls for media playing in a tab you’re not looking at.">
+                    <Toggle checked={settings.showMediaCard} onChange={(showMediaCard) => set({ showMediaCard })} />
+                  </Row>
+                  <Row label="When another tab starts playing" hint="What to do with media that’s already playing elsewhere.">
+                    <Segmented
+                      value={settings.otherMedia}
+                      options={[
+                        ['nothing', 'Keep playing'],
+                        ['offer', 'Offer to pause'],
+                        ['pause', 'Pause others']
+                      ]}
+                      onChange={(otherMedia) => set({ otherMedia })}
+                    />
+                  </Row>
+                  <Row
+                    label="Picture-in-picture when you leave a video"
+                    hint="A playing video floats in a mini player until you come back."
+                  >
+                    <Toggle checked={settings.autoPictureInPicture} onChange={(autoPictureInPicture) => set({ autoPictureInPicture })} />
+                  </Row>
+                  <Row label="Play protected content (Google Widevine)" hint={widevineHint(widevine)}>
+                    {settings.widevine && widevine.state === 'restart' && (
+                      <button className="settings-inline-button" onClick={() => zepper.send({ type: 'app.relaunch' })}>
+                        Restart now
+                      </button>
+                    )}
+                    <Toggle checked={settings.widevine && widevine.state !== 'unavailable'} onChange={(on) => set({ widevine: on })} />
+                  </Row>
+                  {!settings.widevine && (
+                    <Row label="Ask when a site needs it" hint="Offer to turn Widevine on when a page asks for it.">
+                      <Toggle checked={settings.widevinePrompt} onChange={(widevinePrompt) => set({ widevinePrompt })} />
+                    </Row>
                   )}
-                </Row>
-                <Row label="Ask where to save each file">
-                  <Toggle checked={settings.downloadAsk} onChange={(downloadAsk) => set({ downloadAsk })} />
-                </Row>
-                <Row label="Your downloads" hint="Progress, finished files and Show in Finder. ⌥⌘L">
-                  <button className="panel-button" onClick={() => zepper.send({ type: 'ui.downloads' })}>
-                    Show Downloads
-                  </button>
-                </Row>
-              </>
-            )}
+                  <Row label="Picture-in-picture size" hint="Relative to your screen. Resize the player to fine-tune it.">
+                    <Segmented
+                      value={settings.pipSize}
+                      options={[
+                        ['small', 'Small'],
+                        ['medium', 'Medium'],
+                        ['large', 'Large']
+                      ]}
+                      onChange={(pipSize) => set({ pipSize })}
+                    />
+                  </Row>
+                </>
+              )}
 
-            {section === 'gestures' && (
-              <>
-                <h2>Spaces &amp; Gestures</h2>
-                <Row label="Swipe between spaces" hint="Two-finger swipe on the sidebar.">
-                  <Toggle checked={settings.swipeBetweenSpaces} onChange={(swipeBetweenSpaces) => set({ swipeBetweenSpaces })} />
-                </Row>
-                <Row label="Swipe to go back and forward" hint="Two-finger swipe on a page.">
-                  <Toggle checked={settings.swipeToNavigate} onChange={(swipeToNavigate) => set({ swipeToNavigate })} />
-                </Row>
-                <Row label="Wrap around spaces" hint="Next space after the last one is the first.">
-                  <Toggle checked={settings.wrapSpaces} onChange={(wrapSpaces) => set({ wrapSpaces })} />
-                </Row>
-                <Row label="Reveal sidebar on hover in compact mode">
-                  <Toggle checked={settings.compactRevealOnHover} onChange={(compactRevealOnHover) => set({ compactRevealOnHover })} />
-                </Row>
-              </>
-            )}
+              {section === 'search' && (
+                <>
+                  <Row label="Search engine">
+                    <select value={settings.searchEngine} onChange={(e) => set({ searchEngine: e.target.value as SearchEngineId })}>
+                      {Object.entries(SEARCH_ENGINES).map(([id, engine]) => (
+                        <option key={id} value={id}>
+                          {engine.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Row>
+                  <Row label="Search suggestions" hint="Ask the search engine for suggestions while you type.">
+                    <Toggle checked={settings.searchSuggestions} onChange={(searchSuggestions) => set({ searchSuggestions })} />
+                  </Row>
+                  <Row label="DuckDuckGo bangs" hint="Type !yt cats or !gh zepper to go straight to the site's search, without a detour.">
+                    <Toggle checked={settings.bangs} onChange={(bangs) => set({ bangs })} />
+                  </Row>
+                  <Row label="Recently visited sites" hint="An empty command bar lists sites you visited lately.">
+                    <Toggle checked={settings.paletteRecents} onChange={(paletteRecents) => set({ paletteRecents })} />
+                  </Row>
+                </>
+              )}
 
-            {section === 'privacy' && (
-              <>
-                <h2>Privacy</h2>
-                <Row
-                  label="Block ads and trackers"
-                  hint="uBlock Origin’s filter lists, built in. Turn protections off for one site from the lock icon."
-                >
-                  <Toggle checked={settings.adblock} onChange={(adblock) => set({ adblock })} />
-                </Row>
-                {(settings.adblockAllowlist.length > 0 || Object.keys(settings.siteExceptions).length > 0) && (
-                  <div className="settings-row settings-row-stacked">
-                    <div className="settings-row-text">
-                      <div className="settings-row-label">Sites with protections off</div>
-                      <div className="settings-row-hint">Change them from the lock icon on the site, or turn them all back on here.</div>
+              {section === 'downloads' && (
+                <>
+                  <Row label="Save downloads to" hint={settings.downloadPath || 'Downloads folder'}>
+                    <button className="panel-button" onClick={() => zepper.send({ type: 'settings.chooseDownloadFolder' })}>
+                      Change…
+                    </button>
+                    {settings.downloadPath && (
+                      <button className="panel-button" onClick={() => set({ downloadPath: '' })}>
+                        Reset
+                      </button>
+                    )}
+                  </Row>
+                  <Row label="Ask where to save each file">
+                    <Toggle checked={settings.downloadAsk} onChange={(downloadAsk) => set({ downloadAsk })} />
+                  </Row>
+                  <Row label="Your downloads" hint="Progress, finished files and Show in Finder. ⌥⌘L">
+                    <button className="panel-button" onClick={() => zepper.send({ type: 'ui.downloads' })}>
+                      Show Downloads
+                    </button>
+                  </Row>
+                </>
+              )}
+
+              {section === 'gestures' && (
+                <>
+                  <Row label="Swipe between spaces" hint="Two-finger swipe on the sidebar.">
+                    <Toggle checked={settings.swipeBetweenSpaces} onChange={(swipeBetweenSpaces) => set({ swipeBetweenSpaces })} />
+                  </Row>
+                  <Row label="Swipe to go back and forward" hint="Two-finger swipe on a page.">
+                    <Toggle checked={settings.swipeToNavigate} onChange={(swipeToNavigate) => set({ swipeToNavigate })} />
+                  </Row>
+                  <Row label="Wrap around spaces" hint="Next space after the last one is the first.">
+                    <Toggle checked={settings.wrapSpaces} onChange={(wrapSpaces) => set({ wrapSpaces })} />
+                  </Row>
+                  <Row label="Reveal sidebar on hover in compact mode">
+                    <Toggle checked={settings.compactRevealOnHover} onChange={(compactRevealOnHover) => set({ compactRevealOnHover })} />
+                  </Row>
+                </>
+              )}
+
+              {section === 'privacy' && (
+                <>
+                  <Row
+                    label="Block ads and trackers"
+                    hint="uBlock Origin’s filter lists, built in. Turn protections off for one site from the lock icon."
+                  >
+                    <Toggle checked={settings.adblock} onChange={(adblock) => set({ adblock })} />
+                  </Row>
+                  {(settings.adblockAllowlist.length > 0 || Object.keys(settings.siteExceptions).length > 0) && (
+                    <div className="settings-row settings-row-stacked">
+                      <div className="settings-row-text">
+                        <div className="settings-row-label">Sites with protections off</div>
+                        <div className="settings-row-hint">Change them from the lock icon on the site, or turn them all back on here.</div>
+                      </div>
+                      <SiteChips
+                        items={[...new Set([...settings.adblockAllowlist, ...Object.keys(settings.siteExceptions)])]}
+                        site={(domain) => domain}
+                        chip={(domain) => {
+                          const off = settings.adblockAllowlist.includes(domain)
+                            ? 'all'
+                            : (settings.siteExceptions[domain] ?? []).map((key) => PROTECTIONS.find((p) => p.key === key)?.label).join(', ')
+                          return (
+                            <span key={domain} className="site-chip" title={`Off: ${off}`}>
+                              {domain}
+                              <span className="site-chip-detail">{off === 'all' ? 'all off' : off}</span>
+                              <button
+                                title={`Turn protections back on for ${domain}`}
+                                onClick={() => zepper.send({ type: 'site.resetProtections', domain })}
+                              >
+                                <IconClose size={9} />
+                              </button>
+                            </span>
+                          )
+                        }}
+                      />
                     </div>
-                    <div className="site-chips">
-                      {[...new Set([...settings.adblockAllowlist, ...Object.keys(settings.siteExceptions)])].map((domain) => {
-                        const off = settings.adblockAllowlist.includes(domain)
-                          ? 'all'
-                          : (settings.siteExceptions[domain] ?? []).map((key) => PROTECTIONS.find((p) => p.key === key)?.label).join(', ')
-                        return (
-                          <span key={domain} className="site-chip" title={`Off: ${off}`}>
-                            {domain}
-                            <span className="site-chip-detail">{off === 'all' ? 'all off' : off}</span>
-                            <button
-                              title={`Turn protections back on for ${domain}`}
-                              onClick={() => zepper.send({ type: 'site.resetProtections', domain })}
-                            >
-                              <IconClose size={9} />
-                            </button>
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-                <Row label="Hide cookie banners" hint="Hides cookie consent pop-ups and other annoyances, using uBlock Origin’s lists.">
-                  <Toggle checked={settings.hideCookieBanners} onChange={(hideCookieBanners) => set({ hideCookieBanners })} />
-                </Row>
-                <Row
-                  label="Block fingerprinting"
-                  hint="Adds tiny per-site noise to canvas, WebGL and audio readouts and hides local network addresses, so sites can’t recognise you."
-                >
-                  <Toggle checked={settings.blockFingerprinting} onChange={(blockFingerprinting) => set({ blockFingerprinting })} />
-                </Row>
-                <Row
-                  label="Block cross-site cookies"
-                  hint="Embedded content from other sites can’t set or read cookies, so it can’t follow you around. Sign-in frames still work."
-                >
-                  <Toggle checked={settings.blockCrossSiteCookies} onChange={(blockCrossSiteCookies) => set({ blockCrossSiteCookies })} />
-                </Row>
-                <Row
-                  label="Upgrade connections to HTTPS"
-                  hint="Loads sites over HTTPS when they support it, and falls back when they don’t."
-                >
-                  <Toggle checked={settings.httpsUpgrade} onChange={(httpsUpgrade) => set({ httpsUpgrade })} />
-                </Row>
-                <Row
-                  label="Remove trackers from links"
-                  hint="Strips click identifiers like fbclid and gclid, and opens Google AMP pages on the real site."
-                >
-                  <Toggle checked={settings.cleanLinks} onChange={(cleanLinks) => set({ cleanLinks })} />
-                </Row>
-                <Row
-                  label="Secure DNS"
-                  hint="Encrypts site lookups, so your network can’t see or change where you go. Automatic uses your DNS provider’s encryption when it offers it."
-                >
-                  <select value={settings.secureDns} onChange={(e) => set({ secureDns: e.target.value as SecureDns })}>
-                    <option value="automatic">Automatic</option>
-                    <option value="cloudflare">Cloudflare</option>
-                    <option value="quad9">Quad9</option>
-                    <option value="google">Google</option>
-                    <option value="off">Off</option>
-                  </select>
-                </Row>
-                <Row
-                  label="Block pop-up floods"
-                  hint="Windows you open are never blocked, and sites can open a couple on their own; one that keeps opening them is stopped. Change it for a site from its lock icon."
-                >
-                  <Toggle checked={settings.blockPopups} onChange={(blockPopups) => set({ blockPopups })} />
-                </Row>
-                <SitePermissionsRow sites={sitePermissions} />
-                <SystemAccessRows access={systemAccess} />
-                <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
-                  <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
-                </Row>
-                <Row label="Clear history when Zepper quits" hint="Your tabs, spaces and sign-ins stay.">
-                  <Toggle checked={settings.clearHistoryOnQuit} onChange={(clearHistoryOnQuit) => set({ clearHistoryOnQuit })} />
-                </Row>
-                <ClearBrowsingData />
-                <Row label="Browsing history" hint="Search it, open pages again or delete them. ⌘Y">
-                  <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openHistory' })}>
-                    Show History
-                  </button>
-                </Row>
-                <Row label="Identify as" hint="The browser websites think you’re using. Google sign-in needs Chrome or Edge.">
-                  <select value={settings.userAgent} onChange={(e) => set({ userAgent: e.target.value as UserAgentChoice })}>
-                    {Object.entries(USER_AGENT_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
+                  )}
+                  <Row label="Hide cookie banners" hint="Hides cookie consent pop-ups and other annoyances, using uBlock Origin’s lists.">
+                    <Toggle checked={settings.hideCookieBanners} onChange={(hideCookieBanners) => set({ hideCookieBanners })} />
+                  </Row>
+                  <Row
+                    label="Block fingerprinting"
+                    hint="Adds tiny per-site noise to canvas, WebGL and audio readouts and hides local network addresses, so sites can’t recognise you."
+                  >
+                    <Toggle checked={settings.blockFingerprinting} onChange={(blockFingerprinting) => set({ blockFingerprinting })} />
+                  </Row>
+                  <Row
+                    label="Block cross-site cookies"
+                    hint="Embedded content from other sites can’t set or read cookies, so it can’t follow you around. Sign-in frames still work."
+                  >
+                    <Toggle checked={settings.blockCrossSiteCookies} onChange={(blockCrossSiteCookies) => set({ blockCrossSiteCookies })} />
+                  </Row>
+                  <Row
+                    label="Upgrade connections to HTTPS"
+                    hint="Loads sites over HTTPS when they support it, and falls back when they don’t."
+                  >
+                    <Toggle checked={settings.httpsUpgrade} onChange={(httpsUpgrade) => set({ httpsUpgrade })} />
+                  </Row>
+                  <Row
+                    label="Remove trackers from links"
+                    hint="Strips click identifiers like fbclid and gclid, and opens Google AMP pages on the real site."
+                  >
+                    <Toggle checked={settings.cleanLinks} onChange={(cleanLinks) => set({ cleanLinks })} />
+                  </Row>
+                  <Row
+                    label="Secure DNS"
+                    hint="Encrypts site lookups, so your network can’t see or change where you go. Automatic uses your DNS provider’s encryption when it offers it."
+                  >
+                    <select value={settings.secureDns} onChange={(e) => set({ secureDns: e.target.value as SecureDns })}>
+                      <option value="automatic">Automatic</option>
+                      <option value="cloudflare">Cloudflare</option>
+                      <option value="quad9">Quad9</option>
+                      <option value="google">Google</option>
+                      <option value="off">Off</option>
+                    </select>
+                  </Row>
+                  <Row
+                    label="Block pop-up floods"
+                    hint="Windows you open are never blocked, and sites can open a couple on their own; one that keeps opening them is stopped. Change it for a site from its lock icon."
+                  >
+                    <Toggle checked={settings.blockPopups} onChange={(blockPopups) => set({ blockPopups })} />
+                  </Row>
+                  <SitePermissionsRow sites={sitePermissions} />
+                  <SystemAccessRows access={systemAccess} />
+                  <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
+                    <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
+                  </Row>
+                  <Row label="Clear history when Zepper quits" hint="Your tabs, spaces and sign-ins stay.">
+                    <Toggle checked={settings.clearHistoryOnQuit} onChange={(clearHistoryOnQuit) => set({ clearHistoryOnQuit })} />
+                  </Row>
+                  <ClearBrowsingData />
+                  <Row label="Browsing history" hint="Search it, open pages again or delete them. ⌘Y">
+                    <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openHistory' })}>
+                      Show History
+                    </button>
+                  </Row>
+                  <Row label="Identify as" hint="The browser websites think you’re using. Google sign-in needs Chrome or Edge.">
+                    <select value={settings.userAgent} onChange={(e) => set({ userAgent: e.target.value as UserAgentChoice })}>
+                      {Object.entries(USER_AGENT_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </Row>
+                  {settings.userAgent === 'custom' && (
+                    <CustomUserAgent value={settings.customUserAgent} onChange={(customUserAgent) => set({ customUserAgent })} />
+                  )}
+                  <Row
+                    label="Google sign-in compatibility"
+                    hint="Lets Google’s sign-in page accept Zepper. Only affects accounts.google.com."
+                  >
+                    <Toggle checked={settings.googleSignInCompat} onChange={(googleSignInCompat) => set({ googleSignInCompat })} />
+                  </Row>
+                </>
+              )}
+
+              {section === 'passwords' && <PasswordsSettings settings={settings} />}
+
+              {section === 'extensions' && <ExtensionsSettings settings={settings} />}
+
+              {section === 'shortcuts' && (
+                <>
+                  <div className="shortcut-list">
+                    {SHORTCUTS.map(([label, keys]) => (
+                      <div key={label} className="shortcut-row">
+                        <span>{label}</span>
+                        <kbd>{isMac ? keys : keys.replace(/⌘/g, 'Ctrl+')}</kbd>
+                      </div>
                     ))}
-                  </select>
-                </Row>
-                {settings.userAgent === 'custom' && (
-                  <CustomUserAgent value={settings.customUserAgent} onChange={(customUserAgent) => set({ customUserAgent })} />
-                )}
-                <Row
-                  label="Google sign-in compatibility"
-                  hint="Lets Google’s sign-in page accept Zepper. Only affects accounts.google.com."
-                >
-                  <Toggle checked={settings.googleSignInCompat} onChange={(googleSignInCompat) => set({ googleSignInCompat })} />
-                </Row>
-              </>
-            )}
-
-            {section === 'passwords' && <PasswordsSettings settings={settings} />}
-
-            {section === 'extensions' && <ExtensionsSettings settings={settings} />}
-
-            {section === 'shortcuts' && (
-              <>
-                <h2>Keyboard Shortcuts</h2>
-                <div className="shortcut-list">
-                  {SHORTCUTS.map(([label, keys]) => (
-                    <div key={label} className="shortcut-row">
-                      <span>{label}</span>
-                      <kbd>{isMac ? keys : keys.replace(/⌘/g, 'Ctrl+')}</kbd>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </motion.div>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
         </div>
       </motion.div>
     </motion.div>
@@ -840,8 +857,10 @@ function SitePermissionsRow({ sites }: { sites: SiteDecisions[] }): React.JSX.El
         </div>
       </div>
       {sites.length > 0 && (
-        <div className="site-chips">
-          {sites.map((site) => (
+        <SiteChips
+          items={sites}
+          site={(site) => site.host}
+          chip={(site) => (
             <span key={site.origin} className="site-chip" title={summary(site)}>
               {site.host}
               <span className="site-chip-detail">{summary(site)}</span>
@@ -849,8 +868,8 @@ function SitePermissionsRow({ sites }: { sites: SiteDecisions[] }): React.JSX.El
                 <IconClose size={9} />
               </button>
             </span>
-          ))}
-        </div>
+          )}
+        />
       )}
     </div>
   )
