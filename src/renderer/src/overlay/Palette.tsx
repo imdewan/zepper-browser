@@ -124,6 +124,18 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
       setText(completion)
       return
     }
+    // → at the end of the field puts the highlighted suggestion in it, to keep editing before you go.
+    if (e.key === 'ArrowRight' && !e.shiftKey && !e.metaKey && !e.altKey) {
+      const field = e.currentTarget as HTMLInputElement
+      const fill = fillText(results[selected])
+      if (fill && fill !== text && field.selectionStart === field.value.length && field.selectionEnd === field.value.length) {
+        e.preventDefault()
+        setNoCompletion(true)
+        setText(fill)
+        requestAnimationFrame(() => input.current?.setSelectionRange(fill.length, fill.length))
+        return
+      }
+    }
     if (down || up) {
       e.preventDefault()
       if (results.length) setSelected((s) => (s + (down ? 1 : -1) + results.length) % results.length)
@@ -206,6 +218,15 @@ interface SuggestionRowProps {
   engineName: string
   onHover: () => void
   onChoose: () => void
+}
+
+/** What → puts in the field for a suggestion: a search's words, or a page's address (without https://). */
+function fillText(suggestion: Suggestion | undefined): string | null {
+  if (!suggestion) return null
+  if (suggestion.kind === 'search') return suggestion.query
+  // A bang being typed has its own completion (Return); → leaves it alone.
+  if (suggestion.kind === 'bang') return null
+  return suggestion.url.replace(/^https:\/\//, '')
 }
 
 function SuggestionRow({ mode, suggestion, selected, engineName, onHover, onChoose }: SuggestionRowProps): React.JSX.Element {
