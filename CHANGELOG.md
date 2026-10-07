@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- A call's floating window (Google Meet's, opened when you switch away from a call) stayed black: the call's tab was in the background, where pages get no animation frames, so the site never drew into it. The tab keeps drawing while its floating window is open, as in Chrome. The window's title also names the site instead of "Pop-up — about:blank".
+
 ## [0.1.2] - 2026-10-07
 
 ### Fixed

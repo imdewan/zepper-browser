@@ -1032,10 +1032,15 @@ export class Browser {
     if (this.tabByWebContents.has(wc.id)) return
     this.popups.set(win, openerId)
     win.once('closed', () => this.popups.delete(win))
-    // Popups have no address bar, so the title says which site you're on (sign-in, payment…).
+    // Popups have no address bar, so the title says which site you're on (sign-in, payment…). A blank
+    // one the page fills itself (a call's floating window) is the opener's site.
     const retitle = (): void => {
-      if (!win.isDestroyed()) win.setTitle(`${safeHost(wc.getURL()) || 'Pop-up'} — ${wc.getTitle()}`)
+      if (win.isDestroyed()) return
+      const host = safeHost(wc.getURL()) || safeHost(this.views.get(openerId)?.webContents.getURL() ?? '') || 'Pop-up'
+      const title = wc.getTitle()
+      win.setTitle(title && title !== wc.getURL() ? `${host} — ${title}` : host)
     }
+    retitle()
     wc.on('page-title-updated', (event) => {
       event.preventDefault()
       retitle()
@@ -3623,9 +3628,15 @@ export class Browser {
     win.setAlwaysOnTop(true, 'floating')
     this.docPips.get(tabId)?.close()
     this.docPips.set(tabId, win)
+    // The page draws this window from its own tab, which is in the background once you've switched
+    // away; a background tab gets no animation frames, so the window would stay black. It keeps
+    // drawing while the window is open, as in Chrome.
+    const opener = this.views.get(tabId)?.webContents
+    opener?.setBackgroundThrottling(false)
     win.once('closed', () => {
       if (this.docPips.get(tabId) === win) this.docPips.delete(tabId)
       this.autoDocPips.delete(tabId)
+      if (opener && !opener.isDestroyed() && !this.docPips.has(tabId)) opener.setBackgroundThrottling(true)
     })
   }
 
