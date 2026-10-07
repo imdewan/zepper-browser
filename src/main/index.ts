@@ -9,7 +9,9 @@ import { Hub } from './hub'
 import { buildMenu } from './menu'
 import { SettingsStore } from './settings-store'
 
-app.setName('Zepper')
+// Development copies are "Zepper Dev": their own profile folder and their own Keychain item ("Zepper
+// Dev Safe Storage"), so running one never touches the installed Zepper's logins, data or Keychain.
+app.setName(app.isPackaged ? 'Zepper' : 'Zepper Dev')
 
 // With Widevine off we disable castLabs' component updater, and its own background
 // install then rejects internally ("No component available"). That's expected.
