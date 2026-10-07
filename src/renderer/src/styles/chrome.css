@@ -542,12 +542,25 @@ button.site-button.insecure:hover {
 
 /* ---- Essentials ---------------------------------------------------------- */
 
+/* Essentials wrap as in Zen (see layoutFor): a quarter or a third of the row each (just under, so
+   four or three always fit), never narrower than a tile is tall; short rows stretch to fill. */
 .essentials {
+  --tile-min: 50px;
+  --quarter: max(calc((100% - 18px) / 4 - 0.5px), var(--tile-min));
+  --third: max(calc((100% - 12px) / 3 - 0.5px), var(--tile-min));
   flex: none;
   display: grid;
-  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(var(--quarter), 1fr));
   gap: 6px;
   padding-bottom: 8px;
+}
+
+.essentials[data-layout='pairs'] {
+  grid-template-columns: repeat(auto-fit, minmax(var(--quarter), 1fr) minmax(var(--quarter), 1fr));
+}
+
+.essentials[data-layout='threes'] {
+  grid-template-columns: repeat(auto-fit, minmax(var(--third), 1fr));
 }
 
 .essential-slot {

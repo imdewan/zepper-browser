@@ -8,11 +8,15 @@ import { useUiEvents } from '../useSnapshot'
 import { cx, rectOf } from '../util'
 import { dragProps, useDragging, useDrop, useDropHint, type DropPosition } from './dnd'
 
-/** Column count that keeps rows balanced (5 → 3+2, 6 → 3+3, 9 → 3×3). */
-function columnsFor(count: number): number {
-  if (count <= 4) return Math.max(count, 1)
-  if (count === 5 || count === 6 || count === 9) return 3
-  return 4
+/**
+ * How the grid wraps, as in Zen: up to four to a row, each at least 50px wide (so a narrower sidebar
+ * fits fewer), and a row that isn't full stretches to fill it. Some counts wrap so rows stay even:
+ * 2 and 4 go in pairs (2×2 rather than 3+1 when narrow), and 5, 6 and 9 in threes.
+ */
+function layoutFor(count: number): 'pairs' | 'threes' | undefined {
+  if (count === 5 || count === 6 || count === 9) return 'threes'
+  if (count % 2 === 0 && count < 8) return 'pairs'
+  return undefined
 }
 
 interface EssentialsProps {
@@ -62,7 +66,7 @@ export function Essentials({ tabs, spaceId, activeTabId }: EssentialsProps): Rea
     ) : null
   }
   return (
-    <div {...end.props} className="essentials" style={{ '--cols': columnsFor(tabs.length) } as React.CSSProperties}>
+    <div {...end.props} className="essentials" data-layout={layoutFor(tabs.length)}>
       <AnimatePresence initial={false}>
         {tabs.map((tab) => (
           <Essential key={tab.id} tab={tab} active={tab.id === activeTabId} />
