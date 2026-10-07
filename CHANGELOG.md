@@ -4,8 +4,11 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-07
+
 ### Changed
 
+- Releases are signed with the same certificate every time, so macOS knows each update as the same app: it stops asking for Zepper's Keychain item (and camera or microphone access) after every update. It asks one last time with this update.
 - Memory Saver works the way Chrome's and Brave's does, so tabs stay loaded far longer. Its modes are Moderate, Balanced (the default) and Maximum: a tab unloads after 6, 4 or 2 hours out of sight (it was 15 minutes to 4 hours), or sooner when your Mac runs short of memory. Time your Mac is asleep or locked no longer counts, so coming back finds your tabs as you left them, and tabs you keep coming back to, pinned tabs, tabs that update out of sight (an unread count), sites allowed to send notifications and tabs with something typed and not sent stay loaded.
 
 ### Fixed
@@ -73,7 +76,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/imdewan/zepper-browser/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/imdewan/zepper-browser/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/imdewan/zepper-browser/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/imdewan/zepper-browser/releases/tag/v0.1.0
