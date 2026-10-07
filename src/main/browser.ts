@@ -259,6 +259,8 @@ const MEMORY_SAVER_MODES: Record<MemorySaverMode, { afterMs: number; maxRevisits
 const RECENTLY_AUDIBLE_MS = 60_000
 /** Even when memory runs short, a tab seen this recently stays (Chrome's ten minutes). */
 const RECENTLY_SEEN_MS = 10 * 60_000
+/** How long a closing page gets to run its closing code before it's closed regardless (hung pages). */
+const CLOSE_PAGE_TIMEOUT_MS = 1500
 /** A page counts as settled (done loading, not just finishing its title) this long after it stops loading. */
 const SETTLED_AFTER_MS = 5000
 /** macOS's memory pressure level when it's critical (kern.memorystatus_vm_pressure_level: 1, 2 or 4). */
@@ -575,6 +577,12 @@ export class Browser {
   private readonly settledAt = new Map<string, number>()
   /** When Memory Saver last looked, on a clock that stops while the Mac sleeps. */
   private memoryCheckedAt = performance.now()
+  /** Pages closing gently (see closeGently), by web contents: whether "Leave site?" is answered Leave. */
+  private readonly closingGently = new Map<number, { leave: boolean; stayed: () => void }>()
+  /** Tabs Memory Saver is closing. */
+  private readonly freeing = new Set<string>()
+  /** Every page has closed itself (the window is closing or Zepper is quitting). */
+  private pagesClosed = false
   /** When each tab's media metadata was last read. */
   private readonly mediaReadAt = new Map<string, number>()
   /** Pages whose permission prompts are dropped when they go away. */
@@ -779,8 +787,14 @@ export class Browser {
     })
     // Remember where the window is, like other Mac apps (saved with the rest of the state).
     this.win.on('moved', () => this.broadcast())
-    this.win.on('close', () => {
+    this.win.on('close', (event) => {
       this.savedWindow = { bounds: this.win.getNormalBounds(), maximized: this.win.isMaximized() }
+      // Its pages close themselves first, as in Chrome: some save what they need then (a login, a draft).
+      if (this.pagesClosed) return
+      event.preventDefault()
+      void this.closePagesGently().then(() => {
+        if (!this.win.isDestroyed()) this.win.close()
+      })
     })
     if (this.savedWindow?.maximized) this.win.maximize()
     this.win.on('focus', () => this.broadcast())
@@ -2168,11 +2182,60 @@ export class Browser {
     )
   }
 
+  /**
+   * Unloads a tab for Memory Saver. Its page closes itself first, running its closing code like a tab
+   * you close (sites save a login or a draft then); one that asks to stay ("Leave site?") stays loaded.
+   */
   private freeMemory(tab: Tab): void {
-    this.destroyView(tab)
-    this.unseenFor.delete(tab.id)
-    this.updatedInBackground.delete(tab.id)
-    this.broadcast()
+    const view = this.views.get(tab.id)
+    if (!view || this.freeing.has(tab.id)) return
+    this.freeing.add(tab.id)
+    void this.closeGently(view.webContents, false).then((closed) => {
+      this.freeing.delete(tab.id)
+      if (!closed || this.views.get(tab.id) !== view) return
+      this.destroyView(tab)
+      this.unseenFor.delete(tab.id)
+      this.updatedInBackground.delete(tab.id)
+      // Opened again while it was closing: load it again.
+      if (tab.id === this.activeTabId || this.attached.has(tab.id)) this.activateTab(tab.id, { keepRecency: true })
+      this.broadcast()
+    })
+  }
+
+  /**
+   * Closes a page the way Chrome closes a tab: it runs its own closing code (beforeunload, pagehide,
+   * unload) before it goes, which is where some sites save what they need for next time. Resolves
+   * true once it has closed. A page asking "Leave site?" is left when `leaveIfAsked` (closing the
+   * window, quitting) and otherwise stays (false); a page that doesn't answer is closed regardless
+   * when leaving.
+   */
+  private closeGently(wc: WebContents, leaveIfAsked: boolean): Promise<boolean> {
+    if (wc.isDestroyed()) return Promise.resolve(true)
+    return new Promise((resolve) => {
+      let done = false
+      const finish = (closed: boolean): void => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        this.closingGently.delete(wc.id)
+        resolve(closed)
+      }
+      this.closingGently.set(wc.id, { leave: leaveIfAsked, stayed: () => finish(false) })
+      wc.once('destroyed', () => finish(true))
+      const timer = setTimeout(() => {
+        if (leaveIfAsked && !wc.isDestroyed()) wc.close()
+        finish(leaveIfAsked)
+      }, CLOSE_PAGE_TIMEOUT_MS)
+      wc.close({ waitForBeforeUnload: true })
+    })
+  }
+
+  /** The window is closing or Zepper is quitting: every page closes itself first (see closeGently). */
+  async closePagesGently(): Promise<void> {
+    if (this.pagesClosed) return
+    this.persistNow()
+    await Promise.all([...this.views.values()].map((view) => this.closeGently(view.webContents, true)))
+    this.pagesClosed = true
   }
 
   /** The Mac is short of memory: the tab you used least recently (out of sight a while) unloads now. */
@@ -3399,6 +3462,12 @@ export class Browser {
     // A page with unsaved changes asks before it's left, as in Chrome (Electron would otherwise cancel silently).
     wc.on('will-prevent-unload', (event) => {
       if (this.win.isDestroyed()) return event.preventDefault()
+      const gentle = this.closingGently.get(wc.id)
+      if (gentle) {
+        if (gentle.leave) event.preventDefault()
+        else gentle.stayed()
+        return
+      }
       this.askingToLeave.add(tabId)
       const choice = dialog.showMessageBoxSync(this.win, {
         type: 'question',

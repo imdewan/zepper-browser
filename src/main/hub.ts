@@ -321,6 +321,11 @@ export class Hub {
     return this.main ?? [...this.browsers].find((b) => b.kind !== 'private') ?? this.openWindow('main')
   }
 
+  /** Before quitting: every window's pages close themselves (see Browser.closePagesGently). */
+  async closePagesGently(): Promise<void> {
+    await Promise.all([...this.browsers].map((browser) => browser.closePagesGently()))
+  }
+
   persist(): void {
     this.main?.persistNow()
     this.zoom.flush()

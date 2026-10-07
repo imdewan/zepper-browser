@@ -104,6 +104,8 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   let quitConfirmed = false
+  let pagesClosed = false
+  let closingPages = false
   app.on('before-quit', (event) => {
     // Only the main window comes back after a restart: ask before closing other windows' tabs.
     const others = hub && !hub.quitWithoutAsking ? hub.unrestoredWindows() : 0
@@ -118,6 +120,19 @@ if (!app.requestSingleInstanceLock()) {
       })
       if (choice !== 0) return event.preventDefault()
       quitConfirmed = true
+    }
+    // Pages close themselves before Zepper goes, running their closing code as in Chrome (some sites
+    // save a login there), then quitting carries on.
+    if (hub && !pagesClosed) {
+      event.preventDefault()
+      if (closingPages) return
+      closingPages = true
+      hub.persist()
+      void hub.closePagesGently().finally(() => {
+        pagesClosed = true
+        app.quit()
+      })
+      return
     }
     if (hub?.services.settings.get().clearHistoryOnQuit) history.clearSince(0)
     hub?.persist()

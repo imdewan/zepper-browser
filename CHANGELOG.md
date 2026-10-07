@@ -9,6 +9,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 - Settings keeps its close button and the page's title in a bar at the top that stays put while the page scrolls.
 - Lists of sites in Settings (site permissions, sites with protections off, sites passwords are never saved for) stay short as they grow: sites in A–Z order, the first six with Show all, and a search field once there are more than ten.
 
+### Fixed
+
+- Some sites (Discord, for one) could sign you out after you quit Zepper, updated it, closed its window or had a tab unloaded by Memory Saver: pages were closed without running their closing code, which is where some sites save what they need for next time. Pages now close themselves first, as in Chrome. Memory Saver also leaves a page loaded if it asks before you leave (unsaved changes).
+
 ## [0.1.3] - 2026-10-07
 
 ### Changed
