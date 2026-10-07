@@ -878,7 +878,8 @@ function SitePermissionsRow({ sites }: { sites: SiteDecisions[] }): React.JSX.El
 const ACCESS_LABELS: [keyof SystemAccess, string, string][] = [
   ['camera', 'Camera', 'camera'],
   ['microphone', 'Microphone', 'microphone'],
-  ['screen', 'Screen & System Audio Recording', 'screen']
+  ['screen', 'Screen & System Audio Recording', 'screen'],
+  ['location', 'Location Services', 'location']
 ]
 
 function accessHint(state: AccessState): string {

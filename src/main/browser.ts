@@ -84,6 +84,7 @@ import { tidyGroups } from './tidy'
 import { AiError, intelligence } from './ai'
 import { resolveInput, searchEngineName, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
 import { nextZoom } from './zoom'
+import { requestLocationAccess } from './native'
 import { CAPTURE_TARGETS_SCRIPT, captureArea, captureFullPage, pngWithDensity, type CaptureTargets } from './capture'
 
 /** Height reserved for the traffic lights when the sidebar is on the right. */
@@ -984,8 +985,23 @@ export class Browser {
    */
   private grant(keys: string[], callback: (granted: boolean) => void): void {
     const media = (['camera', 'microphone'] as const).filter((kind) => keys.includes(kind))
-    if (process.platform !== 'darwin' || media.length === 0) return callback(true)
+    const location = keys.includes('geolocation')
+    if (process.platform !== 'darwin' || (media.length === 0 && !location)) return callback(true)
     void (async () => {
+      // Location: macOS asks (its own prompt) the first time; Chromium reads it once Zepper's allowed.
+      if (location) {
+        const access = await requestLocationAccess()
+        this.hub.refreshSystemAccess()
+        if (access === 'denied') {
+          this.toast({
+            id: 'system-location',
+            message: 'macOS is blocking Zepper’s location',
+            description: 'Turn on Zepper in Location Services, then reload the page.',
+            action: { label: 'Open Settings', command: { type: 'app.openMediaPrivacySettings', kind: 'location' } },
+            timeout: 8000
+          })
+        }
+      }
       for (const kind of media) {
         const status = systemPreferences.getMediaAccessStatus(kind)
         if (status === 'not-determined') {
@@ -1454,7 +1470,7 @@ export class Browser {
       case 'app.openTranslationSettings':
         return void shell.openExternal('x-apple.systempreferences:com.apple.Localization-Settings.extension')
       case 'app.openMediaPrivacySettings': {
-        const pane = { camera: 'Camera', microphone: 'Microphone', screen: 'ScreenCapture' }[command.kind]
+        const pane = { camera: 'Camera', microphone: 'Microphone', screen: 'ScreenCapture', location: 'LocationServices' }[command.kind]
         return void shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?Privacy_${pane}`)
       }
       case 'app.checkForUpdates':

@@ -143,7 +143,7 @@ function createMock(): ZepperApi {
     defaultBrowser: false,
     update: { state: 'off' },
     sitePermissions: [],
-    systemAccess: { camera: 'allowed', microphone: 'allowed', screen: 'allowed' },
+    systemAccess: { camera: 'allowed', microphone: 'allowed', screen: 'allowed', location: 'allowed' },
     extensionsPartition: 'zepper-browsing',
     intelligence: { ai: true, translation: true, embeddings: true },
     windowSize: { width: window.innerWidth, height: window.innerHeight },

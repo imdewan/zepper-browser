@@ -538,7 +538,7 @@ export type Command =
   | { type: 'page.translate'; tabId: string }
   | { type: 'app.openTranslationSettings' }
   /** System Settings › Privacy & Security › Camera, Microphone, or Screen & System Audio Recording. */
-  | { type: 'app.openMediaPrivacySettings'; kind: 'camera' | 'microphone' | 'screen' }
+  | { type: 'app.openMediaPrivacySettings'; kind: 'camera' | 'microphone' | 'screen' | 'location' }
   /** Look for a newer Zepper now (About shows how it went). */
   | { type: 'app.checkForUpdates' }
   /** Restart into the downloaded update (or, where Zepper can't update itself, open the download page). */
@@ -690,6 +690,7 @@ export interface SystemAccess {
   camera: AccessState
   microphone: AccessState
   screen: AccessState
+  location: AccessState
 }
 
 /** Where Zepper's own update is at. */

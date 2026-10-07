@@ -6,6 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
+- Settings › Privacy shows whether macOS lets Zepper use your location (with a way to change it), next to the camera, microphone and screen.
 - Swiping back and forward works like Chrome's: the page stays still while an arrow slides in from its edge with your fingers, a ring filling as you go; once letting go will navigate, the circle fills in the space's colour. Letting go then goes straight there, without the page lurching and springing back as it did.
 - In the command bar, → (at the end of what you've typed) puts the highlighted suggestion in the field without going there, so you can keep editing it: a search's words, or a page's address. Tab and Shift-Tab step through suggestions, as in Chrome and Firefox.
 - Settings keeps its close button and the page's title in a bar at the top that stays put while the page scrolls.
@@ -15,6 +16,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
+- Sites couldn't get your location (Google Maps: "Your precise location could not be determined"): macOS was never asked to let Zepper use it, so requests waited and timed out. The first time a site you allow wants your location, macOS now asks, and if macOS is blocking Zepper you're told where to turn it on.
 - Some sites (Discord, for one) could sign you out after you quit Zepper, updated it, closed its window or had a tab unloaded by Memory Saver: pages were closed without running their closing code, which is where some sites save what they need for next time. Pages now close themselves first, as in Chrome. Memory Saver also leaves a page loaded if it asks before you leave (unsaved changes).
 
 ## [0.1.3] - 2026-10-07

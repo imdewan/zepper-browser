@@ -75,4 +75,6 @@ static inline NSWindow *WindowFromHandle(napi_env env, napi_value handle) {
 napi_value VerifyOwner(napi_env env, napi_callback_info info);
 napi_value ReadKeychain(napi_env env, napi_callback_info info);
 napi_value BleScan(napi_env env, napi_callback_info info);
+napi_value LocationAccess(napi_env env, napi_callback_info info);
+napi_value RequestLocationAccess(napi_env env, napi_callback_info info);
 napi_value BleStop(napi_env env, napi_callback_info info);

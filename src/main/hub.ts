@@ -38,6 +38,7 @@ import { CertificateStore, SitePermissions } from './site'
 import { PASSWORDS_CHANNEL, type PageMessage } from './autofill'
 import { handleVaultRequest } from './password-settings'
 import { Vault } from './vault'
+import { locationAccess } from './native'
 import { RELEASES_PAGE, Updater } from './updater'
 
 const WEBAUTHN_CHANNEL = 'zepper:webauthn'
@@ -86,7 +87,7 @@ export class Hub {
     () => this.services.settings.get().autoUpdate
   )
   /** What macOS lets Zepper use (camera, microphone, screen); checked when a window comes forward. */
-  systemAccess: SystemAccess = { camera: 'ask', microphone: 'ask', screen: 'ask' }
+  systemAccess: SystemAccess = { camera: 'ask', microphone: 'ask', screen: 'ask', location: 'ask' }
   /** Every download, shared by all windows. */
   readonly downloads = new Downloads(() => {
     for (const browser of this.browsers) browser.refresh()
@@ -415,7 +416,12 @@ export class Hub {
       const status = systemPreferences.getMediaAccessStatus(kind)
       return status === 'granted' ? 'allowed' : status === 'denied' || status === 'restricted' ? 'denied' : 'ask'
     }
-    const next: SystemAccess = { camera: read('camera'), microphone: read('microphone'), screen: read('screen') }
+    const next: SystemAccess = {
+      camera: read('camera'),
+      microphone: read('microphone'),
+      screen: read('screen'),
+      location: process.platform === 'darwin' ? locationAccess() : 'allowed'
+    }
     if (JSON.stringify(next) === JSON.stringify(this.systemAccess)) return
     this.systemAccess = next
     for (const browser of this.browsers) browser.refresh()

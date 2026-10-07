@@ -17,6 +17,10 @@ export interface CredentialsAddon {
   /** Scans for Bluetooth LE advertisements with these 16-bit service UUIDs, reporting JSON events. */
   bleScan(services: string, onEvent: (json: string) => void): void
   bleStop(): void
+  /** macOS Location Services for Zepper: "granted", "denied", "restricted", "not-determined" or "disabled". */
+  locationAccess(): string
+  /** Shows macOS's location prompt if Zepper has never been asked; resolves with the answer (JSON). */
+  requestLocationAccess(): Promise<string>
 }
 
 let addon: CredentialsAddon | null | undefined
@@ -63,4 +67,23 @@ export async function readKeychain(service: string, account: string): Promise<st
   if (!native) return null
   const result = JSON.parse(await native.readKeychain(service, account)) as [string] | null
   return result ? result[0] : null
+}
+
+/** Whether macOS lets Zepper use your location ('ask': it hasn't been asked yet). */
+export function locationAccess(): 'allowed' | 'denied' | 'ask' {
+  const status = credentialsAddon()?.locationAccess?.()
+  if (!status) return 'ask'
+  return status === 'granted' ? 'allowed' : status === 'not-determined' ? 'ask' : 'denied'
+}
+
+/** Asks macOS for your location (its own prompt) if it never has; resolves once you've answered. */
+export async function requestLocationAccess(): Promise<'allowed' | 'denied' | 'ask'> {
+  const native = credentialsAddon()
+  if (!native?.requestLocationAccess) return 'ask'
+  try {
+    const status = JSON.parse(await native.requestLocationAccess()) as string
+    return status === 'granted' ? 'allowed' : status === 'not-determined' ? 'ask' : 'denied'
+  } catch {
+    return 'ask'
+  }
 }

@@ -28,9 +28,12 @@ if (readFileSync(pathFile, 'utf8').trim() !== executable) writeFileSync(pathFile
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit' })
 for (const key of ['CFBundleName', 'CFBundleDisplayName']) run('plutil', ['-replace', key, '-string', 'Zepper', plist])
-// Sharing the Mac's audio with a screen share needs this, or macOS refuses without asking.
-const audioUse = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).build.mac.extendInfo.NSAudioCaptureUsageDescription
-run('plutil', ['-replace', 'NSAudioCaptureUsageDescription', '-string', audioUse, plist])
+// The same reasons as the packaged app for camera, microphone, location, Bluetooth and the Mac's
+// audio: macOS only asks for these (or doesn't refuse outright) when the app says why.
+const extendInfo = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).build.mac.extendInfo
+for (const [key, value] of Object.entries(extendInfo)) {
+  if (key.endsWith('UsageDescription') && typeof value === 'string') run('plutil', ['-replace', key, '-string', value, plist])
+}
 copyFileSync(join(root, 'build/icon.icns'), join(app, 'Contents/Resources/electron.icns'))
 run('codesign', ['--force', '--deep', '--sign', '-', app])
 // Tell Launch Services about the renamed bundle, so the Dock and ⌘Tab use the new name straight away.
