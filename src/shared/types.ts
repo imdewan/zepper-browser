@@ -604,6 +604,18 @@ export type Command =
 
 /** Events pushed from the main process to renderers. */
 export type UiEvent =
+  /**
+   * A two-finger swipe back or forward, for the arrow at the page's edge: how far (0–1), whether
+   * letting go now navigates (armed), and how it ended (commit: it navigates; cancel: it doesn't).
+   */
+  | {
+      type: 'swipe.progress'
+      direction: 'back' | 'forward'
+      progress: number
+      armed: boolean
+      phase: 'move' | 'commit' | 'cancel'
+      accent: string
+    }
   | { type: 'palette.open'; mode: 'new' | 'current' | 'split'; currentUrl: string | null }
   /** Capture mode (⇧⌘2): the page's area and its elements (window coordinates) for hover snapping. */
   | { type: 'capture.start'; page: Rect; targets: Rect[]; scrolls: boolean }
@@ -635,7 +647,6 @@ export type UiEvent =
   | { type: 'share.close'; id: number }
   | { type: 'peek.show' }
   | { type: 'overlay.dismiss' }
-  | { type: 'swipe.progress'; direction: 'back' | 'forward'; progress: number; allowed: boolean }
 
 export interface ZepperApi {
   platform: string

@@ -133,7 +133,7 @@ export class Hub {
     })
     ipcMain.on(IPC.command, (event, command: Command) => this.owner(event.sender)?.handleFromUi(event.sender, command))
     ipcMain.on(IPC.swipe, (event, phase: 'update' | 'end', dx: number, peak: number) =>
-      this.owner(event.sender)?.onPageSwipe(event.sender.id, phase, Number(dx) || 0, Number(peak) || 0)
+      this.owner(event.sender)?.onPageSwipe(event.sender, phase, Number(dx) || 0, Number(peak) || 0)
     )
     ipcMain.on(IPC.pipBack, (event) => this.owner(event.sender)?.onNativePipBack(event.sender.id))
     // Sign-in fields: the passwords dropdown, filling, and offering to save.

@@ -39,7 +39,7 @@ import { writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { PEEK_AREA_EXTRA, PIP_WIDTH, PROTECTIONS, type MemorySaverMode, type Protection, type Settings } from '@shared/settings'
-import { DEFAULT_THEME } from '@shared/theme'
+import { DEFAULT_THEME, themeAccent } from '@shared/theme'
 import {
   IPC,
   type Command,
@@ -227,6 +227,10 @@ const SWIPE_DISTANCE = 170
 /** A quick flick navigates with less travel. */
 const FLICK_DISTANCE = 70
 const FLICK_SPEED = 24
+/** The arrow's view at the page's edge during a swipe (room for its shadow and pop). */
+const SWIPE_ARROW_SIZE = 112
+/** How long the arrow takes to finish (navigating, or sliding away) before its view is hidden. */
+const SWIPE_ARROW_EXIT_MS = 280
 
 /** macOS natural scrolling (on unless explicitly turned off); re-read at most every 30s. */
 let naturalScrolling = true
@@ -531,13 +535,13 @@ export class Browser {
   /** The mode the overlay itself last asked for (it knows what it's showing). */
   private overlayReported: OverlayMode = 'hidden'
   private peekCheck: NodeJS.Timeout | null = null
-  /** Horizontal offset applied to the active view while a swipe gesture is in progress. */
-  private swipeOffset = 0
-  private swipeAnimation: NodeJS.Timeout | null = null
+  /** After a swipe navigates, another from the same gesture's momentum is ignored. */
+  private swipeCooldown: { tabId: string; until: number } | null = null
   /** The tab whose swipe is in progress. */
   private swipeTabId: string | null = null
-  /** After a swipe navigates, its momentum tail is ignored until the trackpad goes quiet. */
-  private swipeCooldown: { tabId: string; until: number } | null = null
+  /** Draws the back/forward arrow at the page's edge while you swipe (Zepper's own view, above the page). */
+  private swipeArrow: WebContentsView | null = null
+  private swipeArrowTimer: NodeJS.Timeout | null = null
   private layoutAnimation: NodeJS.Timeout | null = null
   private pip!: PipPlayer
   private autofill!: AutofillController
@@ -770,6 +774,12 @@ export class Browser {
     this.overlay.setVisible(false)
     this.win.contentView.addChildView(this.overlay)
 
+    this.swipeArrow = new WebContentsView({ webPreferences: uiPrefs })
+    this.swipeArrow.setBackgroundColor('#00000000')
+    this.swipeArrow.setVisible(false)
+    this.win.contentView.addChildView(this.swipeArrow)
+
+    this.swipeArrow.webContents.on('will-navigate', (event) => event.preventDefault())
     for (const wc of [this.win.webContents, this.overlay.webContents]) {
       this.watchControlKey(wc)
       wc.on('will-navigate', (event) => event.preventDefault())
@@ -784,6 +794,7 @@ export class Browser {
     }
     load(this.win.webContents, 'chrome.html')
     load(this.overlay.webContents, 'overlay.html')
+    load(this.swipeArrow.webContents, 'swipe.html')
 
     this.win.once('ready-to-show', () => this.win.show())
     this.win.on('resize', () => {
@@ -1224,6 +1235,8 @@ export class Browser {
     this.popups.clear()
     // Child views' pages outlive their window unless closed.
     if (!this.overlay.webContents.isDestroyed()) this.overlay.webContents.close()
+    if (this.swipeArrowTimer) clearTimeout(this.swipeArrowTimer)
+    if (this.swipeArrow && !this.swipeArrow.webContents.isDestroyed()) this.swipeArrow.webContents.close()
     this.hub.windowClosed(this)
   }
 
@@ -1713,12 +1726,11 @@ export class Browser {
       this.autoDocPips.delete(id)
       this.docPips.get(id)?.close()
     }
-    if (this.swipeOffset !== 0) {
-      this.stopSwipeAnimation()
-      this.swipeOffset = 0
-    }
     this.activeTabId = id
-    if (previousId !== id) this.autofill?.hide()
+    if (previousId !== id) {
+      this.autofill?.hide()
+      this.hideSwipeArrow()
+    }
     const view = this.ensureView(tab)
     this.syncAttachedViews()
     // Only once the old tab is off screen can its video float.
@@ -4167,12 +4179,13 @@ export class Browser {
   // Gestures
 
   /**
-   * Two-finger horizontal swipes reported by the page preload. The page slides
-   * with the fingers to reveal a back/forward arrow, and navigates once the
-   * swipe passes the threshold.
+   * Two-finger horizontal swipes reported by the page preload, as in Chrome: the page stays put
+   * while an arrow slides in from its edge with your fingers, a ring filling as you go; once letting
+   * go would navigate, the circle fills in the space's colour. Letting go then (or flicking) goes
+   * back or forward at once; letting go sooner slides the arrow away.
    */
-  onPageSwipe(webContentsId: number, phase: 'update' | 'end', rawDx: number, peak: number): void {
-    const tabId = this.tabByWebContents.get(webContentsId)
+  onPageSwipe(wc: WebContents, phase: 'update' | 'end', rawDx: number, peak: number): void {
+    const tabId = this.tabByWebContents.get(wc.id)
     if (!tabId || !this.settings.swipeToNavigate || this.htmlFullscreen || !this.attached.has(tabId)) return
     const now = Date.now()
     // The momentum tail of a swipe that just navigated lands on the next page looking like a new
@@ -4181,8 +4194,6 @@ export class Browser {
       this.swipeCooldown.until = now + 250
       return
     }
-    const wc = this.views.get(tabId)?.webContents
-    if (!wc) return
     if (this.swipeTabId !== tabId) {
       this.swipeTabId = tabId
       readNaturalScrolling()
@@ -4192,64 +4203,61 @@ export class Browser {
     const direction = dx < 0 ? 'back' : 'forward'
     const allowed = direction === 'back' ? wc.navigationHistory.canGoBack() : wc.navigationHistory.canGoForward()
     const progress = Math.min(1, Math.abs(dx) / SWIPE_DISTANCE)
-    // The page itself slides only when it's alone on screen (not in split view).
-    const slides = this.attached.size === 1
 
     if (phase === 'update') {
-      this.stopSwipeAnimation()
-      const travel = allowed ? 72 * (1 - Math.pow(1 - progress, 3)) : 12 * progress
-      this.swipeOffset = slides ? (direction === 'back' ? travel : -travel) : 0
-      this.layout()
-      this.emit({ type: 'swipe.progress', direction, progress, allowed }, 'chrome')
+      if (allowed) this.showSwipeArrow(tabId, direction, progress)
+      else this.hideSwipeArrow()
       return
     }
-
     this.swipeTabId = null
-    this.emit({ type: 'swipe.progress', direction, progress: 0, allowed }, 'chrome')
     const flick = peak >= FLICK_SPEED && Math.abs(dx) >= FLICK_DISTANCE
-    if (!allowed || (progress < 1 && !flick)) return this.animateSwipeOffset(0, 220)
-
+    if (!allowed || (progress < 1 && !flick)) return this.finishSwipeArrow(tabId, direction, progress, 'cancel')
     this.swipeCooldown = { tabId, until: now + 400 }
-    // Slide a little further, swap pages while the old one is out of the way, then settle back.
-    if (slides) this.animateSwipeOffset(direction === 'back' ? 110 : -110, 110)
-    let settled = false
-    const settle = (): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(fallback)
-      wc.removeListener('did-navigate', settle)
-      wc.removeListener('did-navigate-in-page', onInPage)
-      wc.removeListener('did-fail-load', settle)
-      if (!wc.isDestroyed()) this.animateSwipeOffset(0, 240)
-    }
-    const onInPage = (_event: unknown, _url: string, isMainFrame: boolean): void => {
-      if (isMainFrame) settle()
-    }
-    const fallback = setTimeout(settle, 650)
-    wc.on('did-navigate', settle)
-    wc.on('did-navigate-in-page', onInPage)
-    wc.on('did-fail-load', settle)
+    this.finishSwipeArrow(tabId, direction, 1, 'commit')
     if (direction === 'back') wc.navigationHistory.goBack()
     else wc.navigationHistory.goForward()
   }
 
-  private stopSwipeAnimation(): void {
-    if (this.swipeAnimation) clearTimeout(this.swipeAnimation)
-    this.swipeAnimation = null
+  /** The arrow's view, at the left or right edge of the tab's pane, halfway down. */
+  private showSwipeArrow(tabId: string, direction: 'back' | 'forward', progress: number): void {
+    const arrow = this.swipeArrow
+    const rect = this.panes().find((pane) => pane.tabId === tabId)?.rect
+    if (!arrow || !rect || arrow.webContents.isDestroyed()) return
+    if (this.swipeArrowTimer) clearTimeout(this.swipeArrowTimer)
+    this.swipeArrowTimer = null
+    const size = Math.min(SWIPE_ARROW_SIZE, rect.width, rect.height)
+    arrow.setBounds({
+      x: direction === 'back' ? rect.x : rect.x + rect.width - size,
+      y: Math.round(rect.y + (rect.height - size) / 2),
+      width: size,
+      height: size
+    })
+    arrow.setBorderRadius(0)
+    arrow.setVisible(true)
+    this.sendSwipeArrow(tabId, direction, progress, 'move')
   }
 
-  /** Eases the swipe offset of the active page to a value. */
-  private animateSwipeOffset(to: number, duration: number): void {
-    this.stopSwipeAnimation()
-    const from = this.swipeOffset
-    const start = Date.now()
-    const tick = (): void => {
-      const t = Math.min(1, (Date.now() - start) / duration)
-      this.swipeOffset = from + (to - from) * (1 - Math.pow(1 - t, 3))
-      this.layout()
-      this.swipeAnimation = t < 1 ? setTimeout(tick, 8) : null
-    }
-    tick()
+  /** The arrow finishes (pops as it navigates, or slides away), then its view is hidden. */
+  private finishSwipeArrow(tabId: string, direction: 'back' | 'forward', progress: number, phase: 'commit' | 'cancel'): void {
+    if (!this.swipeArrow?.getVisible()) return
+    this.sendSwipeArrow(tabId, direction, progress, phase)
+    if (this.swipeArrowTimer) clearTimeout(this.swipeArrowTimer)
+    this.swipeArrowTimer = setTimeout(() => this.hideSwipeArrow(), SWIPE_ARROW_EXIT_MS)
+  }
+
+  private hideSwipeArrow(): void {
+    if (this.swipeArrowTimer) clearTimeout(this.swipeArrowTimer)
+    this.swipeArrowTimer = null
+    this.swipeArrow?.setVisible(false)
+  }
+
+  private sendSwipeArrow(tabId: string, direction: 'back' | 'forward', progress: number, phase: 'move' | 'commit' | 'cancel'): void {
+    const wc = this.swipeArrow?.webContents
+    if (!wc || wc.isDestroyed()) return
+    const space = this.space(this.tab(tabId)?.spaceId ?? this.activeSpaceId) ?? this.space(this.activeSpaceId)
+    const system = process.platform === 'darwin' ? `#${systemPreferences.getAccentColor().slice(0, 6)}` : '#0a84ff'
+    const accent = (space && themeAccent(space.theme)) || system
+    wc.send(IPC.event, { type: 'swipe.progress', direction, progress, armed: progress >= 1, phase, accent } satisfies UiEvent)
   }
 
   /**
@@ -5188,8 +5196,7 @@ export class Browser {
         const hidden = this.htmlFullscreen && pane.tabId !== this.activeTabId
         view.setVisible(!hidden)
         if (hidden) continue
-        const single = this.attached.size <= 1
-        view.setBounds({ ...pane.rect, x: pane.rect.x + (single ? Math.round(this.swipeOffset) : 0) })
+        view.setBounds(pane.rect)
         view.setBorderRadius(this.htmlFullscreen ? 0 : this.settings.cornerRadius)
       }
     }
@@ -5234,6 +5241,7 @@ export class Browser {
       this.win.contentView.addChildView(this.ensureView(tab))
       this.attached.add(id)
     }
+    if (this.swipeArrow) this.win.contentView.addChildView(this.swipeArrow)
     this.win.contentView.addChildView(this.overlay)
     this.layout()
   }

@@ -1,0 +1,108 @@
+/* The back/forward arrow drawn at the page's edge during a two-finger swipe (see SwipeArrow). */
+
+:root {
+  --bubble: #ffffff;
+  --bubble-text: #1d1d1f;
+  --track: rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bubble: #2c2c2e;
+    --bubble-text: #f5f5f7;
+    --track: rgba(255, 255, 255, 0.12);
+  }
+}
+
+html,
+body {
+  background: transparent;
+}
+
+.swipe {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.swipe-bubble {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bubble);
+  color: var(--bubble-text);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    0 1px 3px rgba(0, 0, 0, 0.12),
+    0 0 0 0.5px rgba(0, 0, 0, 0.1);
+  translate: var(--offset) 0;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    scale 0.28s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+/* Letting go now navigates: the circle fills in the space's colour and pops a little. */
+.swipe.armed .swipe-bubble {
+  background: var(--accent);
+  color: #fff;
+  scale: 1.1;
+}
+
+.swipe-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  rotate: -90deg;
+  overflow: visible;
+}
+
+.swipe-ring circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: opacity 0.16s ease;
+}
+
+.swipe.armed .swipe-ring circle {
+  opacity: 0;
+}
+
+.swipe-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.swipe.commit .swipe-bubble {
+  animation: swipe-commit 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.swipe.cancel .swipe-bubble {
+  animation: swipe-cancel 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes swipe-commit {
+  to {
+    scale: 1.35;
+    opacity: 0;
+  }
+}
+
+@keyframes swipe-cancel {
+  to {
+    translate: var(--away) 0;
+    opacity: 0;
+  }
+}

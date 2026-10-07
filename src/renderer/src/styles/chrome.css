@@ -1364,38 +1364,6 @@ button.site-button.insecure:hover {
   opacity: 0.8;
 }
 
-/* ---- Swipe to navigate -------------------------------------------------------- */
-
-.swipe-indicator {
-  position: absolute;
-  top: calc(50% - 20px);
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--element-hover);
-  color: var(--text);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-  pointer-events: none;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.swipe-indicator.back {
-  left: calc(var(--content-left) + 12px);
-}
-
-.swipe-indicator.forward {
-  right: calc(var(--content-right) + 12px);
-}
-
-.swipe-indicator.armed {
-  background: var(--accent);
-  color: #fff;
-}
-
 /* ---- Customisation hooks ----------------------------------------------------------- */
 
 [data-density='compact'] .tab,

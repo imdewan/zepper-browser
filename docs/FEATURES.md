@@ -139,5 +139,5 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
 
 ## Gestures
 
-- Two-finger swipe on a page to go back or forward
+- Two-finger swipe on a page to go back or forward, as in Chrome: an arrow slides in from the page's edge with your fingers, a ring filling as you go, and fills in the space's colour once letting go will navigate
 - Two-finger swipe on the sidebar to switch spaces

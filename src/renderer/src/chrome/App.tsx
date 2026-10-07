@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 import { prefersDarkUi, themeAccent, themeBackground } from '@shared/theme'
 import type { Settings } from '@shared/settings'
-import type { Rect, Snapshot, SpaceTheme, Tab, UiEvent } from '@shared/types'
+import type { Rect, Snapshot, SpaceTheme, Tab } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconBack, IconForward, IconPrivate } from '../icons'
-import { useSnapshot, useSystemDark, useUiEvents } from '../useSnapshot'
+import { IconPrivate } from '../icons'
+import { useSnapshot, useSystemDark } from '../useSnapshot'
 import logo from '../assets/logo.png'
 import { cx } from '../util'
 import { Sidebar } from './Sidebar'
@@ -107,7 +107,6 @@ export function App(): React.JSX.Element | null {
         ) : (
           <ContentCard tab={activeTab} isPrivate={snapshot.kind === 'private'} quiet={snapshot.paletteOpen} />
         )}
-        <SwipeIndicator />
       </div>
     </MotionConfig>
   )
@@ -288,29 +287,3 @@ function SplitPanes({ snapshot }: { snapshot: Snapshot }): React.JSX.Element | n
   )
 }
 
-/** Back/forward arrow revealed behind the page as it slides with a two-finger swipe. */
-function SwipeIndicator(): React.JSX.Element {
-  const [state, setState] = useState<{ direction: 'back' | 'forward'; progress: number; allowed: boolean } | null>(null)
-  useUiEvents(
-    useCallback((event: UiEvent) => {
-      if (event.type !== 'swipe.progress') return
-      setState(event.progress > 0 ? { direction: event.direction, progress: event.progress, allowed: event.allowed } : null)
-    }, [])
-  )
-  const armed = !!state && state.allowed && state.progress >= 1
-  return (
-    <AnimatePresence>
-      {state && state.allowed && (
-        <motion.div
-          className={`swipe-indicator ${state.direction}${armed ? ' armed' : ''}`}
-          initial={{ opacity: 0, scale: 0.6 }}
-          animate={{ opacity: Math.min(1, state.progress * 1.6), scale: 0.7 + state.progress * 0.3 }}
-          exit={{ opacity: 0, scale: 0.6, transition: { duration: 0.15 } }}
-          transition={{ type: 'spring', bounce: 0.3, duration: 0.25 }}
-        >
-          {state.direction === 'back' ? <IconBack size={18} /> : <IconForward size={18} />}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
-}

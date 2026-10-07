@@ -6,6 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
+- Swiping back and forward works like Chrome's: the page stays still while an arrow slides in from its edge with your fingers, a ring filling as you go; once letting go will navigate, the circle fills in the space's colour. Letting go then goes straight there, without the page lurching and springing back as it did.
 - In the command bar, → (at the end of what you've typed) puts the highlighted suggestion in the field without going there, so you can keep editing it: a search's words, or a page's address. Tab and Shift-Tab step through suggestions, as in Chrome and Firefox.
 - Settings keeps its close button and the page's title in a bar at the top that stays put while the page scrolls.
 - Lists of sites in Settings (site permissions, sites with protections off, sites passwords are never saved for) stay short as they grow: sites in A–Z order, the first six with Show all, and a search field once there are more than ten.
