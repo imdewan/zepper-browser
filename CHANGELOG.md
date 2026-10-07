@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- Tabs keep their back and forward pages when you quit and reopen Zepper, as in Chrome, with each page's scroll position, and when Memory Saver unloads them (they used to come back with just their current page).
+
 ### Changed
 
 - Settings › Privacy shows whether macOS lets Zepper use your location (with a way to change it), next to the camera, microphone and screen.

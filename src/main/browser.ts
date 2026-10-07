@@ -27,6 +27,7 @@ import {
   type PermissionCheckHandlerHandlerDetails,
   type Session,
   type HandlerDetails,
+  type NavigationEntry,
   type MenuItemConstructorOptions,
   type Rectangle,
   type WebContents,
@@ -100,7 +101,21 @@ const MAX_ESSENTIALS = 12
 /** Top-right overlay region for toasts and the find bar. */
 const CORNER_REGION = { width: 440, height: 240 }
 
-type PersistedTab = Pick<Tab, 'id' | 'kind' | 'spaceId' | 'url' | 'title' | 'favicon' | 'pinned' | 'lastActiveAt'>
+/** A tab's back and forward pages (with each page's scroll position and form contents), as Chrome keeps them. */
+interface TabHistory {
+  entries: NavigationEntry[]
+  index: number
+}
+
+type PersistedTab = Pick<Tab, 'id' | 'kind' | 'spaceId' | 'url' | 'title' | 'favicon' | 'pinned' | 'lastActiveAt'> & {
+  history?: TabHistory
+}
+
+/** Pages kept on each side of a tab's current page when its history is saved (Chrome keeps six). */
+const HISTORY_BACK = 10
+const HISTORY_FORWARD = 5
+/** A page's saved state (scroll position, form contents) larger than this is left out. */
+const MAX_PAGE_STATE = 64 * 1024
 
 interface PersistedState {
   version: 1
@@ -586,6 +601,8 @@ export class Browser {
   private readonly closingGently = new Map<number, { leave: boolean; stayed: () => void }>()
   /** Tabs Memory Saver is closing. */
   private readonly freeing = new Set<string>()
+  /** The back/forward history of tabs that aren't loaded (saved last time, or kept as they unloaded). */
+  private readonly savedHistory = new Map<string, TabHistory>()
   /**
    * Pages Zepper closed itself (unloading a tab, closing the window, quitting): the tab stays. Only a
    * page closing itself (window.close()) or an extension closing it removes its tab.
@@ -659,9 +676,11 @@ export class Browser {
       this.spaces = saved.spaces.map((space) => ({ ...space, profile: space.profile ?? DEFAULT_PROFILE }))
       // Settings › Tabs decides whether last session's open tabs and Essentials come back.
       const { restoreTabs, keepEssentials } = hub.services.settings.get()
-      this.tabs = saved.tabs
-        .filter((t) => (t.kind !== 'normal' || restoreTabs) && (t.kind !== 'essential' || keepEssentials))
-        .map((t) => makeTab({ ...t, language: null, translation: null }))
+      const restored = saved.tabs.filter((t) => (t.kind !== 'normal' || restoreTabs) && (t.kind !== 'essential' || keepEssentials))
+      for (const { id, history } of restored) {
+        if (history && Array.isArray(history.entries) && Number.isInteger(history.index)) this.savedHistory.set(id, history)
+      }
+      this.tabs = restored.map(({ history: _history, ...t }) => makeTab({ ...t, language: null, translation: null }))
       // Essentials used to be shared by every space; now each space has its own, starting with a copy.
       const shared = this.tabs.filter((t) => t.kind === 'essential' && !t.spaceId)
       if (shared.length > 0) {
@@ -1999,6 +2018,7 @@ export class Browser {
     this.leaveSplit(tab.id)
     const next = wasActive ? (this.tab(splitSibling) ?? this.pickNextTab(tab)) : undefined
     this.destroyView(tab)
+    this.savedHistory.delete(tab.id)
     this.detachPinned(tab.id)
     this.tabs = this.tabs.filter((t) => t !== tab)
     this.openers.delete(tab.id)
@@ -2224,6 +2244,7 @@ export class Browser {
     const view = this.views.get(tab.id)
     if (!view || this.freeing.has(tab.id)) return
     this.freeing.add(tab.id)
+    this.rememberHistory(tab.id)
     void this.closeGently(view.webContents, false).then((closed) => {
       this.freeing.delete(tab.id)
       if (!closed || this.views.get(tab.id) !== view) return
@@ -2271,6 +2292,7 @@ export class Browser {
   /** The window is closing or Zepper is quitting: every page closes itself first (see closeGently). */
   async closePagesGently(): Promise<void> {
     if (this.pagesClosed) return
+    for (const id of this.views.keys()) this.rememberHistory(id)
     this.persistNow()
     await Promise.all([...this.views.values()].map((view) => this.closeGently(view.webContents, true)))
     this.pagesClosed = true
@@ -3420,8 +3442,43 @@ export class Browser {
     this.wire(tab.id, view.webContents)
     this.extensions?.apiFor(view.webContents.session)?.addTab(view.webContents, this.win)
     tab.loaded = true
-    if (!adopt) void view.webContents.loadURL(tab.url).catch(() => {})
+    if (!adopt) {
+      // Its back and forward pages come back too (as in Chrome), when it's still on the page they end at.
+      const history = this.savedHistory.get(tab.id)
+      this.savedHistory.delete(tab.id)
+      if (history && history.entries[history.index]?.url === tab.url) void view.webContents.navigationHistory.restore(history)
+      else void view.webContents.loadURL(tab.url).catch(() => {})
+    }
     return view
+  }
+
+  /**
+   * A tab's back/forward history to keep: from its page if it's loaded, or as it was kept. Only web
+   * pages (not error pages), up to HISTORY_BACK and HISTORY_FORWARD around the current one.
+   */
+  private historyOf(tabId: string): TabHistory | null {
+    const wc = this.views.get(tabId)?.webContents
+    if (!wc || wc.isDestroyed()) return this.savedHistory.get(tabId) ?? null
+    const all = wc.navigationHistory.getAllEntries()
+    const active = wc.navigationHistory.getActiveIndex()
+    const start = Math.max(0, active - HISTORY_BACK)
+    const kept: NavigationEntry[] = []
+    let index = -1
+    all.slice(start, active + HISTORY_FORWARD + 1).forEach((entry, i) => {
+      if (!/^https?:/.test(entry.url)) return
+      if (start + i === active) index = kept.length
+      const pageState = entry.pageState && entry.pageState.length <= MAX_PAGE_STATE ? entry.pageState : undefined
+      kept.push({ url: entry.url, title: entry.title, ...(pageState ? { pageState } : {}) })
+    })
+    // Nothing to go back or forward to, or the current page isn't one to keep: just its address.
+    return index === -1 || kept.length < 2 ? null : { entries: kept, index }
+  }
+
+  /** Keeps a tab's history while its page goes (unloading it, quitting), to bring back with it. */
+  private rememberHistory(tabId: string): void {
+    const history = this.historyOf(tabId)
+    if (history) this.savedHistory.set(tabId, history)
+    else this.savedHistory.delete(tabId)
   }
 
   /**
@@ -3459,6 +3516,7 @@ export class Browser {
   private destroyView(tab: Tab): void {
     if (this.pip?.activeTabId === tab.id) this.pip.exit()
     const view = this.views.get(tab.id)
+    if (view && !view.webContents.isDestroyed()) this.rememberHistory(tab.id)
     tab.loaded = false
     tab.loading = false
     tab.audible = false
@@ -5427,17 +5485,21 @@ export class Browser {
     return {
       version: 1,
       spaces: this.spaces,
-      tabs: this.tabs.map(({ id, kind, spaceId, url, title, favicon, pinned, lastActiveAt, emoji }) => ({
-        id,
-        kind,
-        spaceId,
-        url,
-        title,
-        favicon,
-        pinned,
-        lastActiveAt,
-        ...(emoji && kind === 'essential' ? { emoji } : {})
-      })),
+      tabs: this.tabs.map(({ id, kind, spaceId, url, title, favicon, pinned, lastActiveAt, emoji }) => {
+        const history = this.historyOf(id)
+        return {
+          id,
+          kind,
+          spaceId,
+          url,
+          title,
+          favicon,
+          pinned,
+          lastActiveAt,
+          ...(emoji && kind === 'essential' ? { emoji } : {}),
+          ...(history ? { history } : {})
+        }
+      }),
       activeSpaceId: this.activeSpaceId,
       activeTabId: this.activeTabId,
       sidebarWidth: this.sidebarWidth,
