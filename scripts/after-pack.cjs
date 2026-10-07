@@ -7,8 +7,9 @@
 // 3. Re-seal: VMP signing adds a .sig file inside the framework, which breaks the seal the fuses
 //    step made, and a downloaded app with a broken seal is reported as "damaged". It's signed with
 //    the "Zepper Signing" certificate when this Mac has it (see "Signing releases" in the README), so macOS
-//    knows each update as the same app: the Keychain and camera/microphone permissions carry over
-//    instead of asking again. Without it, an ad-hoc signature (a new app to macOS every build).
+//    knows each update as the same app and camera/microphone permissions carry over (the Keychain
+//    still asks once per update without an Apple team). Without it, an ad-hoc signature (a new app
+//    to macOS every build).
 //    Apple code signing (when there's a Developer ID) replaces this afterwards.
 const { execFileSync } = require('node:child_process')
 const { existsSync } = require('node:fs')

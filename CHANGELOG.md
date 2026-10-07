@@ -18,7 +18,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
-- Releases are signed with the same certificate every time, so macOS knows each update as the same app: it stops asking for Zepper's Keychain item (and camera or microphone access) after every update. It asks one last time with this update.
+- Releases are signed with the same certificate every time, so macOS knows each update as the same app and camera and microphone permissions carry over. (Zepper's Keychain item is still asked for once after each update: macOS remembers that by Apple developer team, which this certificate doesn't have.)
 - Memory Saver works the way Chrome's and Brave's does, so tabs stay loaded far longer. Its modes are Moderate, Balanced (the default) and Maximum: a tab unloads after 6, 4 or 2 hours out of sight (it was 15 minutes to 4 hours), or sooner when your Mac runs short of memory. Time your Mac is asleep or locked no longer counts, so coming back finds your tabs as you left them, and tabs you keep coming back to, pinned tabs, tabs that update out of sight (an unread count), sites allowed to send notifications and tabs with something typed and not sent stay loaded.
 
 ### Fixed

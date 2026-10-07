@@ -168,7 +168,7 @@ Run `npm run vmp:sign` again after reinstalling Electron, and `npm run vmp:login
 
 ### Signing releases
 
-`npm run dist` signs the app with a code-signing certificate named **Zepper Signing** when your login keychain has one, so macOS sees every update as the same app: the Keychain and camera and microphone permissions carry over instead of asking again. Without it, builds are signed ad hoc and each update asks again. To make one: Keychain Access → Certificate Assistant → Create a Certificate…, with Identity Type **Self-Signed Root** and Certificate Type **Code Signing**. Every release has to be signed with the same certificate, so keep a backup of it (exported as a password-protected `.p12`). To use a different name, set `ZEPPER_SIGNING_IDENTITY`.
+`npm run dist` signs the app with a code-signing certificate named **Zepper Signing** when your login keychain has one, so macOS sees every update as the same app and camera and microphone permissions carry over. The Keychain still asks once after each update: it remembers "Always Allow" by Apple developer team, which a self-signed certificate doesn't have, so it goes by the exact build instead (signing with an Apple Developer ID ends that). Without the certificate, builds are signed ad hoc and camera and microphone permissions are asked for again too. To make one: Keychain Access → Certificate Assistant → Create a Certificate…, with Identity Type **Self-Signed Root** and Certificate Type **Code Signing**. Every release has to be signed with the same certificate, so keep a backup of it (exported as a password-protected `.p12`). To use a different name, set `ZEPPER_SIGNING_IDENTITY`.
 
 <details>
 <summary><b>Keyboard shortcuts</b></summary>
