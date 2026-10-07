@@ -12,6 +12,7 @@ import {
   type Session,
   type WebContents
 } from 'electron'
+import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   type DropTarget,
@@ -24,7 +25,7 @@ import {
   type WidevineStatus
 } from '@shared/types'
 import type { AdBlock } from './adblock'
-import { Browser, declineShare, type BrowserKind, type WindowSeed } from './browser'
+import { Browser, WINDOWS_DIR, declineShare, type BrowserKind, type WindowSeed } from './browser'
 import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
 import { bangs } from './bangs'
 import { Downloads } from './downloads'
@@ -80,6 +81,8 @@ export class Hub {
   defaultBrowser = false
   /** Set when quitting on purpose (restart), so Zepper doesn't ask first. */
   quitWithoutAsking = false
+  /** Zepper is quitting: windows closing now come back next time (rather than being forgotten). */
+  quitting = false
   private secureDns: string | null = null
   /** Zepper's own updates. */
   readonly updater = new Updater(
@@ -437,9 +440,31 @@ export class Hub {
     this.focusedNormal().openFromOutside(url)
   }
 
-  /** Windows whose tabs won't come back after quitting (everything but the main window). */
-  unrestoredWindows(): number {
-    return [...this.browsers].filter((b) => b !== this.main && b.tabCount() > 0).length
+  /**
+   * Brings back the windows that were open when Zepper last quit (besides the main one), each where
+   * it was with its spaces and tabs, as in Chrome. With Settings › Tabs › Restore tabs off, they don't
+   * come back, and are forgotten.
+   */
+  restoreWindows(): void {
+    const dir = join(app.getPath('userData'), WINDOWS_DIR)
+    let files: string[]
+    try {
+      files = readdirSync(dir).filter((file) => /^[0-9a-f-]{36}\.json$/.test(file))
+    } catch {
+      return
+    }
+    const { restoreTabs } = this.services.settings.get()
+    for (const file of files) {
+      if (!restoreTabs) {
+        rmSync(join(dir, file), { force: true })
+        continue
+      }
+      const browser = new Browser(this, 'blank', session.defaultSession, undefined, file.slice(0, -'.json'.length))
+      this.browsers.add(browser)
+      browser.start()
+    }
+    // The main window stays in front.
+    this.main?.focusWindow()
   }
 
   /** The focused window when it isn't one of Zepper's (a sign-in popup, say). */

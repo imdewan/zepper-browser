@@ -1,4 +1,4 @@
-import { Menu, app, dialog } from 'electron'
+import { Menu, app } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { AdBlock } from './adblock'
@@ -90,6 +90,7 @@ if (!app.requestSingleInstanceLock()) {
     if (process.env['ZEPPER_DEBUG_PORT'] && !app.isPackaged) Object.assign(globalThis, { zepperHub: hub })
     await hub.widevineSettled(15_000)
     hub.openWindow('main')
+    hub.restoreWindows()
     for (const url of pendingUrls.splice(0)) hub.openUrl(url)
     hub.startExtensions()
     hub.updater.start()
@@ -105,24 +106,11 @@ if (!app.requestSingleInstanceLock()) {
     win.focus()
   })
 
-  let quitConfirmed = false
   let pagesClosed = false
   let closingPages = false
   app.on('before-quit', (event) => {
-    // Only the main window comes back after a restart: ask before closing other windows' tabs.
-    const others = hub && !hub.quitWithoutAsking ? hub.unrestoredWindows() : 0
-    if (!quitConfirmed && others > 0) {
-      const choice = dialog.showMessageBoxSync({
-        type: 'question',
-        message: 'Quit Zepper?',
-        detail: `${others === 1 ? 'Another window is' : `${others} other windows are`} open. Only the main window’s tabs come back next time.`,
-        buttons: ['Quit', 'Cancel'],
-        defaultId: 0,
-        cancelId: 1
-      })
-      if (choice !== 0) return event.preventDefault()
-      quitConfirmed = true
-    }
+    // Every window comes back next time (see Hub.restoreWindows), so quitting doesn't need to ask.
+    if (hub) hub.quitting = true
     // Pages close themselves before Zepper goes, running their closing code as in Chrome (some sites
     // save a login there), then quitting carries on.
     if (hub && !pagesClosed) {

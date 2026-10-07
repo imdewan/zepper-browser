@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
@@ -39,6 +39,21 @@ export class JsonFile<T> {
     this.pending = value
     if (this.timer) return
     this.timer = setTimeout(() => this.writeLater(), this.delayMs)
+  }
+
+  /** Deletes the file, and anything still waiting to be written to it. */
+  remove(): void {
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = null
+    this.pending = null
+    this.written = null
+    // A write already under way sees it's been overtaken and doesn't land.
+    this.version++
+    try {
+      unlinkSync(this.path)
+    } catch {
+      // Never written.
+    }
   }
 
   /** Writes now, synchronously (when quitting). */

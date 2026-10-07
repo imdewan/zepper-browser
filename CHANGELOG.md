@@ -6,6 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Added
 
+- Every window comes back when you reopen Zepper, as in Chrome: where it was, with its spaces and tabs (not just the main window's). Quitting no longer asks first, since nothing's lost; a window you close yourself is forgotten, and private windows never come back.
 - Drag a tab out of the sidebar (onto the page, or out of the window) for a window of its own, or onto another window's sidebar to move it there, as in Chrome: its page keeps running (no reload, still signed in). Pinned tabs and Essentials stay in their window, and private windows keep their tabs.
 - Drop files or links on the sidebar to open them: between tabs for a new tab there, or on a tab to open them in it.
 - Finished downloads drag out of the downloads panel as the files themselves: onto a page to upload them, onto the tabs to open them, or into Finder.

@@ -41,6 +41,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - Drag a tab out of the sidebar for a window of its own, or onto another window's sidebar to move it there; its page keeps running
 - Drop files or links on the sidebar to open them, between tabs or onto one
 - Drag a finished download out of the downloads panel onto a page (to upload it), the tabs or Finder
+- Every window comes back when you reopen Zepper, where it was with its spaces and tabs; windows you close yourself are forgotten
 - Each tab keeps its back and forward pages (with their scroll positions) when you quit and reopen Zepper, and when Memory Saver unloads it
 - **Memory Saver** (on by default, Settings → Tabs), as Chrome and Brave do it: a tab out of sight for 6, 4 or 2 hours (Moderate, Balanced or Maximum) gives back its memory and reloads when you open it, and when your Mac runs short of memory the tab you used least recently goes sooner. Time your Mac is asleep or locked doesn't count. Tabs you keep coming back to, pinned tabs, tabs that update out of sight (an unread count), and tabs playing sound, in a call, in picture-in-picture, allowed to send notifications or with something typed and not sent stay. Inactive tabs show Chrome's dotted ring around their icon.
 - **Unopened tabs** (opened in the background, imported) show their real title and icon, read from the page without loading it.

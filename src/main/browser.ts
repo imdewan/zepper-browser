@@ -111,6 +111,9 @@ type PersistedTab = Pick<Tab, 'id' | 'kind' | 'spaceId' | 'url' | 'title' | 'fav
   history?: TabHistory
 }
 
+/** Where windows other than the main one keep their state (one file each), in the profile. */
+export const WINDOWS_DIR = 'windows'
+
 /** A tab on its way to another window: its page (if loaded) moves with it, still running. */
 export interface MovingTab {
   tab: Tab
@@ -530,6 +533,8 @@ export class Browser {
   private readonly tabByWebContents = new Map<number, string>()
   private readonly openers = new Map<string, string>()
   private readonly stateFile: JsonFile<PersistedState> | null
+  /** Names this window's saved state (windows other than the main one). */
+  private readonly windowId: string
 
   private spaces: Space[]
   private tabs: Tab[]
@@ -677,12 +682,22 @@ export class Browser {
     private readonly hub: Hub,
     readonly kind: BrowserKind,
     private readonly ses: Session,
-    private readonly seed?: WindowSeed
+    private readonly seed?: WindowSeed,
+    /** A window from last time to bring back (its saved state's id). */
+    restoreId?: string
   ) {
-    this.stateFile = kind === 'main' ? new JsonFile<PersistedState>('zepper-state.json', 800) : null
+    // Every window but a private one keeps its state, so it comes back after a restart, as in Chrome:
+    // the main window in zepper-state.json, others in windows/ (forgotten when you close them).
+    this.windowId = restoreId ?? randomUUID()
+    this.stateFile =
+      kind === 'main'
+        ? new JsonFile<PersistedState>('zepper-state.json', 800)
+        : kind === 'blank'
+          ? new JsonFile<PersistedState>(`${WINDOWS_DIR}/${this.windowId}.json`, 800)
+          : null
     this.permissions = kind === 'private' ? new SitePermissions(false) : hub.services.permissions
     if (kind === 'private') this.disposers.push(this.permissions.onChange(() => this.refresh()))
-    const saved = this.stateFile?.read()
+    const saved = kind === 'main' || restoreId ? this.stateFile?.read() : null
     if (saved?.version === 1 && saved.spaces.length > 0) {
       // Spaces from before profiles keep sharing the existing sign-ins (as they did); you can
       // separate any of them from its context menu (Sign-ins).
@@ -1296,7 +1311,9 @@ export class Browser {
   /** Window closed: release every page, and for private windows wipe the session. */
   private destroy(): void {
     this.windowClosed = true
-    this.persistNow()
+    // A window you close is forgotten (as in Chrome); one closing because Zepper quits comes back.
+    if (this.kind === 'blank' && !this.hub.quitting) this.stateFile?.remove()
+    else this.persistNow()
     this.pip?.exit()
     this.autofill?.destroy()
     for (const dispose of this.disposers) dispose()
@@ -1321,10 +1338,8 @@ export class Browser {
    * screen), otherwise a comfortable default; other windows cascade from the default.
    */
   private initialBounds(): Partial<Rectangle> {
-    const saved =
-      this.kind === 'main'
-        ? this.savedWindow?.bounds
-        : this.seed && { ...this.seed.bounds, x: this.seed.bounds.x + 24, y: this.seed.bounds.y + 24 }
+    // Where it was last time (a window coming back), or cascaded from the window it came from.
+    const saved = this.savedWindow?.bounds ?? (this.seed && { ...this.seed.bounds, x: this.seed.bounds.x + 24, y: this.seed.bounds.y + 24 })
     if (saved && saved.width >= 640 && saved.height >= 495) {
       const area = screen.getDisplayMatching(saved).workArea
       const visibleX = Math.min(saved.x + saved.width, area.x + area.width) - Math.max(saved.x, area.x)
