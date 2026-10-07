@@ -7,6 +7,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 ### Added
 
 - In full screen, where the traffic lights come down with the menu bar instead, a sidebar button takes their place at the top of the sidebar, beside Extensions.
+- Point at a link to see where it goes, as in Chrome and Brave: its address in the page's bottom-left corner, the site in bold. Keep pointing and the whole address shows; bring the pointer near and it moves to the other corner.
 
 ### Fixed
 

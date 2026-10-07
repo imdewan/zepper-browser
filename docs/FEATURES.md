@@ -11,7 +11,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 ## Window and sidebar
 
 - Vertical sidebar on the left or right, resizable (190–500px), with a window gradient that shows through, plus transparency and corner radius controls
-- Top row: traffic lights, extensions, back, forward, reload. Buttons shrink to fit narrow sidebars instead of disappearing
+- Top row: traffic lights, extensions, back, forward, reload. Buttons shrink to fit narrow sidebars instead of disappearing. In full screen a sidebar button takes the traffic lights' place
 - Address pill with the site's lock (certificate, permissions, cookies, per-site ad blocking) and a copy button on hover
 - Bottom bar: settings, space switcher (with a "+" for new spaces), downloads with a progress ring
 - Compact mode (⌘S): the sidebar hides and floats back in when you reach the window edge
@@ -20,9 +20,9 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - Default browser: links and files opened from other apps open in Zepper (Settings → General)
 - Print (⌘P), Save Page As (⇧⌘S), Export as PDF, Open File (⌘O), View Source (⌥⌘U), and Chromium's PDF viewer
 - Zoom in Chrome's steps, remembered per site, with a notice to reset; pinch to zoom
+- Point at a link to see its address in the page's bottom corner, as in Chrome: the site stands out, the whole address shows if you keep pointing, and it moves to the other corner when the pointer comes near
 - A crashed page keeps its tab and offers Reload; a page that stops responding can be waited for or closed
 - Closing a tab with unsaved changes asks first ("Leave site?")
-- Quitting asks first when other windows (which aren't restored) are open
 
 ## Spaces
 

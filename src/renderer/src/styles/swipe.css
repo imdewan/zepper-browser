@@ -1,9 +1,13 @@
-/* The back/forward arrow drawn at the page's edge during a two-finger swipe (see SwipeArrow). */
+/* The small view above the page: the back/forward arrow at its edge during a two-finger swipe (see
+   SwipeArrow), or the address of the link you're pointing at in its bottom corner (see LinkStatus). */
 
 :root {
   --bubble: #ffffff;
   --bubble-text: #1d1d1f;
   --track: rgba(0, 0, 0, 0.08);
+  --link-text: #1d1d1f;
+  --link-text-2: #6e6e73;
+  --link-edge: rgba(0, 0, 0, 0.14);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -11,6 +15,9 @@
     --bubble: #2c2c2e;
     --bubble-text: #f5f5f7;
     --track: rgba(255, 255, 255, 0.12);
+    --link-text: #f5f5f7;
+    --link-text-2: #a1a1a6;
+    --link-edge: rgba(255, 255, 255, 0.14);
   }
 }
 
@@ -104,5 +111,72 @@ body {
   to {
     translate: var(--away) 0;
     opacity: 0;
+  }
+}
+
+/* The link's address: a small pill, its view sized to it (the padding is room for the shadow). */
+.link-status {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  padding: 4px;
+  pointer-events: none;
+}
+
+.link-status-pill {
+  display: flex;
+  max-width: var(--max);
+  height: 24px;
+  padding: 0 10px;
+  align-items: center;
+  border-radius: 8px;
+  background: var(--bubble);
+  color: var(--link-text-2);
+  font-size: 12px;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  box-shadow:
+    0 0 0 0.5px var(--link-edge),
+    0 1px 3px rgba(0, 0, 0, 0.12);
+  animation: link-status-in 0.14s var(--spring);
+  transition:
+    opacity 0.12s ease-out,
+    translate 0.12s ease-out;
+}
+
+.link-status.leaving .link-status-pill {
+  opacity: 0;
+  translate: 0 3px;
+  transition-duration: 0.15s;
+}
+
+/* The site stands out and stays whole (unless it alone is too long); the path gives way first. */
+.link-status-site,
+.link-status-rest {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.link-status-site {
+  flex: none;
+  max-width: 100%;
+}
+
+.link-status-host {
+  color: var(--link-text);
+  font-weight: 500;
+}
+
+.link-status-rest {
+  flex: 0 1 auto;
+}
+
+@keyframes link-status-in {
+  from {
+    opacity: 0;
+    translate: 0 3px;
   }
 }

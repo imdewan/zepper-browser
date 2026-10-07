@@ -265,6 +265,18 @@ const FLICK_SPEED = 24
 const SWIPE_ARROW_SIZE = 112
 /** How long the arrow takes to finish (navigating, or sliding away) before its view is hidden. */
 const SWIPE_ARROW_EXIT_MS = 280
+/** The link address bubble sits this far in from the page's bottom corner… */
+const LINK_STATUS_INSET = 6
+/** …in a view with this much room around it for its shadow. */
+const LINK_STATUS_PAD = 4
+/** How close the pointer comes before the bubble moves to the other corner, out of its way. */
+const LINK_STATUS_AVOID = 24
+/** Pointing at the same link this long shows its whole address, as in Chrome. */
+const LINK_STATUS_EXPAND_MS = 1600
+/** Between two links the page briefly points at none; the bubble waits that out rather than flicker. */
+const LINK_STATUS_LINGER_MS = 80
+/** How long the bubble takes to fade before its view is hidden. */
+const LINK_STATUS_FADE_MS = 160
 
 /** macOS natural scrolling (on unless explicitly turned off); re-read at most every 30s. */
 let naturalScrolling = true
@@ -579,9 +591,23 @@ export class Browser {
   private swipeCooldown: { tabId: string; until: number } | null = null
   /** The tab whose swipe is in progress. */
   private swipeTabId: string | null = null
-  /** Draws the back/forward arrow at the page's edge while you swipe (Zepper's own view, above the page). */
-  private swipeArrow: WebContentsView | null = null
+  /**
+   * Zepper's own small view above the page: the back/forward arrow at its edge while you swipe, or the
+   * address of the link you're pointing at in its bottom corner. One view (and renderer) for both.
+   */
+  private pageHints: WebContentsView | null = null
+  private hintsShowing: 'swipe' | 'link' | null = null
   private swipeArrowTimer: NodeJS.Timeout | null = null
+  /** The link you're pointing at, shown in the page's bottom corner as in Chrome. */
+  private linkStatus: {
+    tabId: string
+    url: string
+    expanded: boolean
+    side: 'left' | 'right'
+    /** The bubble's size as drawn (its view's size), once the hints renderer has measured it. */
+    size: { width: number; height: number } | null
+  } | null = null
+  private linkStatusTimers: { expand?: NodeJS.Timeout; linger?: NodeJS.Timeout; fade?: NodeJS.Timeout; watch?: NodeJS.Timeout } = {}
   private layoutAnimation: NodeJS.Timeout | null = null
   private pip!: PipPlayer
   private autofill!: AutofillController
@@ -832,12 +858,12 @@ export class Browser {
     this.overlay.setVisible(false)
     this.win.contentView.addChildView(this.overlay)
 
-    this.swipeArrow = new WebContentsView({ webPreferences: uiPrefs })
-    this.swipeArrow.setBackgroundColor('#00000000')
-    this.swipeArrow.setVisible(false)
-    this.win.contentView.addChildView(this.swipeArrow)
+    this.pageHints = new WebContentsView({ webPreferences: uiPrefs })
+    this.pageHints.setBackgroundColor('#00000000')
+    this.pageHints.setVisible(false)
+    this.win.contentView.addChildView(this.pageHints)
 
-    this.swipeArrow.webContents.on('will-navigate', (event) => event.preventDefault())
+    this.pageHints.webContents.on('will-navigate', (event) => event.preventDefault())
     for (const wc of [this.win.webContents, this.overlay.webContents]) {
       this.watchControlKey(wc)
       wc.on('will-navigate', (event) => event.preventDefault())
@@ -852,7 +878,7 @@ export class Browser {
     }
     load(this.win.webContents, 'chrome.html')
     load(this.overlay.webContents, 'overlay.html')
-    load(this.swipeArrow.webContents, 'swipe.html')
+    load(this.pageHints.webContents, 'swipe.html')
 
     this.win.once('ready-to-show', () => this.win.show())
     this.win.on('resize', () => {
@@ -1169,6 +1195,7 @@ export class Browser {
     return (
       id === this.win.webContents.id ||
       id === this.overlay.webContents.id ||
+      id === this.pageHints?.webContents.id ||
       id === this.pip?.controlsWebContents()?.id ||
       id === this.autofill?.webContents()?.id ||
       this.tabByWebContents.has(id) ||
@@ -1263,6 +1290,7 @@ export class Browser {
     return [
       this.win.webContents.id,
       this.overlay.webContents.id,
+      this.pageHints?.webContents.id,
       this.pip.controlsWebContents()?.id,
       this.autofill.webContents()?.id
     ].includes(wc.id)
@@ -1333,6 +1361,7 @@ export class Browser {
     else this.persistNow()
     this.pip?.exit()
     this.autofill?.destroy()
+    this.clearLinkStatusTimers()
     for (const dispose of this.disposers) dispose()
     // Pages that closed themselves first (quitting, closing the window) are already gone.
     const close = (wc: WebContents | undefined): void => {
@@ -1346,7 +1375,7 @@ export class Browser {
     // Child views' pages outlive their window unless closed.
     close(this.overlay.webContents)
     if (this.swipeArrowTimer) clearTimeout(this.swipeArrowTimer)
-    close(this.swipeArrow?.webContents)
+    close(this.pageHints?.webContents)
     this.hub.windowClosed(this)
   }
 
@@ -1696,6 +1725,8 @@ export class Browser {
         return this.emit({ type: 'onboarding.open', step: command.step }, 'overlay')
       case 'ui.peekSidebar':
         return this.setPeek(command.show)
+      case 'ui.linkStatusSize':
+        return this.onLinkStatusSize(command.width, command.height)
       case 'ui.peekLeft':
         return this.holdPeekWhilePointerOnCard()
       case 'ui.peekLights':
@@ -3833,11 +3864,14 @@ export class Browser {
     on('did-start-navigation', (details) => {
       if (!details.isMainFrame || details.isSameDocument) return
       this.dropDialogs(tabId)
+      if (this.linkStatus?.tabId === tabId) this.hideLinkStatus(false)
       // A new page: its language is checked again once it loads, untranslated.
       this.stopTranslating(tabId)
       if (this.tab(tabId)?.language || this.tab(tabId)?.translation) update({ language: null, translation: null })
     })
     once('destroyed', () => this.dropDialogs(tabId))
+    // The link under the pointer (or none): its address in the page's corner.
+    on('update-target-url', (_event, url) => this.onTargetUrl(tabId, url))
     on('did-start-loading', () => update({ loading: true }))
     on('did-stop-loading', () => {
       this.settledAt.set(tabId, Date.now())
@@ -4589,11 +4623,14 @@ export class Browser {
 
   /** The arrow's view, at the left or right edge of the tab's pane, halfway down. */
   private showSwipeArrow(tabId: string, direction: 'back' | 'forward', progress: number): void {
-    const arrow = this.swipeArrow
+    const arrow = this.pageHints
     const rect = this.panes().find((pane) => pane.tabId === tabId)?.rect
     if (!arrow || !rect || arrow.webContents.isDestroyed()) return
     if (this.swipeArrowTimer) clearTimeout(this.swipeArrowTimer)
     this.swipeArrowTimer = null
+    // The arrow takes the view over from a link's address.
+    if (this.hintsShowing === 'link') this.hideLinkStatus(true)
+    this.hintsShowing = 'swipe'
     const size = Math.min(SWIPE_ARROW_SIZE, rect.width, rect.height)
     arrow.setBounds({
       x: direction === 'back' ? rect.x : rect.x + rect.width - size,
@@ -4608,7 +4645,7 @@ export class Browser {
 
   /** The arrow finishes (pops as it navigates, or slides away), then its view is hidden. */
   private finishSwipeArrow(tabId: string, direction: 'back' | 'forward', progress: number, phase: 'commit' | 'cancel'): void {
-    if (!this.swipeArrow?.getVisible()) return
+    if (this.hintsShowing !== 'swipe') return
     this.sendSwipeArrow(tabId, direction, progress, phase)
     if (this.swipeArrowTimer) clearTimeout(this.swipeArrowTimer)
     this.swipeArrowTimer = setTimeout(() => this.hideSwipeArrow(), SWIPE_ARROW_EXIT_MS)
@@ -4617,11 +4654,130 @@ export class Browser {
   private hideSwipeArrow(): void {
     if (this.swipeArrowTimer) clearTimeout(this.swipeArrowTimer)
     this.swipeArrowTimer = null
-    this.swipeArrow?.setVisible(false)
+    if (this.hintsShowing !== 'swipe') return
+    this.hintsShowing = null
+    this.pageHints?.setVisible(false)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Link status
+
+  /**
+   * The page points at a link (or at none): its address shows in the page's bottom-left corner, as in
+   * Chrome. A third of the page wide at first, the whole address once you've pointed at it a moment,
+   * and in the other corner when the pointer comes near.
+   */
+  private onTargetUrl(tabId: string, url: string): void {
+    const timers = this.linkStatusTimers
+    if (!url || !this.attached.has(tabId) || this.hintsShowing === 'swipe') {
+      if (!this.linkStatus || this.linkStatus.tabId !== tabId || timers.linger) return
+      timers.linger = setTimeout(() => {
+        timers.linger = undefined
+        this.hideLinkStatus(false)
+      }, LINK_STATUS_LINGER_MS)
+      return
+    }
+    clearTimeout(timers.linger)
+    clearTimeout(timers.fade)
+    timers.linger = timers.fade = undefined
+    const same = this.linkStatus?.tabId === tabId && this.linkStatus.url === url
+    if (!same) {
+      this.linkStatus = { tabId, url, expanded: false, side: this.linkStatus?.side ?? 'left', size: this.linkStatus?.size ?? null }
+      clearTimeout(timers.expand)
+      timers.expand = setTimeout(() => {
+        if (!this.linkStatus || this.linkStatus.url !== url) return
+        this.linkStatus.expanded = true
+        this.sendLinkStatus()
+      }, LINK_STATUS_EXPAND_MS)
+    }
+    this.hintsShowing = 'link'
+    this.sendLinkStatus()
+    // The pointer moves without the link changing; the bubble keeps out of its way.
+    timers.watch ??= setInterval(() => this.placeLinkStatus(), 100)
+  }
+
+  private linkStatusPane(): Rectangle | undefined {
+    const status = this.linkStatus
+    return status ? this.panes().find((pane) => pane.tabId === status.tabId)?.rect : undefined
+  }
+
+  private sendLinkStatus(): void {
+    const status = this.linkStatus
+    const rect = this.linkStatusPane()
+    const wc = this.pageHints?.webContents
+    if (!status || !wc || wc.isDestroyed()) return
+    if (!rect) return this.hideLinkStatus(true)
+    const room = rect.width - 2 * LINK_STATUS_INSET
+    const maxWidth = Math.max(0, Math.round(status.expanded ? room : Math.min(room, Math.max(rect.width / 3, 260))))
+    wc.send(IPC.event, { type: 'link.status', url: status.url, maxWidth } satisfies UiEvent)
+  }
+
+  /** The hints renderer measured the bubble: its view takes that size, in the corner. */
+  private onLinkStatusSize(width: number, height: number): void {
+    if (!this.linkStatus || this.hintsShowing !== 'link') return
+    this.linkStatus.size = { width: Math.ceil(width), height: Math.ceil(height) }
+    this.placeLinkStatus()
+  }
+
+  private placeLinkStatus(): void {
+    const status = this.linkStatus
+    const view = this.pageHints
+    if (this.win.isDestroyed()) return this.clearLinkStatusTimers()
+    const rect = this.linkStatusPane()
+    if (!status?.size || !view || this.hintsShowing !== 'link') return
+    if (!rect) return this.hideLinkStatus(true)
+    const { width, height } = status.size
+    const y = rect.y + rect.height - LINK_STATUS_INSET + LINK_STATUS_PAD - height
+    const at = (side: 'left' | 'right'): Rectangle => ({
+      x: side === 'left' ? rect.x + LINK_STATUS_INSET - LINK_STATUS_PAD : rect.x + rect.width - LINK_STATUS_INSET + LINK_STATUS_PAD - width,
+      y,
+      width,
+      height
+    })
+    // Like Chrome's, it moves to the other corner when the pointer comes near (and back once it's gone).
+    const near = (box: Rectangle): boolean => {
+      const { x: px, y: py } = this.pointer()
+      const m = LINK_STATUS_AVOID
+      return px >= box.x - m && px < box.x + box.width + m && py >= box.y - m && py < box.y + box.height + m
+    }
+    if (status.side === 'left' && near(at('left'))) status.side = 'right'
+    else if (status.side === 'right' && !near(at('left'))) status.side = 'left'
+    view.setBounds(at(status.side))
+    view.setBorderRadius(0)
+    if (!view.getVisible()) view.setVisible(true)
+  }
+
+  private clearLinkStatusTimers(): void {
+    const timers = this.linkStatusTimers
+    for (const timer of [timers.expand, timers.linger, timers.fade]) clearTimeout(timer)
+    clearInterval(timers.watch)
+    this.linkStatusTimers = {}
+  }
+
+  /** The bubble fades and its view goes (at once when something else needs the view, or the page went). */
+  private hideLinkStatus(now: boolean): void {
+    const timers = this.linkStatusTimers
+    clearTimeout(timers.expand)
+    clearTimeout(timers.linger)
+    clearInterval(timers.watch)
+    timers.expand = timers.linger = timers.watch = undefined
+    if (!this.linkStatus) return
+    this.linkStatus = null
+    const wc = this.pageHints?.webContents
+    if (wc && !wc.isDestroyed()) wc.send(IPC.event, { type: 'link.status', url: null, maxWidth: 0 } satisfies UiEvent)
+    const done = (): void => {
+      timers.fade = undefined
+      if (this.hintsShowing !== 'link' || this.linkStatus) return
+      this.hintsShowing = null
+      this.pageHints?.setVisible(false)
+    }
+    clearTimeout(timers.fade)
+    if (now) done()
+    else timers.fade = setTimeout(done, LINK_STATUS_FADE_MS)
   }
 
   private sendSwipeArrow(tabId: string, direction: 'back' | 'forward', progress: number, phase: 'move' | 'commit' | 'cancel'): void {
-    const wc = this.swipeArrow?.webContents
+    const wc = this.pageHints?.webContents
     if (!wc || wc.isDestroyed()) return
     const space = this.space(this.tab(tabId)?.spaceId ?? this.activeSpaceId) ?? this.space(this.activeSpaceId)
     const system = process.platform === 'darwin' ? `#${systemPreferences.getAccentColor().slice(0, 6)}` : '#0a84ff'
@@ -5610,7 +5766,8 @@ export class Browser {
       this.win.contentView.addChildView(this.ensureView(tab))
       this.attached.add(id)
     }
-    if (this.swipeArrow) this.win.contentView.addChildView(this.swipeArrow)
+    if (this.linkStatus && !wanted.has(this.linkStatus.tabId)) this.hideLinkStatus(true)
+    if (this.pageHints) this.win.contentView.addChildView(this.pageHints)
     this.win.contentView.addChildView(this.overlay)
     this.layout()
   }

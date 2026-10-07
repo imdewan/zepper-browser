@@ -602,6 +602,8 @@ export type Command =
   /** The size of what the overlay shows in the window's corner (toasts, find bar), so only that takes clicks. */
   | { type: 'ui.overlayCorner'; width: number; height: number }
   | { type: 'ui.peekSidebar'; show: boolean }
+  /** The link address bubble's size as drawn, with room for its shadow (its view takes this size). */
+  | { type: 'ui.linkStatusSize'; width: number; height: number }
   /**
    * The pointer left the peek card, as far as the card can tell. Over the traffic lights or the top
    * row (where macOS takes the pointer to drag the window) it's still on the card, which then stays.
@@ -631,6 +633,8 @@ export type UiEvent =
       phase: 'move' | 'commit' | 'cancel'
       accent: string
     }
+  /** The address of the link you're pointing at, at most maxWidth wide; null when it goes. */
+  | { type: 'link.status'; url: string | null; maxWidth: number }
   | { type: 'palette.open'; mode: 'new' | 'current' | 'split'; currentUrl: string | null }
   /** Capture mode (⇧⌘2): the page's area and its elements (window coordinates) for hover snapping. */
   | { type: 'capture.start'; page: Rect; targets: Rect[]; scrolls: boolean }
