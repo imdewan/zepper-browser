@@ -8,6 +8,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 - Settings keeps its close button and the page's title in a bar at the top that stays put while the page scrolls.
 - Lists of sites in Settings (site permissions, sites with protections off, sites passwords are never saved for) stay short as they grow: sites in A–Z order, the first six with Show all, and a search field once there are more than ten.
+- A tab playing sound shows its bars in the text colour, so they read on any theme (they were the space's accent colour, and hard to see on some), a little larger. Pointing at the tab (or an Essential) shows a speaker instead, so it's clear a click mutes it.
 
 ### Fixed
 

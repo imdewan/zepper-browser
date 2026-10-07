@@ -1462,27 +1462,34 @@ button.site-button.insecure:hover {
 @keyframes eq-bounce {
   0%,
   100% {
-    transform: scaleY(0.3);
+    transform: scaleY(0.4);
   }
   50% {
     transform: scaleY(1);
   }
 }
 
+/* A tab's sound: bars in the text colour (legible on any theme) while it plays, and a speaker,
+   which says "click to mute", while you point at the tab. */
 .tab-button.audio.playing {
-  color: var(--accent);
+  color: var(--text);
+}
+
+.tab-button.audio .equalizer {
+  width: 13px;
+  height: 12px;
+  gap: 2px;
 }
 
 .tab-button.audio .audio-hover {
   display: none;
 }
 
-.tab-button.audio:hover .audio-hover {
+.tab:hover .tab-button.audio .audio-hover {
   display: grid;
-  color: var(--text);
 }
 
-.tab-button.audio:hover .audio-idle {
+.tab:hover .tab-button.audio .audio-idle {
   display: none;
 }
 
@@ -1510,9 +1517,24 @@ button.site-button.insecure:hover {
   display: grid;
   place-items: center;
   background: var(--panel, rgba(30, 30, 32, 0.9));
-  color: var(--accent);
+  color: var(--text);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   transition: transform 0.15s ease;
+}
+
+.essential-audio .audio-idle,
+.essential-audio .audio-hover {
+  display: grid;
+  place-items: center;
+}
+
+.essential-audio .audio-hover,
+.essential:hover .essential-audio .audio-idle {
+  display: none;
+}
+
+.essential:hover .essential-audio .audio-hover {
+  display: grid;
 }
 
 .essential-audio:hover {

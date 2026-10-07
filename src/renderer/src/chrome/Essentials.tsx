@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import type { Tab, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
 import { Favicon } from '../Favicon'
-import { Equalizer, IconMuted } from '../icons'
+import { Equalizer, IconMuted, IconSpeaker } from '../icons'
 import { useUiEvents } from '../useSnapshot'
 import { cx, rectOf } from '../util'
 import { dragProps, useDragging, useDrop, useDropHint, type DropPosition } from './dnd'
@@ -125,7 +125,18 @@ function Essential({ tab, active }: { tab: Tab; active: boolean }): React.JSX.El
               zepper.send({ type: 'tab.toggleMute', tabId: tab.id })
             }}
           >
-            {tab.muted ? <IconMuted size={10} /> : <Equalizer />}
+            {tab.muted ? (
+              <IconMuted size={10} />
+            ) : (
+              <>
+                <span className="audio-idle">
+                  <Equalizer />
+                </span>
+                <span className="audio-hover">
+                  <IconSpeaker size={10} />
+                </span>
+              </>
+            )}
           </span>
         )}
       </button>
