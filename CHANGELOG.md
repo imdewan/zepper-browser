@@ -20,6 +20,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
+- Turning on the extensions row (Settings › Extensions) showed nothing until you'd pinned an extension. It shows all your extensions until you pin some, then just the pinned ones.
 - Sites couldn't get your location (Google Maps: "Your precise location could not be determined"): macOS was never asked to let Zepper use it, so requests waited and timed out. The first time a site you allow wants your location, macOS now asks, and if macOS is blocking Zepper you're told where to turn it on.
 - Some sites (Discord, for one) could sign you out after you quit Zepper, updated it, closed its window or had a tab unloaded by Memory Saver: pages were closed without running their closing code, which is where some sites save what they need for next time. Pages now close themselves first, as in Chrome. Memory Saver also leaves a page loaded if it asks before you leave (unsaved changes).
 

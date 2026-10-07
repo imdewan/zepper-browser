@@ -33,7 +33,10 @@ export function ExtensionsSettings({ settings }: { settings: Settings }): React.
       <div className="settings-row">
         <div className="settings-row-text">
           <div className="settings-row-label">Show extensions row</div>
-          <div className="settings-row-hint">Pinned extensions get their own row under the address bar.</div>
+          <div className="settings-row-hint">
+            Your extensions get a row of their own under the address bar: the ones you pin from the puzzle menu, or all of them until you
+            pin some.
+          </div>
         </div>
         <div className="settings-row-control">
           <Toggle

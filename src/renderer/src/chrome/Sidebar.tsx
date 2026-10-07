@@ -288,14 +288,18 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
   )
 }
 
-/** Optional row of pinned extensions under the address bar (Settings → Extensions). */
+/**
+ * Optional row of extensions under the address bar (Settings → Extensions): the pinned ones, or every
+ * one until you pin some, so turning the row on always shows your extensions.
+ */
 function ExtensionsRow(): React.JSX.Element | null {
   const extensions = useExtensions()
   const pinned = useSnapshotPinnedExtensions(extensions)
-  if (pinned.length === 0) return null
+  const shown = pinned.length > 0 ? pinned : extensions.actions.map((action) => action.id)
+  if (shown.length === 0) return null
   return (
     <div className="extensions-row">
-      {pinned.map((id) => (
+      {shown.map((id) => (
         <ExtensionButton key={id} id={id} tabId={extensions.activeTabId} version={extensions} />
       ))}
     </div>
