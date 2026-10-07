@@ -66,6 +66,7 @@ function sameRow(a: TabRowProps, b: TabRowProps): boolean {
     x.title === y.title &&
     x.favicon === y.favicon &&
     x.loaded === y.loaded &&
+    x.discarded === y.discarded &&
     x.audible === y.audible &&
     x.muted === y.muted &&
     x.capture?.camera === y.capture?.camera &&
@@ -125,7 +126,7 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
             <Favicon src={tab.favicon} className="pin-current" />
             <span className="pin-slash" />
           </button>
-        ) : !tab.loaded ? (
+        ) : !tab.loaded && tab.discarded ? (
           <InactiveFavicon src={tab.favicon} />
         ) : (
           <Favicon src={tab.favicon} />

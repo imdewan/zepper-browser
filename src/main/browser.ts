@@ -581,6 +581,11 @@ export class Browser {
   private readonly closingGently = new Map<number, { leave: boolean; stayed: () => void }>()
   /** Tabs Memory Saver is closing. */
   private readonly freeing = new Set<string>()
+  /**
+   * Pages Zepper closed itself (unloading a tab, closing the window, quitting): the tab stays. Only a
+   * page closing itself (window.close()) or an extension closing it removes its tab.
+   */
+  private readonly closedHere = new WeakSet<WebContents>()
   /** Every page has closed itself (the window is closing or Zepper is quitting). */
   private pagesClosed = false
   /** When each tab's media metadata was last read. */
@@ -1181,7 +1186,7 @@ export class Browser {
    * saved tabs (or the destroyed window).
    */
   removeByWebContents(wc: WebContents): void {
-    if (this.windowClosed || this.win.isDestroyed()) return
+    if (this.windowClosed || this.win.isDestroyed() || this.closedHere.has(wc)) return
     const tab = this.tab(this.tabByWebContents.get(wc.id))
     if (tab) this.removeTab(tab)
   }
@@ -1986,6 +1991,7 @@ export class Browser {
     const wasActive = this.activeTabId === tab.id
     const next = wasActive ? this.pickNextTab(tab) : undefined
     this.destroyView(tab)
+    tab.discarded = true
     if (reset && tab.pinned) Object.assign(tab, tab.pinned)
     if (wasActive) {
       if (next) this.activateTab(next.id)
@@ -2194,6 +2200,7 @@ export class Browser {
       this.freeing.delete(tab.id)
       if (!closed || this.views.get(tab.id) !== view) return
       this.destroyView(tab)
+      tab.discarded = true
       this.unseenFor.delete(tab.id)
       this.updatedInBackground.delete(tab.id)
       // Opened again while it was closing: load it again.
@@ -2221,6 +2228,9 @@ export class Browser {
         resolve(closed)
       }
       this.closingGently.set(wc.id, { leave: leaveIfAsked, stayed: () => finish(false) })
+      this.closedHere.add(wc)
+      // 'close' is when the page agreed to close (Electron doesn't reliably run 'destroyed' listeners then).
+      ;(wc as NodeJS.EventEmitter).once('close', () => finish(true))
       wc.once('destroyed', () => finish(true))
       const timer = setTimeout(() => {
         if (leaveIfAsked && !wc.isDestroyed()) wc.close()
@@ -3351,6 +3361,7 @@ export class Browser {
   private ensureView(tab: Tab, adopt?: WebContents): WebContentsView {
     const existing = this.views.get(tab.id)
     if (existing) return existing
+    tab.discarded = false
     const view = adopt
       ? new WebContentsView({ webContents: adopt })
       : new WebContentsView({
@@ -3428,6 +3439,7 @@ export class Browser {
     this.attached.delete(tab.id)
     this.views.delete(tab.id)
     for (const [wcId, id] of this.tabByWebContents) if (id === tab.id) this.tabByWebContents.delete(wcId)
+    this.closedHere.add(view.webContents)
     if (!view.webContents.isDestroyed()) view.webContents.close()
   }
 
@@ -4019,6 +4031,7 @@ export class Browser {
   private unloadSpace(id: string): void {
     for (const tab of this.tabs.filter((t) => t.spaceId === id && t.loaded && t.id !== this.activeTabId)) {
       this.destroyView(tab)
+      tab.discarded = true
     }
     this.broadcast()
   }

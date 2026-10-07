@@ -22,6 +22,11 @@ export interface Tab {
   pinned: PinnedInfo | null
   /** Whether the tab currently has a live web view. */
   loaded: boolean
+  /**
+   * Unloaded to free memory, by Memory Saver or by you ("Unload"), as opposed to not opened yet (after
+   * a restart, say): only these show Chrome's inactive ring. Cleared when it loads again; not saved.
+   */
+  discarded?: boolean
   loading: boolean
   audible: boolean
   muted: boolean
