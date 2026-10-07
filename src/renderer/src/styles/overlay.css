@@ -864,6 +864,38 @@
   color: var(--text);
 }
 
+/* A list's own page: a way back to its section. */
+.settings-back {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-left: -8px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+
+.settings-back:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.settings-bar.sub {
+  gap: 6px;
+}
+
+/* "3 sites ›": opens a list's page. */
+.site-list-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.site-list-open svg {
+  color: var(--text-3);
+}
+
 .settings-row {
   display: flex;
   align-items: center;
@@ -933,68 +965,6 @@
 
 .settings-input:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 50%);
-}
-
-.site-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.site-chip-search {
-  flex: none;
-  margin-bottom: 8px;
-}
-
-.site-chip-more {
-  padding: 0 10px;
-  color: var(--text-2);
-  transition: background-color 0.1s ease;
-}
-
-.site-chip-more:hover {
-  background: var(--element-hover);
-  color: var(--text);
-}
-
-.site-chip-empty {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-3);
-}
-
-.site-chip-detail {
-  margin-left: 6px;
-  font-size: 11px;
-  color: var(--text-3);
-}
-
-.site-chip {
-  height: 26px;
-  padding: 0 4px 0 10px;
-  border-radius: 13px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  background: var(--element);
-}
-
-.site-chip button {
-  width: 18px;
-  height: 18px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  color: var(--text-3);
-  transition:
-    background-color 0.1s ease,
-    color 0.1s ease;
-}
-
-.site-chip button:hover {
-  background: var(--press);
-  color: var(--text);
 }
 
 .toggle {

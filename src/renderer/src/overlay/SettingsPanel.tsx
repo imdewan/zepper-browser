@@ -28,11 +28,11 @@ import {
 } from '@shared/settings'
 import type { AccessState, IntelligenceStatus, SiteDecisions, Snapshot, SystemAccess, UpdateStatus, WidevineStatus } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconClose } from '../icons'
+import { IconBack, IconClose } from '../icons'
 import { cx, isMac } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
 import { PasswordsSettings } from './PasswordsSettings'
-import { SiteChips } from './SiteChips'
+import { SiteListLink, SiteListPage, type SiteListItem } from './SiteListPage'
 import { Toggle } from './Toggle'
 
 /** What each Memory Saver mode does (Chrome's and Brave's timings). */
@@ -83,6 +83,14 @@ const SECTIONS: { id: Section; label: string; title?: string; Icon: LucideIcon; 
   { id: 'extensions', label: 'Extensions', Icon: Puzzle, color: '#ff453a' },
   { id: 'shortcuts', label: 'Shortcuts', title: 'Keyboard Shortcuts', Icon: Keyboard, color: '#48484a' }
 ]
+
+/** Pages a section opens for its longer lists: what they're called, and the section they're in. */
+type SubPage = 'sitePermissions' | 'protectionsOff' | 'neverSaved'
+const SUB_PAGES: Record<SubPage, { title: string; section: Section }> = {
+  sitePermissions: { title: 'Site permissions', section: 'privacy' },
+  protectionsOff: { title: 'Sites with protections off', section: 'privacy' },
+  neverSaved: { title: 'Passwords never saved', section: 'passwords' }
+}
 
 const SHORTCUTS: [string, string][] = [
   ['Command bar / new tab', '⌘T'],
@@ -165,20 +173,28 @@ export function SettingsPanel({
   const body = useRef<HTMLDivElement>(null)
   // The bar's divider shows once the page scrolls under it.
   const [scrolled, setScrolled] = useState(false)
+  // A list's own page within its section (site permissions…), with a way back.
+  const [page, setPage] = useState<SubPage | null>(null)
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
-  const open = (next: Section): void => {
+  const show = (next: Section, nextPage: SubPage | null = null): void => {
     setSection(next)
+    setPage(nextPage)
     body.current?.scrollTo({ top: 0 })
     setScrolled(false)
   }
+  const open = (next: Section): void => show(next)
+  const openPage = (next: SubPage): void => show(SUB_PAGES[next].section, next)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      // Esc steps back out of a list's page first, then closes Settings.
+      if (page) show(SUB_PAGES[page].section)
+      else onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, page])
 
   return (
     <motion.div
@@ -208,20 +224,52 @@ export function SettingsPanel({
         </nav>
         <div className="settings-main">
           {/* Stays put while the page scrolls, so closing is always one click away. */}
-          <header className={cx('settings-bar', scrolled && 'scrolled')}>
-            <h2>{current.title ?? current.label}</h2>
+          <header className={cx('settings-bar', scrolled && 'scrolled', page && 'sub')}>
+            {page && (
+              <button className="settings-back" title={`Back to ${current.label} (Esc)`} onClick={() => show(section)}>
+                <IconBack size={15} />
+              </button>
+            )}
+            <h2>{page ? SUB_PAGES[page].title : (current.title ?? current.label)}</h2>
             <button className="settings-close" title="Close (Esc)" onClick={onClose}>
               <IconClose size={14} />
             </button>
           </header>
           <div className="settings-body" ref={body} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
             <motion.div
-              key={section}
+              key={page ?? section}
               initial={{ opacity: 0, x: 8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ type: 'spring', bounce: 0, duration: 0.25 }}
             >
-              {section === 'general' && (
+              {page === 'sitePermissions' && (
+                <SiteListPage
+                  items={sitePermissions.map((site) => ({ key: site.origin, site: site.host, detail: permissionSummary(site) }))}
+                  action="Reset"
+                  actionTitle={(item) => `Ask again on ${item.site}`}
+                  empty="Sites you allow or block the camera, microphone, location, notifications or pop-ups for show up here."
+                  onAction={(item) => zepper.send({ type: 'site.resetPermissions', origin: item.key })}
+                />
+              )}
+              {page === 'protectionsOff' && (
+                <SiteListPage
+                  items={protectionsOff(settings)}
+                  action="Turn On"
+                  actionTitle={(item) => `Turn protections back on for ${item.site}`}
+                  empty="Sites you turn protections off for (from the lock icon) show up here."
+                  onAction={(item) => zepper.send({ type: 'site.resetProtections', domain: item.key })}
+                />
+              )}
+              {page === 'neverSaved' && (
+                <SiteListPage
+                  items={settings.neverSavePasswords.map((domain) => ({ key: domain, site: domain }))}
+                  action="Remove"
+                  actionTitle={(item) => `Offer to save passwords on ${item.site} again`}
+                  empty="Sites you choose Never for, when Zepper offers to save a password, show up here."
+                  onAction={(item) => set({ neverSavePasswords: settings.neverSavePasswords.filter((d) => d !== item.key) })}
+                />
+              )}
+              {!page && section === 'general' && (
                 <>
                   <Row
                     label="Default browser"
@@ -309,7 +357,7 @@ export function SettingsPanel({
                 </>
               )}
 
-              {section === 'appearance' && (
+              {!page && section === 'appearance' && (
                 <>
                   <Row label="Theme" hint="Websites follow this too.">
                     <Segmented
@@ -395,7 +443,7 @@ export function SettingsPanel({
                 </>
               )}
 
-              {section === 'tabs' && (
+              {!page && section === 'tabs' && (
                 <>
                   <Row label="New tabs open at">
                     <Segmented
@@ -470,7 +518,7 @@ export function SettingsPanel({
                 </>
               )}
 
-              {section === 'media' && (
+              {!page && section === 'media' && (
                 <>
                   <Row label="Now playing in the sidebar" hint="Controls for media playing in a tab you’re not looking at.">
                     <Toggle checked={settings.showMediaCard} onChange={(showMediaCard) => set({ showMediaCard })} />
@@ -519,7 +567,7 @@ export function SettingsPanel({
                 </>
               )}
 
-              {section === 'search' && (
+              {!page && section === 'search' && (
                 <>
                   <Row label="Search engine">
                     <select value={settings.searchEngine} onChange={(e) => set({ searchEngine: e.target.value as SearchEngineId })}>
@@ -542,7 +590,7 @@ export function SettingsPanel({
                 </>
               )}
 
-              {section === 'downloads' && (
+              {!page && section === 'downloads' && (
                 <>
                   <Row label="Save downloads to" hint={settings.downloadPath || 'Downloads folder'}>
                     <button className="panel-button" onClick={() => zepper.send({ type: 'settings.chooseDownloadFolder' })}>
@@ -565,7 +613,7 @@ export function SettingsPanel({
                 </>
               )}
 
-              {section === 'gestures' && (
+              {!page && section === 'gestures' && (
                 <>
                   <Row label="Swipe between spaces" hint="Two-finger swipe on the sidebar.">
                     <Toggle checked={settings.swipeBetweenSpaces} onChange={(swipeBetweenSpaces) => set({ swipeBetweenSpaces })} />
@@ -582,7 +630,7 @@ export function SettingsPanel({
                 </>
               )}
 
-              {section === 'privacy' && (
+              {!page && section === 'privacy' && (
                 <>
                   <Row
                     label="Block ads and trackers"
@@ -590,35 +638,12 @@ export function SettingsPanel({
                   >
                     <Toggle checked={settings.adblock} onChange={(adblock) => set({ adblock })} />
                   </Row>
-                  {(settings.adblockAllowlist.length > 0 || Object.keys(settings.siteExceptions).length > 0) && (
-                    <div className="settings-row settings-row-stacked">
-                      <div className="settings-row-text">
-                        <div className="settings-row-label">Sites with protections off</div>
-                        <div className="settings-row-hint">Change them from the lock icon on the site, or turn them all back on here.</div>
-                      </div>
-                      <SiteChips
-                        items={[...new Set([...settings.adblockAllowlist, ...Object.keys(settings.siteExceptions)])]}
-                        site={(domain) => domain}
-                        chip={(domain) => {
-                          const off = settings.adblockAllowlist.includes(domain)
-                            ? 'all'
-                            : (settings.siteExceptions[domain] ?? []).map((key) => PROTECTIONS.find((p) => p.key === key)?.label).join(', ')
-                          return (
-                            <span key={domain} className="site-chip" title={`Off: ${off}`}>
-                              {domain}
-                              <span className="site-chip-detail">{off === 'all' ? 'all off' : off}</span>
-                              <button
-                                title={`Turn protections back on for ${domain}`}
-                                onClick={() => zepper.send({ type: 'site.resetProtections', domain })}
-                              >
-                                <IconClose size={9} />
-                              </button>
-                            </span>
-                          )
-                        }}
-                      />
-                    </div>
-                  )}
+                  <SiteListLink
+                    label="Sites with protections off"
+                    hint="Sites you turned protections off for, from the lock icon. Turn them back on here."
+                    count={protectionsOff(settings).length}
+                    onOpen={() => openPage('protectionsOff')}
+                  />
                   <Row label="Hide cookie banners" hint="Hides cookie consent pop-ups and other annoyances, using uBlock Origin’s lists.">
                     <Toggle checked={settings.hideCookieBanners} onChange={(hideCookieBanners) => set({ hideCookieBanners })} />
                   </Row>
@@ -664,7 +689,12 @@ export function SettingsPanel({
                   >
                     <Toggle checked={settings.blockPopups} onChange={(blockPopups) => set({ blockPopups })} />
                   </Row>
-                  <SitePermissionsRow sites={sitePermissions} />
+                  <SiteListLink
+                    label="Site permissions"
+                    hint="What you’ve allowed or blocked for each site (camera, microphone, location, notifications, pop-ups)."
+                    count={sitePermissions.length}
+                    onOpen={() => openPage('sitePermissions')}
+                  />
                   <SystemAccessRows access={systemAccess} />
                   <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
                     <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
@@ -699,11 +729,13 @@ export function SettingsPanel({
                 </>
               )}
 
-              {section === 'passwords' && <PasswordsSettings settings={settings} />}
+              {!page && section === 'passwords' && (
+                <PasswordsSettings settings={settings} onOpenNeverSaved={() => openPage('neverSaved')} />
+              )}
 
-              {section === 'extensions' && <ExtensionsSettings settings={settings} />}
+              {!page && section === 'extensions' && <ExtensionsSettings settings={settings} />}
 
-              {section === 'shortcuts' && (
+              {!page && section === 'shortcuts' && (
                 <>
                   <div className="shortcut-list">
                     {SHORTCUTS.map(([label, keys]) => (
@@ -836,43 +868,25 @@ function CheckButton({ onClick }: { onClick: () => void }): React.JSX.Element {
   )
 }
 
-/** Settings › Privacy: sites you've allowed or blocked something for, each resettable. */
-function SitePermissionsRow({ sites }: { sites: SiteDecisions[] }): React.JSX.Element {
-  const summary = (site: SiteDecisions): string => {
-    const named = (state: 'allow' | 'block'): string[] => site.decisions.filter((d) => d.state === state).map((d) => d.label)
-    const allowed = named('allow')
-    const blocked = named('block')
-    return [allowed.length ? `${allowed.join(', ')} allowed` : '', blocked.length ? `${blocked.join(', ')} blocked` : '']
-      .filter(Boolean)
-      .join(' · ')
-  }
-  return (
-    <div className="settings-row settings-row-stacked">
-      <div className="settings-row-text">
-        <div className="settings-row-label">Site permissions</div>
-        <div className="settings-row-hint">
-          {sites.length
-            ? 'What you’ve allowed or blocked for each site. Change one from the site’s lock icon, or reset a site to be asked again.'
-            : 'Sites you allow or block the camera, microphone, location, notifications or pop-ups for show up here.'}
-        </div>
-      </div>
-      {sites.length > 0 && (
-        <SiteChips
-          items={sites}
-          site={(site) => site.host}
-          chip={(site) => (
-            <span key={site.origin} className="site-chip" title={summary(site)}>
-              {site.host}
-              <span className="site-chip-detail">{summary(site)}</span>
-              <button title={`Reset ${site.host}`} onClick={() => zepper.send({ type: 'site.resetPermissions', origin: site.origin })}>
-                <IconClose size={9} />
-              </button>
-            </span>
-          )}
-        />
-      )}
-    </div>
-  )
+/** What's allowed and blocked for a site, in a line ("Camera, Microphone allowed · Notifications blocked"). */
+function permissionSummary(site: SiteDecisions): string {
+  const named = (state: 'allow' | 'block'): string[] => site.decisions.filter((d) => d.state === state).map((d) => d.label)
+  const allowed = named('allow')
+  const blocked = named('block')
+  return [allowed.length ? `${allowed.join(', ')} allowed` : '', blocked.length ? `${blocked.join(', ')} blocked` : '']
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/** Sites with protections off: every one (from the lock icon's main switch), or some. */
+function protectionsOff(settings: Settings): SiteListItem[] {
+  return [...new Set([...settings.adblockAllowlist, ...Object.keys(settings.siteExceptions)])].map((domain) => ({
+    key: domain,
+    site: domain,
+    detail: settings.adblockAllowlist.includes(domain)
+      ? 'All protections off'
+      : `Off: ${(settings.siteExceptions[domain] ?? []).map((key) => PROTECTIONS.find((p) => p.key === key)?.label).join(', ')}`
+  }))
 }
 
 const ACCESS_LABELS: [keyof SystemAccess, string, string][] = [

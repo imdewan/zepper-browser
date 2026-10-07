@@ -4,14 +4,14 @@ import type { ImportResult, ImportSource, LoginSummary, VaultReplies } from '@sh
 import { zepper } from '../bridge'
 import { IconClose, IconCopy, IconKey, IconPasskey, IconPlus, IconSearch } from '../icons'
 import { cx } from '../util'
-import { SiteChips } from './SiteChips'
+import { SiteListLink } from './SiteListPage'
 import { Toggle } from './Toggle'
 
 /**
  * Settings › Passwords: Zepper's password manager. Saved passwords (search, show with Touch ID,
  * copy, edit, delete), passkeys, importing from other browsers and password exports, and exporting.
  */
-export function PasswordsSettings({ settings }: { settings: Settings }): React.JSX.Element {
+export function PasswordsSettings({ settings, onOpenNeverSaved }: { settings: Settings; onOpenNeverSaved: () => void }): React.JSX.Element {
   const [data, setData] = useState<VaultReplies['list'] | null>(null)
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState<string | null>(null)
@@ -150,29 +150,12 @@ export function PasswordsSettings({ settings }: { settings: Settings }): React.J
         </>
       )}
 
-      {settings.neverSavePasswords.length > 0 && (
-        <div className="settings-row settings-row-stacked">
-          <div className="settings-row-text">
-            <div className="settings-row-label">Never saved for</div>
-            <div className="settings-row-hint">Zepper doesn’t offer to save passwords on these sites.</div>
-          </div>
-          <SiteChips
-            items={settings.neverSavePasswords}
-            site={(domain) => domain}
-            chip={(domain) => (
-              <span key={domain} className="site-chip">
-                {domain}
-                <button
-                  title={`Offer to save passwords on ${domain} again`}
-                  onClick={() => set({ neverSavePasswords: settings.neverSavePasswords.filter((d) => d !== domain) })}
-                >
-                  <IconClose size={9} />
-                </button>
-              </span>
-            )}
-          />
-        </div>
-      )}
+      <SiteListLink
+        label="Never saved for"
+        hint="Sites where Zepper doesn’t offer to save passwords."
+        count={settings.neverSavePasswords.length}
+        onOpen={onOpenNeverSaved}
+      />
     </>
   )
 }

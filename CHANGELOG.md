@@ -14,7 +14,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 - Swiping back and forward works like Chrome's: the page stays still while an arrow slides in from its edge with your fingers, a ring filling as you go; once letting go will navigate, the circle fills in the space's colour. Letting go then goes straight there, without the page lurching and springing back as it did.
 - In the command bar, → (at the end of what you've typed) puts the highlighted suggestion in the field without going there, so you can keep editing it: a search's words, or a page's address. Tab and Shift-Tab step through suggestions, as in Chrome and Firefox.
 - Settings keeps its close button and the page's title in a bar at the top that stays put while the page scrolls.
-- Lists of sites in Settings (site permissions, sites with protections off, sites passwords are never saved for) stay short as they grow: sites in A–Z order, the first six with Show all, and a search field once there are more than ten.
+- Lists of sites in Settings (site permissions, sites with protections off, sites passwords are never saved for) have pages of their own, opened from a row that says how many sites there are: searchable, in A–Z order, each site with a button to undo what's set. Esc goes back out of one.
 - Chrome's dotted inactive ring only marks tabs that were unloaded to free memory (by Memory Saver, or Unload): tabs that simply haven't been opened since Zepper started look as usual.
 - A tab playing sound shows its bars in the text colour, so they read on any theme (they were the space's accent colour, and hard to see on some), a little larger. Pointing at the tab (or an Essential) shows a speaker instead, so it's clear a click mutes it.
 
