@@ -107,12 +107,6 @@ export function App(): React.JSX.Element | null {
         ) : (
           <ContentCard tab={activeTab} isPrivate={snapshot.kind === 'private'} quiet={snapshot.paletteOpen} />
         )}
-        {snapshot.belowNotch && !snapshot.fullscreen && (
-          <>
-            <div className="notch-corner left" />
-            <div className="notch-corner right" />
-          </>
-        )}
       </div>
     </MotionConfig>
   )

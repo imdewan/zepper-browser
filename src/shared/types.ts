@@ -167,11 +167,6 @@ export interface Snapshot {
   compact: boolean
   focused: boolean
   fullscreen: boolean
-  /**
-   * The window is in full screen on a display with a camera notch: macOS keeps a black band across
-   * the top there (the menu bar shows in it) and puts the window below it, corners square.
-   */
-  belowNotch: boolean
   adblockEnabled: boolean
   settings: Settings
   /** Window type: the main window, a temporary window, or a private window. */

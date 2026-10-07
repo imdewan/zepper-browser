@@ -132,7 +132,6 @@ function createMock(): ZepperApi {
     compact: false,
     focused: true,
     fullscreen: false,
-    belowNotch: false,
     adblockEnabled: true,
     settings: DEFAULT_SETTINGS,
     kind: 'main',
