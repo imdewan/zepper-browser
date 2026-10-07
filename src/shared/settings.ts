@@ -18,6 +18,9 @@ export type PipSize = 'small' | 'medium' | 'large'
  */
 export const PEEK_AREA_EXTRA = 40
 
+/** The peek card's hover area runs this far past the sidebar: it leaves once the pointer is beyond. */
+export const PEEK_HOVER_EXTRA = 12
+
 /** Share of the screen's width the floating player starts at. */
 export const PIP_WIDTH: Record<PipSize, number> = { small: 0.18, medium: 0.25, large: 0.33 }
 

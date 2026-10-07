@@ -39,7 +39,15 @@ import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { PEEK_AREA_EXTRA, PIP_WIDTH, PROTECTIONS, type MemorySaverMode, type Protection, type Settings } from '@shared/settings'
+import {
+  PEEK_AREA_EXTRA,
+  PEEK_HOVER_EXTRA,
+  PIP_WIDTH,
+  PROTECTIONS,
+  type MemorySaverMode,
+  type Protection,
+  type Settings
+} from '@shared/settings'
 import { DEFAULT_THEME, themeAccent } from '@shared/theme'
 import {
   IPC,
@@ -565,9 +573,8 @@ export class Browser {
   /** The mode the overlay itself last asked for (it knows what it's showing). */
   private overlayReported: OverlayMode = 'hidden'
   private peekCheck: NodeJS.Timeout | null = null
-  /** Following the pointer while it's on the traffic lights over the peek card. */
-  private peekLightsWatch: NodeJS.Timeout | null = null
-  private trafficLightsShown = false
+  /** Following the pointer while it's over the peek card where the card can't see it. */
+  private peekWatch: NodeJS.Timeout | null = null
   /** After a swipe navigates, another from the same gesture's momentum is ignored. */
   private swipeCooldown: { tabId: string; until: number } | null = null
   /** The tab whose swipe is in progress. */
@@ -1690,7 +1697,7 @@ export class Browser {
       case 'ui.peekSidebar':
         return this.setPeek(command.show)
       case 'ui.peekLeft':
-        return this.holdPeekOverLights()
+        return this.holdPeekWhilePointerOnCard()
       case 'ui.peekLights':
         // Only for a left-hand peek: with the sidebar on the right, the lights would sit on the page.
         if (!this.compact || !this.peeking || this.settings.sidebarPosition === 'right') return
@@ -4449,11 +4456,9 @@ export class Browser {
     if (this.win.isFullScreen()) {
       this.win.setWindowButtonVisibility(true)
       this.win.setWindowButtonPosition(null)
-      this.trafficLightsShown = false
       return
     }
     this.win.setWindowButtonVisibility(visible)
-    this.trafficLightsShown = visible
     if (!visible) return
     const inset = this.peeking ? PEEK_INSET : 0
     this.win.setWindowButtonPosition({ x: TRAFFIC_LIGHTS.x + inset, y: TRAFFIC_LIGHTS.y + inset })
@@ -4466,42 +4471,41 @@ export class Browser {
     return { x: cursor.x - content.x, y: cursor.y - content.y }
   }
 
-  /** The pointer's on the traffic lights in the peek card's corner (with a little room around them). */
-  private onPeekLights(): boolean {
-    if (!this.peeking || !this.trafficLightsShown) return false
+  /** The pointer's over the peek card's hover area (the card, and a little past it). */
+  private pointerOnPeekCard(): boolean {
+    if (!this.peeking || this.overlayMode !== 'peek') return false
     const { x, y } = this.pointer()
-    const left = TRAFFIC_LIGHTS.x + PEEK_INSET
-    const top = TRAFFIC_LIGHTS.y + PEEK_INSET
-    return x >= left - 8 && x <= left + 72 && y >= top - 10 && y <= top + 26
+    const [width, height] = this.win.getContentSize()
+    const reach = this.sidebarWidth + PEEK_HOVER_EXTRA
+    const across = this.settings.sidebarPosition === 'right' ? x >= width - reach && x < width : x >= 0 && x < reach
+    return across && y >= 0 && y < height
   }
 
   /**
-   * The pointer left the peek card: if it's on the traffic lights, the card stays while it's there.
-   * Moving from them back onto the card is the card's business; anywhere else, the card leaves.
+   * The card says the pointer left it, but the pointer can still be over it: on the traffic lights
+   * (macOS's own buttons) or the card's top row (where macOS drags the window), the card can't see
+   * it. Then it stays until the pointer really leaves.
    */
-  private holdPeekOverLights(): void {
-    if (this.peekLightsWatch || !this.onPeekLights()) return
+  private holdPeekWhilePointerOnCard(): void {
+    if (this.peekWatch || !this.pointerOnPeekCard()) return
     this.emit({ type: 'peek.hold' }, 'overlay')
-    this.peekLightsWatch = setInterval(() => {
-      if (!this.peeking || this.win.isDestroyed()) return this.stopPeekLightsWatch()
-      if (this.onPeekLights()) return
-      this.stopPeekLightsWatch()
-      const { x, y } = this.pointer()
-      const [width, height] = this.win.getContentSize()
-      const onCard = x >= 0 && x < this.sidebarWidth + PEEK_AREA_EXTRA && x < width && y >= 0 && y < height
-      if (!onCard) this.emit({ type: 'peek.leave' }, 'overlay')
+    this.peekWatch = setInterval(() => {
+      if (!this.peeking || this.win.isDestroyed()) return this.stopPeekWatch()
+      if (this.pointerOnPeekCard()) return
+      this.stopPeekWatch()
+      this.emit({ type: 'peek.leave' }, 'overlay')
     }, 80)
   }
 
-  private stopPeekLightsWatch(): void {
-    if (this.peekLightsWatch) clearInterval(this.peekLightsWatch)
-    this.peekLightsWatch = null
+  private stopPeekWatch(): void {
+    if (this.peekWatch) clearInterval(this.peekWatch)
+    this.peekWatch = null
   }
 
   private endPeek(): void {
     if (this.peekCheck) clearTimeout(this.peekCheck)
     this.peekCheck = null
-    this.stopPeekLightsWatch()
+    this.stopPeekWatch()
     this.peeking = false
     this.showTrafficLights(!this.compact)
   }

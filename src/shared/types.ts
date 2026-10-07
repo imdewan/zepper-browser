@@ -603,8 +603,8 @@ export type Command =
   | { type: 'ui.overlayCorner'; width: number; height: number }
   | { type: 'ui.peekSidebar'; show: boolean }
   /**
-   * The pointer left the peek card. The traffic lights are macOS's own buttons over the card, so the
-   * card can't tell they're under the pointer: if they are, it stays until the pointer moves off them.
+   * The pointer left the peek card, as far as the card can tell. Over the traffic lights or the top
+   * row (where macOS takes the pointer to drag the window) it's still on the card, which then stays.
    */
   | { type: 'ui.peekLeft' }
   | { type: 'ui.dismissOverlay' }
@@ -661,9 +661,9 @@ export type UiEvent =
   /** The page went away before you chose. */
   | { type: 'share.close'; id: number }
   | { type: 'peek.show' }
-  /** The pointer is on the traffic lights: the peek card stays. */
+  /** The pointer's still over the peek card where the card can't see it: the card stays. */
   | { type: 'peek.hold' }
-  /** The pointer went from the traffic lights off the card: it leaves, as when the pointer leaves it. */
+  /** The pointer went from there off the card: it leaves, as when the pointer leaves it. */
   | { type: 'peek.leave' }
   | { type: 'overlay.dismiss' }
 

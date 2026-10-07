@@ -10,7 +10,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
-- The floating sidebar (compact mode) closed when you moved the pointer onto its traffic lights.
+- The floating sidebar (compact mode) closed when you moved the pointer onto its traffic lights, or the empty part of its top row.
 
 ## [0.1.4] - 2026-10-07
 

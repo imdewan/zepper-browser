@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
+import { PEEK_HOVER_EXTRA } from '@shared/settings'
 import type { Snapshot, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
 import { useUiEvents } from '../useSnapshot'
@@ -36,7 +37,7 @@ export function Peek({ snapshot, onHide, onShow }: PeekProps): React.JSX.Element
     }, NEVER_ENTERED_MS)
     return () => window.clearTimeout(timer.current)
   }, [])
-  // Leaving: shortly after, unless the pointer comes back (or main says it's on the traffic lights).
+  // Leaving: shortly after, unless the pointer comes back (or main says it's still over the card).
   const leave = useCallback((): void => {
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
@@ -60,7 +61,7 @@ export function Peek({ snapshot, onHide, onShow }: PeekProps): React.JSX.Element
   return (
     <motion.div
       className={`peek-zone${right ? ' right' : ''}`}
-      style={{ width: snapshot.sidebarWidth + 12 }}
+      style={{ width: snapshot.sidebarWidth + PEEK_HOVER_EXTRA }}
       initial={{ x: offscreen }}
       animate={{ x: 0 }}
       exit={{ x: offscreen, transition: { type: 'spring', bounce: 0, duration: 0.22 } }}
