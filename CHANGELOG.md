@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-08
+
 ### Added
 
 - In full screen, where the traffic lights come down with the menu bar instead, a sidebar button takes their place at the top of the sidebar, beside Extensions.
@@ -118,7 +120,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/imdewan/zepper-browser/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/imdewan/zepper-browser/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/imdewan/zepper-browser/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/imdewan/zepper-browser/compare/v0.1.1...v0.1.2
