@@ -78,6 +78,31 @@
   -webkit-app-region: no-drag;
 }
 
+/*
+ * Full screen below a camera notch: macOS puts a black band across the top and the window under it,
+ * corners square. Rounding the top corners into the band keeps the window's shape, each corner
+ * following the page's own (its radius plus the gap around it).
+ */
+.notch-corner {
+  --r: calc(var(--radius) + var(--gap));
+  position: absolute;
+  top: 0;
+  width: var(--r);
+  height: var(--r);
+  z-index: 100;
+  pointer-events: none;
+  background: radial-gradient(circle at 100% 100%, transparent calc(var(--r) - 0.75px), #000 calc(var(--r) + 0.25px));
+}
+
+.notch-corner.left {
+  left: 0;
+}
+
+.notch-corner.right {
+  right: 0;
+  transform: scaleX(-1);
+}
+
 .window[data-side='right'] .edge-hotzone {
   left: auto;
   right: 0;

@@ -863,8 +863,14 @@ export class Browser {
     if (this.savedWindow?.maximized) this.win.maximize()
     this.win.on('focus', () => this.broadcast())
     // macOS puts the traffic lights back at their default spot after full screen.
-    this.win.on('enter-full-screen', () => this.showTrafficLights(true))
-    this.win.on('leave-full-screen', () => this.showTrafficLights(!this.compact || this.peeking))
+    this.win.on('enter-full-screen', () => {
+      this.showTrafficLights(true)
+      this.broadcast()
+    })
+    this.win.on('leave-full-screen', () => {
+      this.showTrafficLights(!this.compact || this.peeking)
+      this.broadcast()
+    })
     this.win.on('blur', () => this.broadcast())
     this.win.on('closed', () => this.destroy())
     const onTheme = (): void => this.broadcast()
@@ -5652,6 +5658,14 @@ export class Browser {
     )
   }
 
+  /** In full screen below a notch's black band: on the Mac's own display, starting lower than it does. */
+  private belowNotch(): boolean {
+    if (!this.win || this.win.isDestroyed() || !this.win.isFullScreen()) return false
+    const bounds = this.win.getBounds()
+    const display = screen.getDisplayMatching(bounds)
+    return display.internal && bounds.y > display.bounds.y
+  }
+
   private windowBounds(): Rect {
     const [width, height] = this.win.getContentSize()
     return { x: 0, y: 0, width, height }
@@ -5667,6 +5681,7 @@ export class Browser {
       compact: this.compact,
       focused: this.win?.isFocused() ?? true,
       fullscreen: this.htmlFullscreen,
+      belowNotch: this.belowNotch(),
       adblockEnabled: this.adblock.isEnabled(),
       settings: this.settings,
       kind: this.kind,

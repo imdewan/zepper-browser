@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Changed
+
+- Full screen on a MacBook with a camera notch: the window's top corners round into the black band macOS keeps across the top, instead of meeting it square.
+
 ## [0.1.4] - 2026-10-07
 
 ### Added
