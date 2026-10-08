@@ -132,8 +132,39 @@
   color: var(--text-2);
 }
 
+/* Under the pointer: a lighter highlight (Return goes to the keyboard's row, as in Chrome). */
+.suggestion.hovered {
+  background: var(--hover);
+}
+
 .suggestion.selected {
   background: color-mix(in srgb, var(--accent) 72%, transparent);
+}
+
+/* Takes a page out of your history (⇧Delete does too). */
+.suggestion-remove {
+  flex: none;
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--text-2);
+}
+
+.suggestion-remove:hover {
+  background: var(--element-hover);
+  color: var(--text);
+}
+
+.suggestion.selected .suggestion-remove {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.suggestion.selected .suggestion-remove:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
 }
 
 .suggestion.selected,

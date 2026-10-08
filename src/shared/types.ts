@@ -475,7 +475,8 @@ export type Command =
   | { type: 'tab.activate'; tabId: string }
   | { type: 'tab.close'; tabId: string }
   | { type: 'tab.middleClick'; tabId: string }
-  | { type: 'tab.open'; input: string; where: 'new' | 'current' | 'split' }
+  /** where: as the command bar was opened for, or (with a modifier, as in Chrome) a background tab or a new window. */
+  | { type: 'tab.open'; input: string; where: 'new' | 'current' | 'split' | 'background' | 'window' }
   | { type: 'tab.pin'; tabId: string }
   | { type: 'tab.unpin'; tabId: string }
   | { type: 'tab.addEssential'; tabId: string }

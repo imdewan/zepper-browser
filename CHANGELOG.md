@@ -6,6 +6,15 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
+- The command bar works like Chrome's address bar:
+  - Arrowing to a suggestion shows it in the field (its address, or its search), ready to go to or to edit.
+  - Esc first takes it back, then closes.
+  - The pointer only highlights a row; Return still goes to the one you arrowed to.
+  - Rows open when you let go of the click.
+  - ⌘Return opens in a background tab, ⌥Return in a new tab, ⇧Return in a new window, and ⌃Return adds www. and .com.
+  - Page Up and Page Down jump to the first and last row.
+  - ⇧Delete (or a row's ✕) removes a page from your history.
+  - A middle-click opens a row in the background.
 - Spaces with their own sign-ins now keep their own history, saved passwords and passkeys, downloads list and site permissions too, like separate browser profiles. The command bar, the history page, the downloads panel and Settings show the space you're in. Spaces that already had their own sign-ins keep working: they start with a copy of the passwords and site permissions you had, and earlier history stays with your main profile. **Copy From** brings a space's passwords and site permissions along with its cookies, and deleting a space with its own profile moves its passwords and passkeys to your main profile's spaces rather than deleting them.
 
 ## [0.1.7] - 2026-10-09

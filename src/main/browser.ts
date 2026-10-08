@@ -1912,13 +1912,15 @@ export class Browser {
     }
   }
 
-  private openInput(input: string, where: 'new' | 'current' | 'split'): void {
+  private openInput(input: string, where: 'new' | 'current' | 'split' | 'background' | 'window'): void {
     const url = resolveInput(input)
     // Typed without a scheme and sent to HTTPS: fall back to HTTP if the site has no HTTPS.
     if (/^https:/.test(url) && !/^[a-z][a-z0-9+.-]*:\/\//i.test(input.trim()) && !/\s/.test(input.trim())) {
       this.httpsFirst.add(normalizedUrl(url))
       if (this.httpsFirst.size > 50) this.httpsFirst.delete(this.httpsFirst.values().next().value!)
     }
+    if (where === 'window') return void this.hub.openWindow(this.kind === 'private' ? 'private' : 'blank', url)
+    if (where === 'background') return void this.openTab(url, { background: true })
     const current = this.tab(this.activeTabId)
     if (where === 'split') {
       const tab = makeTab({ kind: 'normal', url, spaceId: this.activeSpaceId })
