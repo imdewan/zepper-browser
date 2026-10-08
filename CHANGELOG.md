@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-08
+
 ### Changed
 
 - The command bar no longer waits for the search engine: your tabs, history and sites show as you type, and the engine's suggestions join below when they arrive (it lagged behind your typing on a slow network, or while pages loaded).
@@ -132,7 +134,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/imdewan/zepper-browser/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/imdewan/zepper-browser/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/imdewan/zepper-browser/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/imdewan/zepper-browser/compare/v0.1.2...v0.1.3
