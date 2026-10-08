@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import type { Rect } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose } from '../icons'
-import { cx } from '../util'
+import { cx, rectOf } from '../util'
 
 export interface CaptureSession {
   page: Rect
@@ -37,7 +37,8 @@ function snap(session: CaptureSession, x: number, y: number): (Rect & { full: Re
 
 /**
  * Capture mode (⇧⌘2): the page dims; hovering highlights an element to capture with a click,
- * dragging selects a region. Visible and Full page capture the whole screen or the whole page.
+ * dragging selects a region. Visible and Full page capture the whole screen or the whole page, and
+ * Portrait frames what's on screen on a background (Portrait Mode).
  */
 export function CaptureOverlay({ session, onDone }: { session: CaptureSession; onDone: () => void }): React.JSX.Element {
   const [hover, setHover] = useState<(Rect & { full?: Rect }) | null>(null)
@@ -53,6 +54,13 @@ export function CaptureOverlay({ session, onDone }: { session: CaptureSession; o
     zepper.send({ type: 'capture.cancel' })
     onDone()
   }
+  const portraitButton = useRef<HTMLButtonElement>(null)
+  /** Portrait Mode: this frame, framed on a background (its popover opens under the button). */
+  const portrait = (): void => {
+    if (!portraitButton.current) return
+    zepper.send({ type: 'capture.portrait', anchor: rectOf(portraitButton.current) })
+    onDone()
+  }
 
   useEffect(() => {
     root.current?.focus()
@@ -60,6 +68,7 @@ export function CaptureOverlay({ session, onDone }: { session: CaptureSession; o
       if (e.key === 'Escape') cancel()
       else if (e.key === 'Enter' || e.key.toLowerCase() === 'v') take('visible')
       else if (e.key.toLowerCase() === 'f' && session.scrolls) take('full')
+      else if (e.key.toLowerCase() === 'p') portrait()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -129,6 +138,9 @@ export function CaptureOverlay({ session, onDone }: { session: CaptureSession; o
             Full page <kbd>F</kbd>
           </button>
         )}
+        <button ref={portraitButton} onClick={portrait} title="Framed on a background, to share">
+          Portrait <kbd>P</kbd>
+        </button>
         <button className="capture-cancel" title="Cancel (Esc)" onClick={cancel}>
           <IconClose size={12} />
         </button>

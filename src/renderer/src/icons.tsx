@@ -1,6 +1,5 @@
 import type { SVGProps } from 'react'
 import {
-  AppWindow,
   Camera,
   CircleArrowUp,
   CodeXml,
@@ -13,8 +12,6 @@ import {
   Mic,
   Monitor,
   MonitorUp,
-  PanelBottom,
-  PanelRight,
   Smartphone,
   SquareTerminal,
   UserRoundKey,
@@ -346,7 +343,3 @@ export const IconSplit = lucide(Columns2)
 export const IconInfo = lucide(Info)
 /** Developer Mode. */
 export const IconCode = lucide(CodeXml, 2)
-/** DevTools docked beside the page, below it, or in a window of their own. */
-export const IconDockRight = lucide(PanelRight)
-export const IconDockBottom = lucide(PanelBottom)
-export const IconOwnWindow = lucide(AppWindow)

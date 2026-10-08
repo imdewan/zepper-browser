@@ -139,9 +139,6 @@ export interface Pane {
   page: Rect
   /** The developer bar above the page (Developer Mode). */
   bar?: Rect
-  /** DevTools, docked beside or below the page, and the bar over them (dock side, own window, close). */
-  devtools?: Rect
-  devtoolsHeader?: Rect
 }
 
 /** A download, for the downloads panel. */
@@ -214,8 +211,8 @@ export interface Snapshot {
   splits: Split[]
   /** Where each visible web view sits in the window; more than one while a split is shown. */
   panes: Pane[]
-  /** Tabs with DevTools open (docked, or in their own window), and the panel the developer bar last showed. */
-  devtools: { tabId: string; panel: DevToolsPanel; window: boolean }[]
+  /** Tabs with DevTools open, and the panel the developer bar last showed (for its buttons). */
+  devtools: { tabId: string; panel: DevToolsPanel }[]
 }
 
 /** The DevTools panels the developer bar opens (inspect: Elements, picking an element on the page). */
@@ -557,15 +554,13 @@ export type Command =
   | { type: 'developer.portrait'; tabId: string; anchor: Rect }
   /** Portrait Mode's finished picture (a PNG data URL): onto the clipboard, then as a capture. */
   | { type: 'developer.portraitDone'; png: string; scale: number }
-  /** DevTools docked beside a tab's page, on a panel; the same panel again closes them. */
+  /** A tab's DevTools on a panel; the same panel again closes them. */
   | { type: 'devtools.show'; tabId: string; panel: DevToolsPanel }
   | { type: 'devtools.close'; tabId: string }
-  /** Where DevTools open (for this tab now, and from then on). */
-  | { type: 'devtools.dock'; tabId: string; dock: 'right' | 'bottom' | 'window' }
-  /** Docked DevTools' size, dragging the divider: their width beside the page, or height below it. */
-  | { type: 'devtools.resize'; size: number }
   | { type: 'capture.take'; mode: 'visible' | 'full' | 'area'; rect?: Rect }
   | { type: 'capture.cancel' }
+  /** Portrait Mode from the capture bar: the frame being captured, framed (its popover under the button). */
+  | { type: 'capture.portrait'; anchor: Rect }
   | { type: 'capture.save' }
   | { type: 'capture.reveal' }
   | { type: 'capture.retake' }

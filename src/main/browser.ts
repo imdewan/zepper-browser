@@ -104,12 +104,6 @@ import { CAPTURE_TARGETS_SCRIPT, captureArea, captureFullPage, pngWithDensity, t
 const TITLEBAR_STRIP = 34
 /** Developer Mode's bar, along the top of the page: its full address and developer tools. */
 const DEV_BAR_HEIGHT = 40
-/** Docked DevTools: the least they and the page beside (or above) them may have, and their own bar. */
-const MIN_DEVTOOLS_WIDTH = 300
-const MIN_DEVTOOLS_HEIGHT = 160
-const MIN_PAGE_BESIDE_DEVTOOLS = 320
-const MIN_PAGE_ABOVE_DEVTOOLS = 160
-const DEVTOOLS_HEADER_HEIGHT = 30
 /** Where the traffic lights sit in the sidebar's top row. */
 const TRAFFIC_LIGHTS = { x: 17, y: 17 }
 /** The compact-mode peek card's inset from the window edge (overlay.css .peek-card). */
@@ -632,13 +626,8 @@ export class Browser {
   private folders: Folder[] = []
   /** Capture mode's frozen frame of the page (see startCapture). */
   private captureFrame: { tabId: string; image: Electron.NativeImage; page: Rect; zoom: number; scroll: [number, number] } | null = null
-  /**
-   * Tabs with DevTools open: docked (Zepper's view for them, beside or below the page) or in a window
-   * of their own (view null), and the panel the developer bar last asked for.
-   */
-  private readonly devtools = new Map<string, { view: WebContentsView | null; panel: DevToolsPanel }>()
-  /** Checks DevTools are still open while any are (their own shortcuts can close them unannounced). */
-  private devtoolsWatch: NodeJS.Timeout | null = null
+  /** Tabs with DevTools open, and the panel the developer bar last asked for (for its buttons). */
+  private readonly devtools = new Map<string, DevToolsPanel>()
   /** The pane layout last put on screen, so a change (a page becoming a site you're building, say) lays out again. */
   private panesKey = ''
   /** The last capture, for Save, Show in Finder and dragging out. */
@@ -995,8 +984,7 @@ export class Browser {
         updateSettings: (patch) => this.settingsStore.update(patch),
         pageBounds: (wc) => {
           const id = this.tabByWebContents.get(wc.id)
-          const view = id && this.attached.has(id) ? this.views.get(id) : undefined
-          return view ? view.getBounds() : null
+          return id && this.attached.has(id) ? this.pageRect(id) : null
         },
         ownsVisiblePage: (wc) => {
           const id = this.tabByWebContents.get(wc.id)
@@ -1034,7 +1022,8 @@ export class Browser {
         const layers = [{ name: 'chrome', webContents: this.win.webContents, bounds: this.windowBounds() }]
         for (const id of this.attached) {
           const view = this.views.get(id)
-          if (view) layers.push({ name: `tab-${layers.length}`, webContents: view.webContents, bounds: view.getBounds() })
+          if (view)
+            layers.push({ name: `tab-${layers.length}`, webContents: view.webContents, bounds: this.pageRect(id) ?? view.getBounds() })
         }
         if (this.overlayMode !== 'hidden') {
           layers.push({ name: 'overlay', webContents: this.overlay.webContents, bounds: this.overlay.getBounds() })
@@ -1460,9 +1449,7 @@ export class Browser {
     }
     for (const view of this.views.values()) close(view.webContents)
     this.views.clear()
-    for (const { view } of this.devtools.values()) close(view?.webContents)
     this.devtools.clear()
-    if (this.devtoolsWatch) clearInterval(this.devtoolsWatch)
     this.tabByWebContents.clear()
     for (const popup of this.popups.keys()) if (!popup.isDestroyed()) popup.destroy()
     this.popups.clear()
@@ -1671,17 +1658,7 @@ export class Browser {
         return this.showDevTools(command.tabId, command.panel)
       case 'devtools.close':
         return this.closeDevTools(command.tabId)
-      case 'devtools.dock':
-        return this.dockDevTools(command.tabId, command.dock)
-      case 'devtools.resize': {
-        const size = Math.round(Number(command.size) || 0)
-        if (size <= 0) return
-        return this.settingsStore.update(
-          this.settings.devtoolsDock === 'bottom'
-            ? { devtoolsHeight: Math.max(MIN_DEVTOOLS_HEIGHT, size) }
-            : { devtoolsWidth: Math.max(MIN_DEVTOOLS_WIDTH, size) }
-        )
-      }
+
       case 'ui.toggleCompact':
         return this.toggleCompact()
       case 'ui.siteInfo':
@@ -1710,6 +1687,7 @@ export class Browser {
         return this.hub.makeDefaultBrowser()
       case 'capture.take':
       case 'capture.cancel':
+      case 'capture.portrait':
       case 'capture.save':
       case 'capture.reveal':
       case 'capture.retake':
@@ -1916,10 +1894,7 @@ export class Browser {
       prev.sidebarPosition !== next.sidebarPosition ||
       prev.developerMode !== next.developerMode ||
       prev.developerSites !== next.developerSites ||
-      prev.notDeveloperSites !== next.notDeveloperSites ||
-      prev.devtoolsDock !== next.devtoolsDock ||
-      prev.devtoolsWidth !== next.devtoolsWidth ||
-      prev.devtoolsHeight !== next.devtoolsHeight
+      prev.notDeveloperSites !== next.notDeveloperSites
     if (layoutChanged && prev) this.animateLayout()
     else if (layoutChanged) this.layout()
     this.broadcast()
@@ -2301,8 +2276,8 @@ export class Browser {
     const view = this.views.get(id) ?? null
     if (this.pip?.activeTabId === id) this.pip.exit()
     this.docPips.get(id)?.close()
-    // Docked DevTools are this window's: they close (the page goes on in the other window).
-    this.closeDevTools(id)
+    // The page takes its DevTools along; this window stops keeping track of them.
+    this.devtools.delete(id)
     const wasActive = this.activeTabId === id
     const splitSibling = this.splitOf(id)?.tabIds.find((other) => other !== id)
     this.leaveSplit(id)
@@ -3324,7 +3299,7 @@ export class Browser {
     const view = tab && this.views.get(tab.id)
     const wc = view?.webContents
     if (!tab || !view || !wc || wc.isDestroyed() || !/^(https?|file):/.test(wc.getURL())) return
-    const page = view.getBounds()
+    const page = this.pageRect(tab.id) ?? view.getBounds()
     const zoom = wc.getZoomFactor()
     const [image, info] = await Promise.all([
       wc.capturePage(),
@@ -3431,6 +3406,11 @@ export class Browser {
       case 'capture.cancel':
         this.captureFrame = null
         return
+      case 'capture.portrait': {
+        const frame = this.captureFrame
+        this.captureFrame = null
+        return void (frame && this.openPortrait(frame.tabId, command.anchor, frame.image))
+      }
       case 'capture.retake':
         this.lastCapture = null
         return void this.startCapture()
@@ -3804,11 +3784,12 @@ export class Browser {
     if (response === 1 && !recovered.signal.aborted && !wc.isDestroyed()) wc.forcefullyCrashRenderer()
   }
 
-  /** ⌥⌘I: DevTools for the page you're on, docked or in their own window (Settings: where you last put them). */
+  /** ⌥⌘I: DevTools for the page you're on. */
   toggleDevTools(): void {
     const id = this.activeTabId
-    if (!id || !this.views.get(id)) return
-    if (this.devtools.has(id)) this.closeDevTools(id)
+    const page = id ? this.views.get(id)?.webContents : undefined
+    if (!id || !page || page.isDestroyed()) return
+    if (page.isDevToolsOpened()) this.closeDevTools(id)
     else this.showDevTools(id, 'elements', false)
   }
 
@@ -3828,109 +3809,41 @@ export class Browser {
   }
 
   /**
-   * Opens a tab's DevTools on a panel: docked beside or below the page in Zepper's own view (Electron
-   * would give them a window), or in a window of their own if that's where you put them. From the
-   * developer bar, the panel that's already showing closes them again (`toggle`); Inspect always
-   * picks an element on the page.
+   * Opens a tab's DevTools on a panel, docked in the page's own view as in Chrome (with its device
+   * toolbar, and its own menu to dock them elsewhere or in a window). Electron remembers where you
+   * last put them; the first time, they're on the right. From the developer bar, the panel that's
+   * already showing closes them again (`toggle`); Inspect always picks an element on the page.
    */
   private showDevTools(tabId: string, panel: DevToolsPanel, toggle = true): void {
     const page = this.views.get(tabId)?.webContents
     if (!page || page.isDestroyed()) return
-    const open = this.devtools.get(tabId)
-    if (open) {
-      if (toggle && open.panel === panel && panel !== 'inspect') return this.closeDevTools(tabId)
-      open.panel = panel
-      const frontend = open.view?.webContents ?? page.devToolsWebContents
-      if (frontend) void showDevToolsPanel(frontend, panel)
+    if (page.isDevToolsOpened()) {
+      if (toggle && this.devtools.get(tabId) === panel && panel !== 'inspect') return this.closeDevTools(tabId)
+      this.devtools.set(tabId, panel)
+      if (page.devToolsWebContents) void showDevToolsPanel(page.devToolsWebContents, panel)
       return this.broadcast()
     }
-    if (this.settings.devtoolsDock === 'window') {
-      this.devtools.set(tabId, { view: null, panel })
-      page.once('devtools-opened', () => {
-        if (page.devToolsWebContents) void showDevToolsPanel(page.devToolsWebContents, panel)
-      })
-      page.openDevTools({ mode: 'detach' })
-    } else {
-      const view = new WebContentsView()
-      view.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#28292c' : '#ffffff')
-      this.devtools.set(tabId, { view, panel })
-      page.setDevToolsWebContents(view.webContents)
-      page.openDevTools({ mode: 'detach', activate: false })
-      view.webContents.once('did-finish-load', () => void showDevToolsPanel(view.webContents, panel))
-      // DevTools' own shortcuts for themselves would close them behind Zepper's back: Zepper's do it.
-      view.webContents.on('before-input-event', (event, input) => {
-        if (input.type !== 'keyDown' || !input.meta || !input.alt || input.shift || input.control) return
-        const action = { KeyI: () => this.toggleDevTools(), KeyJ: () => this.showConsole(), KeyC: () => this.inspectElementMode() }[
-          input.code
-        ]
-        if (!action) return
-        event.preventDefault()
-        action()
-      })
-      if (this.attached.has(tabId)) this.win.contentView.addChildView(view)
-      this.syncAttachedViews()
+    this.devtools.set(tabId, panel)
+    page.once('devtools-opened', () => {
+      if (page.devToolsWebContents) void showDevToolsPanel(page.devToolsWebContents, panel)
+    })
+    if (this.settings.devtoolsPlaced) page.openDevTools()
+    else {
+      page.openDevTools({ mode: 'right' })
+      this.settingsStore.update({ devtoolsPlaced: true })
     }
-    const gone = (): void => this.forgetDevTools(tabId)
-    page.once('devtools-closed', gone)
-    page.once('destroyed', gone)
-    this.watchDevTools()
     this.broadcast()
   }
 
   private closeDevTools(tabId: string): void {
-    if (!this.devtools.has(tabId)) return
     const page = this.views.get(tabId)?.webContents
-    if (page && !page.isDestroyed()) page.closeDevTools()
-    this.forgetDevTools(tabId)
-  }
-
-  private forgetDevTools(tabId: string): void {
-    const open = this.devtools.get(tabId)
-    if (!open) return
-    this.devtools.delete(tabId)
-    const view = open.view
-    if (view) {
-      if (!this.win.isDestroyed()) this.win.contentView.removeChildView(view)
-      if (!view.webContents.isDestroyed()) view.webContents.close()
-    }
-    if (this.windowClosed) return
-    this.layout()
-    this.broadcast()
-  }
-
-  /**
-   * While DevTools are open in a window of their own, notices them closed from it (its own close).
-   * (Docked ones are Zepper's view; Electron doesn't count those as open, and they close only through Zepper.)
-   */
-  private watchDevTools(): void {
-    if (this.devtoolsWatch) return
-    this.devtoolsWatch = setInterval(() => {
-      for (const [id, { view }] of [...this.devtools]) {
-        const page = this.views.get(id)?.webContents
-        if (!page || page.isDestroyed() || (!view && !page.isDevToolsOpened())) this.forgetDevTools(id)
-      }
-      if (this.devtools.size === 0 && this.devtoolsWatch) {
-        clearInterval(this.devtoolsWatch)
-        this.devtoolsWatch = null
-      }
-    }, 1000)
-  }
-
-  /** Where DevTools go (from their bar): docked beside or below the page, or a window of their own. Remembered. */
-  private dockDevTools(tabId: string, dock: 'right' | 'bottom' | 'window'): void {
-    const open = this.devtools.get(tabId)
-    const wasWindow = (open && !open.view) || this.settings.devtoolsDock === 'window'
-    this.settingsStore.update({ devtoolsDock: dock })
-    // Between docked and a window, they open again where they're going (the docked sides just lay out again).
-    if (open && wasWindow !== (dock === 'window')) {
-      this.closeDevTools(tabId)
-      setTimeout(() => this.showDevTools(tabId, open.panel, false), 50)
-    }
+    if (page && !page.isDestroyed() && page.isDevToolsOpened()) page.closeDevTools()
+    if (this.devtools.delete(tabId)) this.broadcast()
   }
 
   /** Inspect Element (the page's menu): the element in DevTools. */
   private inspectAt(tabId: string, wc: WebContents, x: number, y: number): void {
-    if (this.devtools.has(tabId)) return wc.inspectElement(x, y)
+    if (wc.isDevToolsOpened()) return wc.inspectElement(x, y)
     this.showDevTools(tabId, 'elements', false)
     wc.once('devtools-opened', () => wc.inspectElement(x, y))
   }
@@ -3957,15 +3870,18 @@ export class Browser {
     })
   }
 
-  /** Portrait Mode's popover: the page as it is now, for framing on a background. */
-  private async openPortrait(tabId: string, anchor: Rect): Promise<void> {
+  /**
+   * Portrait Mode's popover: the page as it is now (or the frame capture mode froze), for framing on
+   * a background. From the developer bar's button or the capture bar.
+   */
+  private async openPortrait(tabId: string, anchor: Rect, frozen?: Electron.NativeImage): Promise<void> {
     const view = this.views.get(tabId)
     const wc = view?.webContents
     if (!view || !wc || wc.isDestroyed()) return
-    const image = await wc.capturePage().catch(() => null)
+    const image = frozen ?? (await wc.capturePage().catch(() => null))
     if (!image || image.isEmpty()) return this.toast({ id: 'capture', message: 'Couldn’t capture this page', timeout: 3000 })
     const { width, height } = image.getSize()
-    const scale = width / Math.max(1, view.getBounds().width)
+    const scale = width / Math.max(1, (this.pageRect(tabId) ?? view.getBounds()).width)
     this.handle({
       type: 'ui.openPopover',
       popover: { kind: 'portrait', anchor, tabId, image: image.toDataURL(), width, height, scale, wallpaper: desktopPicture(1600) }
@@ -4201,6 +4117,17 @@ export class Browser {
     on('did-stop-loading', () => {
       this.settledAt.set(tabId, Date.now())
       update({ loading: false, ...navState() })
+    })
+    // DevTools opened or closed any way (a shortcut, the developer bar, their own ×): the bar's buttons follow.
+    on('devtools-opened', () => {
+      if (!this.devtools.has(tabId)) this.devtools.set(tabId, 'elements')
+      this.broadcast()
+    })
+    on('devtools-closed', () => {
+      this.devtools.delete(tabId)
+      // Rounded again (see layout).
+      this.layout()
+      this.broadcast()
     })
     on('page-title-updated', (_event, title) => {
       this.noteBackgroundUpdate(tabId, wc)
@@ -5144,7 +5071,7 @@ export class Browser {
    */
   private animateLayout(): void {
     const view = this.activeTabId ? this.views.get(this.activeTabId) : undefined
-    if (!view || this.settings.reduceMotion || this.attached.size > 1 || this.devtools.get(this.activeTabId!)?.view) return this.layout()
+    if (!view || this.settings.reduceMotion || this.attached.size > 1) return this.layout()
     const from = view.getBounds()
     const to = this.panes().find((pane) => pane.tabId === this.activeTabId)?.page ?? this.contentBounds()
     const start = Date.now()
@@ -6089,15 +6016,10 @@ export class Browser {
         if (!view) continue
         const hidden = this.htmlFullscreen && pane.tabId !== this.activeTabId
         view.setVisible(!hidden)
-        const tools = this.devtools.get(pane.tabId)?.view ?? undefined
-        tools?.setVisible(!hidden && !!pane.devtools)
         if (hidden) continue
         view.setBounds(pane.page)
-        view.setBorderRadius(this.htmlFullscreen ? 0 : this.settings.cornerRadius)
-        if (tools && pane.devtools) {
-          tools.setBounds(pane.devtools)
-          tools.setBorderRadius(this.settings.cornerRadius)
-        }
+        // Rounding a page drops DevTools docked in it (Electron), so while they're open it's square.
+        if (!view.webContents.isDevToolsOpened()) view.setBorderRadius(this.htmlFullscreen ? 0 : this.settings.cornerRadius)
       }
     }
     this.layoutOverlay()
@@ -6126,8 +6048,8 @@ export class Browser {
   }
 
   /**
-   * A pane's parts: Developer Mode's bar along its top, docked DevTools at its right, the page in the
-   * rest. In full screen (a video, a game) the page has it all.
+   * A pane's parts: Developer Mode's bar along its top, the page in the rest (DevTools dock inside the
+   * page's own view, as in Chrome). In full screen (a video, a game) the page has it all.
    */
   private paneParts(tabId: string, rect: Rectangle): Pane {
     if (this.htmlFullscreen) return { tabId, rect, page: rect }
@@ -6138,31 +6060,12 @@ export class Browser {
       bar = { x: rect.x, y: rect.y, width: rect.width, height: DEV_BAR_HEIGHT }
       page = { x: rect.x, y: rect.y + DEV_BAR_HEIGHT, width: rect.width, height: Math.max(0, rect.height - DEV_BAR_HEIGHT) }
     }
-    let devtools: Rectangle | undefined
-    let devtoolsHeader: Rectangle | undefined
-    if (this.devtools.get(tabId)?.view) {
-      const gap = Math.max(6, this.settings.contentGap)
-      let area: Rectangle
-      if (this.settings.devtoolsDock === 'bottom') {
-        const room = Math.max(MIN_DEVTOOLS_HEIGHT, page.height - MIN_PAGE_ABOVE_DEVTOOLS - gap)
-        const height = Math.round(Math.min(Math.max(this.settings.devtoolsHeight, MIN_DEVTOOLS_HEIGHT), room))
-        area = { x: page.x, y: page.y + page.height - height, width: page.width, height }
-        page = { ...page, height: Math.max(0, page.height - height - gap) }
-      } else {
-        const room = Math.max(MIN_DEVTOOLS_WIDTH, page.width - MIN_PAGE_BESIDE_DEVTOOLS - gap)
-        const width = Math.round(Math.min(Math.max(this.settings.devtoolsWidth, MIN_DEVTOOLS_WIDTH), room))
-        area = { x: page.x + page.width - width, y: page.y, width, height: page.height }
-        page = { ...page, width: Math.max(0, page.width - width - gap) }
-      }
-      devtoolsHeader = { x: area.x, y: area.y, width: area.width, height: DEVTOOLS_HEADER_HEIGHT }
-      devtools = {
-        x: area.x,
-        y: area.y + DEVTOOLS_HEADER_HEIGHT,
-        width: area.width,
-        height: Math.max(0, area.height - DEVTOOLS_HEADER_HEIGHT)
-      }
-    }
-    return { tabId, rect, page, ...(bar ? { bar } : {}), ...(devtools ? { devtools, devtoolsHeader } : {}) }
+    return { tabId, rect, page, ...(bar ? { bar } : {}) }
+  }
+
+  /** Where a tab's page is in the window. */
+  private pageRect(tabId: string): Rectangle | null {
+    return this.views.get(tabId)?.getBounds() ?? null
   }
 
   /** A site you're building (Developer Mode): it gets the developer bar. */
@@ -6177,8 +6080,6 @@ export class Browser {
       if (wanted.has(id)) continue
       const view = this.views.get(id)
       if (view) this.win.contentView.removeChildView(view)
-      const tools = this.devtools.get(id)?.view
-      if (tools) this.win.contentView.removeChildView(tools)
       this.attached.delete(id)
     }
     if (this.pip?.activeTabId && wanted.has(this.pip.activeTabId)) this.pip.exit()
@@ -6186,8 +6087,6 @@ export class Browser {
       const tab = this.tab(id)
       if (!tab) continue
       this.win.contentView.addChildView(this.ensureView(tab))
-      const tools = this.devtools.get(id)?.view
-      if (tools) this.win.contentView.addChildView(tools)
       this.attached.add(id)
     }
     if (this.linkStatus && !wanted.has(this.linkStatus.tabId)) this.hideLinkStatus(true)
@@ -6324,7 +6223,7 @@ export class Browser {
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : [],
-      devtools: [...this.devtools].map(([tabId, { view, panel }]) => ({ tabId, panel, window: !view }))
+      devtools: [...this.devtools].map(([tabId, panel]) => ({ tabId, panel }))
     }
   }
 

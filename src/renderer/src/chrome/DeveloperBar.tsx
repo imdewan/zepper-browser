@@ -1,13 +1,8 @@
-import { useRef } from 'react'
 import type { DevToolsPanel, Pane, Snapshot, Tab } from '@shared/types'
 import { zepper } from '../bridge'
-import type { Settings } from '@shared/settings'
 import {
   IconClose,
   IconConsole,
-  IconDockBottom,
-  IconDockRight,
-  IconOwnWindow,
   IconFrame,
   IconInfo,
   IconInspect,
@@ -22,8 +17,7 @@ import { cx, rectOf } from '../util'
 /**
  * Developer Mode, as in Arc: over the page of a site you're building, a bar with its full address
  * and the tools you reach for (copy the address, Portrait Mode, a capture, DevTools' Console,
- * Network and Inspect, extensions, split view). And for any page with DevTools docked: their own
- * bar (dock side, a window of their own, close) and the divider to resize them.
+ * Network and Inspect, extensions, split view).
  */
 export function DeveloperLayer({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
   return (
@@ -35,8 +29,6 @@ export function DeveloperLayer({ snapshot }: { snapshot: Snapshot }): React.JSX.
         return (
           <div key={pane.tabId}>
             {pane.bar && <DeveloperBar pane={pane} tab={tab} active={tab.id === snapshot.activeTabId} panel={panel} />}
-            {pane.devtoolsHeader && <DevToolsHeader pane={pane} dock={snapshot.settings.devtoolsDock} />}
-            {pane.devtools && <DevToolsDivider pane={pane} dock={snapshot.settings.devtoolsDock} />}
           </div>
         )
       })}
@@ -139,66 +131,6 @@ function DeveloperBar({
         </button>
       </div>
     </div>
-  )
-}
-
-/** Docked DevTools' own bar: where they go (beside the page, below it, or a window of their own) and close. */
-function DevToolsHeader({ pane, dock }: { pane: Pane; dock: Settings['devtoolsDock'] }): React.JSX.Element {
-  const rect = pane.devtoolsHeader!
-  const place = (where: Settings['devtoolsDock']): void => zepper.send({ type: 'devtools.dock', tabId: pane.tabId, dock: where })
-  return (
-    <div className="devtools-header" style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}>
-      <span className="devtools-title">DevTools</span>
-      <button className={cx('dev-button', 'small', dock === 'right' && 'on')} title="Dock to the right" onClick={() => place('right')}>
-        <IconDockRight size={14} />
-      </button>
-      <button className={cx('dev-button', 'small', dock === 'bottom' && 'on')} title="Dock to the bottom" onClick={() => place('bottom')}>
-        <IconDockBottom size={14} />
-      </button>
-      <button className="dev-button small" title="Open in a window of their own" onClick={() => place('window')}>
-        <IconOwnWindow size={14} />
-      </button>
-      <span className="dev-separator" />
-      <button
-        className="dev-button small"
-        title="Close DevTools (⌥⌘I)"
-        onClick={() => zepper.send({ type: 'devtools.close', tabId: pane.tabId })}
-      >
-        <IconClose size={12} />
-      </button>
-    </div>
-  )
-}
-
-/** Between the page and docked DevTools: drag it to give either more room. */
-function DevToolsDivider({ pane, dock }: { pane: Pane; dock: Settings['devtoolsDock'] }): React.JSX.Element {
-  const page = pane.page
-  const header = pane.devtoolsHeader!
-  const frame = useRef(0)
-  const below = dock === 'bottom'
-  // The gap between the page and the DevTools area (their bar and them).
-  const style = below
-    ? { left: page.x, top: page.y + page.height, width: page.width, height: header.y - (page.y + page.height) }
-    : {
-        left: page.x + page.width,
-        top: header.y,
-        width: header.x - (page.x + page.width),
-        height: pane.devtools!.y + pane.devtools!.height - header.y
-      }
-  const end = below ? pane.rect.y + pane.rect.height : pane.rect.x + pane.rect.width
-  const gap = below ? style.height : style.width
-  return (
-    <div
-      className={cx('devtools-divider', below && 'horizontal')}
-      style={style}
-      onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
-      onPointerMove={(e) => {
-        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-        const size = end - (below ? e.clientY : e.clientX) - gap / 2
-        cancelAnimationFrame(frame.current)
-        frame.current = requestAnimationFrame(() => zepper.send({ type: 'devtools.resize', size }))
-      }}
-    />
   )
 }
 

@@ -139,11 +139,8 @@ export interface Settings {
   developerSites: string[]
   /** Local hosts you turned it off for. */
   notDeveloperSites: string[]
-  /** Where DevTools open: docked beside the page, below it, or in a window of their own. */
-  devtoolsDock: 'right' | 'bottom' | 'window'
-  /** Docked DevTools' width (beside the page) and height (below it). */
-  devtoolsWidth: number
-  devtoolsHeight: number
+  /** DevTools have been opened before: from then on they open where you last put them (Electron remembers). */
+  devtoolsPlaced: boolean
   /** Where downloads are saved ('' means the Downloads folder). */
   downloadPath: string
   /** Ask where to save each download. */
@@ -218,9 +215,7 @@ export const DEFAULT_SETTINGS: Settings = {
   developerMode: true,
   developerSites: [],
   notDeveloperSites: [],
-  devtoolsDock: 'right',
-  devtoolsWidth: 460,
-  devtoolsHeight: 320,
+  devtoolsPlaced: false,
   hideCookieBanners: true,
   blockFingerprinting: true,
   blockCrossSiteCookies: true,

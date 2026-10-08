@@ -2107,15 +2107,6 @@ button.site-button.insecure:hover {
   text-overflow: ellipsis;
 }
 
-.developer-button.on {
-  color: #b58a00;
-  background: color-mix(in srgb, #f2c200 22%, transparent);
-}
-
-[data-ui='dark'] .developer-button.on {
-  color: #f2c200;
-}
-
 /* The bar over the page: its full address, and developer tools. Part of the page's card. */
 .dev-bar {
   position: absolute;
@@ -2201,85 +2192,4 @@ button.site-button.insecure:hover {
   height: 16px;
   margin: 0 5px;
   background: var(--separator);
-}
-
-/* Between the page and docked DevTools. */
-.devtools-divider {
-  position: absolute;
-  cursor: col-resize;
-  -webkit-app-region: no-drag;
-}
-
-.devtools-divider.horizontal {
-  cursor: row-resize;
-}
-
-.devtools-divider.horizontal::after {
-  width: 36px;
-  height: 3px;
-}
-
-/* Docked DevTools' own bar: dock side, a window of their own, close. Joined to the DevTools below it,
-   so in their colours (they follow the Mac's light or dark appearance, not the space's). */
-.devtools-header {
-  --text: rgba(0, 0, 0, 0.82);
-  --text-2: rgba(0, 0, 0, 0.55);
-  --hover: rgba(0, 0, 0, 0.06);
-  --press: rgba(0, 0, 0, 0.1);
-  --separator: rgba(0, 0, 0, 0.12);
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0 4px 0 12px;
-  border-radius: var(--radius) var(--radius) 0 0;
-  background: #f3f3f3;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  color: var(--text-2);
-  -webkit-app-region: no-drag;
-}
-
-@media (prefers-color-scheme: dark) {
-  .devtools-header {
-    --text: rgba(255, 255, 255, 0.9);
-    --text-2: rgba(255, 255, 255, 0.6);
-    --hover: rgba(255, 255, 255, 0.08);
-    --press: rgba(255, 255, 255, 0.13);
-    --separator: rgba(255, 255, 255, 0.14);
-    background: #2a2a2b;
-    border-bottom-color: rgba(255, 255, 255, 0.08);
-  }
-}
-
-.devtools-title {
-  flex: 1;
-  min-width: 0;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--text-2);
-}
-
-.dev-button.small {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-}
-
-.devtools-divider::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 3px;
-  height: 36px;
-  border-radius: 2px;
-  translate: -50% -50%;
-  background: var(--text-3);
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.devtools-divider:hover::after {
-  opacity: 0.7;
 }

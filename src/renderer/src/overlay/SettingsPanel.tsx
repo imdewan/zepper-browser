@@ -294,7 +294,7 @@ export function SettingsPanel({
                   items={settings.developerSites.map((host) => ({ key: host, site: host }))}
                   action="Remove"
                   actionTitle={(item) => `Turn off Developer Mode for ${item.site}`}
-                  empty="Sites you turn Developer Mode on for (from their lock icon, their tab’s menu or the </> button) show up here."
+                  empty="Sites you turn Developer Mode on for (⌥⇧⌘D, their lock icon or their tab’s menu) show up here."
                   onAction={(item) => set({ developerSites: settings.developerSites.filter((h) => h !== item.key) })}
                 />
               )}
@@ -783,7 +783,7 @@ export function SettingsPanel({
                   </Row>
                   <SiteListLink
                     label="Sites you’re building"
-                    hint="Turn Developer Mode on or off for any site with ⌥⇧⌘D, from its lock icon, its tab’s menu, or the </> button at the bottom of the sidebar."
+                    hint="Turn Developer Mode on or off for any site with ⌥⇧⌘D, from its lock icon, or from its tab’s menu."
                     count={settings.developerSites.length}
                     onOpen={() => openPage('developerSites')}
                   />
