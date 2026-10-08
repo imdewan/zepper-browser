@@ -6,7 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
-- About Zepper is redone: the close button back in its corner, the logo's own blue glowing behind it, whether you're up to date in a pill (with Restart to Update beside it when there's one), every detail on one line, and a What's new button for this version's release notes.
+- About Zepper is redone, in the logo's blue throughout: the close button back in its corner, the blue glowing behind the logo, whether you're up to date in a pill (with Restart to Update beside it when there's one), every detail on one line, and a What's new button for this version's release notes.
 
 ### Fixed
 

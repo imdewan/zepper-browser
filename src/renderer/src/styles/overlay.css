@@ -2388,7 +2388,9 @@
 
 /* ---- About Zepper ------------------------------------------------------------------- */
 
+/* About is in the logo's blue throughout, whatever the space's colour. */
 .about {
+  --accent: var(--system-accent);
   position: relative;
   width: min(400px, calc(100vw - 48px));
   padding: 0 22px 18px;
@@ -2404,9 +2406,9 @@
     0 0 0 0.5px var(--panel-border);
 }
 
-/* The logo's blue (not the space's colour) glows softly down from the top. */
+/* The logo's blue glows softly down from the top. */
 .about-hero {
-  --glow: color-mix(in srgb, var(--system-accent), transparent 72%);
+  --glow: color-mix(in srgb, var(--accent), transparent 72%);
   align-self: stretch;
   margin: 0 -22px;
   padding: 34px 28px 20px;
@@ -2440,7 +2442,7 @@
   width: 76px;
   height: 76px;
   object-fit: contain;
-  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--system-accent), transparent 50%));
+  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--accent), transparent 50%));
 }
 
 .about-name {
@@ -2481,7 +2483,7 @@
   font-size: 12px;
 }
 
-/* Where updates are at: a pill, its icon in a small circle coloured for good news, news or trouble. */
+/* Where updates are at: a pill, its icon in a small blue circle (grey when there's nothing to say). */
 .about-pill {
   display: inline-flex;
   align-items: center;
@@ -2508,12 +2510,9 @@
   background: var(--text-3);
 }
 
-.about-pill.good .about-pill-icon {
-  background: #30a14e;
-}
-
+.about-pill.good .about-pill-icon,
 .about-pill.new .about-pill-icon {
-  background: var(--system-accent);
+  background: var(--accent);
 }
 
 .about-pill.busy .about-pill-icon {
@@ -2525,7 +2524,7 @@
   height: 12px;
   border-radius: 50%;
   border: 1.5px solid var(--separator);
-  border-top-color: var(--text-2);
+  border-top-color: var(--accent);
   animation: about-spin 0.8s linear infinite;
 }
 
