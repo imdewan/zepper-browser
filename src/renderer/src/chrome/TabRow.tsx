@@ -122,13 +122,8 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
           zepper.send({ type: 'tab.contextMenu', tabId: tab.id })
         }}
       >
-        {/* A site you're building (Developer Mode), on the tab you're on: a dashed yellow outline, as in Arc. */}
-        {tab.developing && active && (
-          <svg className="dev-outline" aria-hidden="true">
-            <rect className="dev-outline-under" />
-            <rect className="dev-outline-dash" />
-          </svg>
-        )}
+        {/* A site you're building (Developer Mode), on the tab you're on: hazard-tape edges, as in Arc. */}
+        {tab.developing && active && <span className="dev-outline" aria-hidden="true" />}
         {changed && tab.pinned ? (
           <button
             className={cx('pin-reset', resetHover && 'hover')}
@@ -151,6 +146,8 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
 
         <div className="tab-label">
           <span className="tab-title">{tab.title || tab.url}</span>
+          {/* Its address under the title (localhost:3000), as Arc shows it. */}
+          {tab.developing && active && !changed && <span className="tab-devhost">{devHost(tab.url)}</span>}
           {changed && (
             <span className={cx('tab-sublabel', resetHover && 'visible')}>
               {metaHeld ? 'Separate from pinned tab' : 'Back to pinned url'}
@@ -246,4 +243,13 @@ function InactiveFavicon({ src }: { src: string | null }): React.JSX.Element {
       </svg>
     </span>
   )
+}
+
+/** The host and port a site you're building is on ("localhost:3000"). */
+function devHost(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
 }

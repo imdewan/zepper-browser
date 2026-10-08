@@ -139,8 +139,9 @@ export interface Pane {
   page: Rect
   /** The developer bar above the page (Developer Mode). */
   bar?: Rect
-  /** DevTools, docked beside the page. */
+  /** DevTools, docked beside or below the page, and the bar over them (dock side, own window, close). */
   devtools?: Rect
+  devtoolsHeader?: Rect
 }
 
 /** A download, for the downloads panel. */
@@ -213,8 +214,8 @@ export interface Snapshot {
   splits: Split[]
   /** Where each visible web view sits in the window; more than one while a split is shown. */
   panes: Pane[]
-  /** Tabs with DevTools docked, and the panel the developer bar last showed. */
-  devtools: { tabId: string; panel: DevToolsPanel }[]
+  /** Tabs with DevTools open (docked, or in their own window), and the panel the developer bar last showed. */
+  devtools: { tabId: string; panel: DevToolsPanel; window: boolean }[]
 }
 
 /** The DevTools panels the developer bar opens (inspect: Elements, picking an element on the page). */
@@ -559,8 +560,10 @@ export type Command =
   /** DevTools docked beside a tab's page, on a panel; the same panel again closes them. */
   | { type: 'devtools.show'; tabId: string; panel: DevToolsPanel }
   | { type: 'devtools.close'; tabId: string }
-  /** The docked DevTools' width (dragging the divider). */
-  | { type: 'devtools.resize'; width: number }
+  /** Where DevTools open (for this tab now, and from then on). */
+  | { type: 'devtools.dock'; tabId: string; dock: 'right' | 'bottom' | 'window' }
+  /** Docked DevTools' size, dragging the divider: their width beside the page, or height below it. */
+  | { type: 'devtools.resize'; size: number }
   | { type: 'capture.take'; mode: 'visible' | 'full' | 'area'; rect?: Rect }
   | { type: 'capture.cancel' }
   | { type: 'capture.save' }

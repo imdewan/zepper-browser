@@ -172,6 +172,11 @@ export function buildMenu(hub: Hub): Menu {
           )
         },
         {
+          label: 'Inspect Elements',
+          accelerator: 'CmdOrCtrl+Alt+C',
+          click: run((browser) => browser.inspectElementMode())
+        },
+        {
           label: 'JavaScript Console',
           accelerator: 'CmdOrCtrl+Alt+J',
           click: run(

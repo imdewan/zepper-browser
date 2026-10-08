@@ -136,7 +136,7 @@ const SHORTCUTS: [string, string][] = [
   ['Back / forward', '⌘[ / ⌘]'],
   ['Zoom in / out / reset', '⌘+ / ⌘− / ⌘0'],
   ['Developer tools', '⌥⌘I'],
-  ['JavaScript console', '⌥⌘J'],
+  ['JavaScript console / inspect an element', '⌥⌘J / ⌥⌘C'],
   ['Developer Mode for this site', '⌥⇧⌘D'],
   ['Settings', '⌘,']
 ]

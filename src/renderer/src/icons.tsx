@@ -1,11 +1,11 @@
 import type { SVGProps } from 'react'
 import {
+  AppWindow,
   Camera,
   CircleArrowUp,
   CodeXml,
   Columns2,
   Crosshair,
-  Frame,
   Globe,
   Info,
   KeyRound,
@@ -13,6 +13,8 @@ import {
   Mic,
   Monitor,
   MonitorUp,
+  PanelBottom,
+  PanelRight,
   Smartphone,
   SquareTerminal,
   UserRoundKey,
@@ -325,8 +327,15 @@ const lucide = (Glyph: React.ComponentType<LucideProps>, strokeWidth = 1.9) =>
   }
 /** Copy the address. */
 export const IconLink = lucide(Link)
-/** Portrait Mode: the page, framed. */
-export const IconFrame = lucide(Frame)
+/** Portrait Mode: a picture of the page, set on a backdrop. */
+export const IconFrame = (p: IconProps): React.JSX.Element => (
+  <Icon {...p}>
+    <rect x="2.5" y="3.5" width="19" height="17" rx="3.5" />
+    <rect x="6.5" y="7.5" width="11" height="9" rx="1.5" />
+    <path d="M8.5 15l2.5-2.75 1.75 1.75 1.25-1.25 1.5 1.5" />
+    <circle cx="14.6" cy="10.1" r="0.6" fill="currentColor" stroke="none" />
+  </Icon>
+)
 /** A screenshot (Zepper's capture). */
 export const IconScreenshot = lucide(Camera)
 export const IconConsole = lucide(SquareTerminal)
@@ -337,3 +346,7 @@ export const IconSplit = lucide(Columns2)
 export const IconInfo = lucide(Info)
 /** Developer Mode. */
 export const IconCode = lucide(CodeXml, 2)
+/** DevTools docked beside the page, below it, or in a window of their own. */
+export const IconDockRight = lucide(PanelRight)
+export const IconDockBottom = lucide(PanelBottom)
+export const IconOwnWindow = lucide(AppWindow)

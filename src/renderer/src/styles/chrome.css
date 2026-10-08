@@ -2071,41 +2071,40 @@ button.site-button.insecure:hover {
 
 /* ---- Developer Mode ------------------------------------------------------------ */
 
-/* A site you're building, on the tab you're on: a thin dashed outline, yellow over a darker line, as in Arc. */
+/* A site you're building, on the tab you're on: hazard-tape edges in soft yellow and olive, and faint
+   stripes inside, as in Arc. */
 .tab .dev-outline {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
+  border-radius: inherit;
+  padding: 2px;
+  background: repeating-linear-gradient(45deg, #f3d35a 0 3.5px, #8c7a30 3.5px 7px);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
   pointer-events: none;
 }
 
-.dev-outline rect {
-  x: 0.75px;
-  y: 0.75px;
-  width: calc(100% - 1.5px);
-  height: calc(100% - 1.5px);
-  rx: 9.25px;
-  fill: none;
-  stroke-width: 1.5px;
+/* See-through, so the space's colour shows as on Arc's. */
+.tab.developing.active {
+  background-color: color-mix(in srgb, var(--selected) 45%, transparent);
+  background-image: repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.035) 0 6px, transparent 6px 12px);
+  box-shadow: none;
 }
 
-.dev-outline-under {
-  stroke: rgba(60, 50, 20, 0.35);
+[data-ui='dark'] .tab.developing.active {
+  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 6px, transparent 6px 12px);
 }
 
-.dev-outline-dash {
-  stroke: #e9b92e;
-  stroke-dasharray: 7 4;
-}
-
-[data-ui='dark'] .dev-outline-under {
-  stroke: rgba(0, 0, 0, 0.5);
-}
-
-[data-ui='dark'] .dev-outline-dash {
-  stroke: #e3b63a;
+.tab-devhost {
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .developer-button.on {
@@ -2209,6 +2208,62 @@ button.site-button.insecure:hover {
   position: absolute;
   cursor: col-resize;
   -webkit-app-region: no-drag;
+}
+
+.devtools-divider.horizontal {
+  cursor: row-resize;
+}
+
+.devtools-divider.horizontal::after {
+  width: 36px;
+  height: 3px;
+}
+
+/* Docked DevTools' own bar: dock side, a window of their own, close. Joined to the DevTools below it,
+   so in their colours (they follow the Mac's light or dark appearance, not the space's). */
+.devtools-header {
+  --text: rgba(0, 0, 0, 0.82);
+  --text-2: rgba(0, 0, 0, 0.55);
+  --hover: rgba(0, 0, 0, 0.06);
+  --press: rgba(0, 0, 0, 0.1);
+  --separator: rgba(0, 0, 0, 0.12);
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px 0 12px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: #f3f3f3;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  color: var(--text-2);
+  -webkit-app-region: no-drag;
+}
+
+@media (prefers-color-scheme: dark) {
+  .devtools-header {
+    --text: rgba(255, 255, 255, 0.9);
+    --text-2: rgba(255, 255, 255, 0.6);
+    --hover: rgba(255, 255, 255, 0.08);
+    --press: rgba(255, 255, 255, 0.13);
+    --separator: rgba(255, 255, 255, 0.14);
+    background: #2a2a2b;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.devtools-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-2);
+}
+
+.dev-button.small {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
 }
 
 .devtools-divider::after {
