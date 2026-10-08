@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-09
+
 ### Added
 
 - Zepper for Intel Macs (macOS 14 or later), alongside Apple silicon. Translate and summarise need Apple Intelligence, so they stay on Apple silicon; everything else is the same.
@@ -143,7 +145,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/imdewan/zepper-browser/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/imdewan/zepper-browser/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/imdewan/zepper-browser/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/imdewan/zepper-browser/compare/v0.1.3...v0.1.4

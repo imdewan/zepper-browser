@@ -28,7 +28,7 @@ Fork it, change anything, and see it in a second. No Chromium to compile.
 
 ## Download
 
-**[Download Zepper for Mac at mrdsa.dev/zepper](https://mrdsa.dev/zepper)** (Apple silicon, macOS 14 or later). The `.dmg` is also on the [latest release](https://github.com/imdewan/zepper-browser/releases/latest).
+**[Download Zepper for Mac at mrdsa.dev/zepper](https://mrdsa.dev/zepper)** (macOS 14 or later, Apple silicon or Intel). The `.dmg`s are also on the [latest release](https://github.com/imdewan/zepper-browser/releases/latest): `arm64` for Apple silicon, `x64` for Intel.
 
 1. Open the `.dmg` and drag Zepper into Applications.
 2. Zepper isn't notarized by Apple yet, so macOS blocks it the first time you open it. Go to **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. You only need to do this once.
