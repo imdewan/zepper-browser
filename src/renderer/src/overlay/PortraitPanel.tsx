@@ -118,8 +118,8 @@ const framedWidth = (w: number, h: number): number => w + 2 * margin(w, h)
 const framedHeight = (w: number, h: number): number => h + 2 * margin(w, h)
 
 /**
- * The page framed on its background, `k` times its own size: a rounded window with a soft shadow
- * and a hairline edge, on white, a two-tone gradient of the hue, or the desktop picture (filling it).
+ * The page framed on its background, `k` times its own size: in a thin glass border with a soft
+ * shadow, on white, a two-tone gradient of the hue, or the desktop picture (filling it).
  */
 function draw(canvas: HTMLCanvasElement, page: HTMLImageElement, backdrop: Backdrop, wallpaper: HTMLImageElement | null, k: number): void {
   const w = page.naturalWidth
@@ -155,30 +155,62 @@ function draw(canvas: HTMLCanvasElement, page: HTMLImageElement, backdrop: Backd
     ctx.fillRect(0, 0, W, H)
   }
 
+  // The page sits in a thin glass border, as Zepper's window looks in compact mode: the background
+  // shows through it, blurred and frosted, with a bright edge.
   const x = pad * k
   const y = pad * k
   const pw = w * k
   const ph = h * k
-  const radius = Math.max(w, h) * 0.008 * k + 6 * k
-  const shape = (): void => {
+  const rim = Math.max(w, h) * 0.011 * k
+  const inner = Math.max(w, h) * 0.008 * k + 6 * k
+  const outer = inner + rim
+  const windowShape = (): void => {
     ctx.beginPath()
-    ctx.roundRect(x, y, pw, ph, radius)
+    ctx.roundRect(x - rim, y - rim, pw + 2 * rim, ph + 2 * rim, outer)
   }
+  const pageShape = (): void => {
+    ctx.beginPath()
+    ctx.roundRect(x, y, pw, ph, inner)
+  }
+  const behind = document.createElement('canvas')
+  behind.width = W
+  behind.height = H
+  behind.getContext('2d')?.drawImage(canvas, 0, 0)
+
+  // Its shadow.
   ctx.save()
-  ctx.shadowColor = backdrop.kind === 'white' ? 'rgba(20, 24, 40, 0.18)' : 'rgba(20, 24, 40, 0.3)'
+  ctx.shadowColor = backdrop.kind === 'white' ? 'rgba(20, 24, 40, 0.16)' : 'rgba(20, 24, 40, 0.28)'
   ctx.shadowBlur = pad * k * 0.55
   ctx.shadowOffsetY = pad * k * 0.16
-  shape()
+  windowShape()
   ctx.fillStyle = '#ffffff'
   ctx.fill()
   ctx.restore()
+
+  // The glass: what's behind it, blurred, under a frosting.
   ctx.save()
-  shape()
+  windowShape()
+  ctx.clip()
+  ctx.filter = `blur(${Math.max(2, rim * 1.4)}px)`
+  ctx.drawImage(behind, 0, 0)
+  ctx.filter = 'none'
+  ctx.fillStyle = backdrop.kind === 'white' ? 'rgba(236, 237, 241, 0.9)' : 'rgba(255, 255, 255, 0.42)'
+  ctx.fillRect(0, 0, W, H)
+  ctx.restore()
+
+  // The page in it.
+  ctx.save()
+  pageShape()
   ctx.clip()
   ctx.drawImage(page, x, y, pw, ph)
   ctx.restore()
-  shape()
+
+  // Edges: a bright one round the glass, a faint line where the page meets it.
   ctx.lineWidth = Math.max(1, k)
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)'
+  windowShape()
+  ctx.strokeStyle = backdrop.kind === 'white' ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.65)'
+  ctx.stroke()
+  pageShape()
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'
   ctx.stroke()
 }
