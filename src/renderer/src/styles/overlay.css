@@ -2390,61 +2390,164 @@
 
 .about {
   position: relative;
-  width: min(420px, calc(100vw - 48px));
-  padding: 34px 30px 20px;
+  width: min(400px, calc(100vw - 48px));
+  padding: 0 22px 18px;
   border-radius: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+  overflow: hidden;
   background: var(--panel);
   box-shadow:
     0 24px 80px rgba(0, 0, 0, 0.4),
     0 0 0 0.5px var(--panel-border);
 }
 
+/* The logo's blue (not the space's colour) glows softly down from the top. */
+.about-hero {
+  --glow: color-mix(in srgb, var(--system-accent), transparent 72%);
+  align-self: stretch;
+  margin: 0 -22px;
+  padding: 34px 28px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: radial-gradient(120% 90% at 50% -10%, var(--glow), transparent 62%);
+}
+
+.about-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  background: var(--element);
+  transition: background-color 0.1s ease;
+}
+
+.about-close:hover {
+  background: var(--element-hover);
+  color: var(--text);
+}
+
 .about-logo {
-  width: 84px;
-  height: 84px;
+  width: 76px;
+  height: 76px;
   object-fit: contain;
-  filter: drop-shadow(0 8px 22px color-mix(in srgb, var(--accent), transparent 55%));
+  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--system-accent), transparent 50%));
 }
 
 .about-name {
-  margin: 14px 0 0;
-  font-size: 24px;
+  margin: 12px 0 0;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+}
+
+.about-tagline {
+  margin: 4px 0 0;
+  max-width: 280px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
 }
 
 .about-version {
-  margin-top: 2px;
-  font-size: 12.5px;
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
 
-.about-tagline {
-  margin: 12px 0 18px;
-  max-width: 300px;
-  font-size: 13px;
-  line-height: 1.5;
+.about-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.about-status .panel-button {
+  height: 26px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+/* Where updates are at: a pill, its icon in a small circle coloured for good news, news or trouble. */
+.about-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 11px 0 5px;
+  border-radius: 13px;
+  background: var(--element);
+  font-size: 12px;
   color: var(--text-2);
+}
+
+.about-pill.quiet {
+  padding-left: 11px;
+}
+
+.about-pill-icon {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--text-3);
+}
+
+.about-pill.good .about-pill-icon {
+  background: #30a14e;
+}
+
+.about-pill.new .about-pill-icon {
+  background: var(--system-accent);
+}
+
+.about-pill.busy .about-pill-icon {
+  background: none;
+}
+
+.about-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--separator);
+  border-top-color: var(--text-2);
+  animation: about-spin 0.8s linear infinite;
+}
+
+@keyframes about-spin {
+  to {
+    rotate: 360deg;
+  }
 }
 
 .about-rows {
   width: 100%;
   margin: 0;
-  padding: 6px 14px;
+  padding: 2px 14px;
   border-radius: 12px;
   background: var(--element);
 }
 
 .about-row {
   display: flex;
-  justify-content: space-between;
+  align-items: baseline;
   gap: 16px;
-  padding: 7px 0;
+  padding: 8px 0;
   font-size: 12.5px;
   border-bottom: 1px solid var(--separator);
 }
@@ -2454,28 +2557,39 @@
 }
 
 .about-row dt {
+  flex: none;
   color: var(--text-3);
+  white-space: nowrap;
 }
 
 .about-row dd {
+  flex: 1;
   margin: 0;
   min-width: 0;
   text-align: right;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
 
-.about-copy {
-  margin-top: 16px;
+.about-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.about-actions .panel-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-size: 12.5px;
 }
 
 .about-footer {
   margin-top: 16px;
   font-size: 11px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--text-3);
 }
 
@@ -3977,23 +4091,4 @@
 .share-buttons {
   display: flex;
   gap: 8px;
-}
-
-/* ---- Update ---------------------------------------------------------------------- */
-
-.about-update {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 30px;
-  margin-top: 6px;
-  font-size: 12.5px;
-  color: var(--text-2);
-}
-
-.about-update .panel-button {
-  height: 28px;
-  padding: 0 12px;
-  font-size: 12px;
 }

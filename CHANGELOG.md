@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Changed
+
+- About Zepper is redone: the close button back in its corner, the logo's own blue glowing behind it, whether you're up to date in a pill (with Restart to Update beside it when there's one), every detail on one line, and a What's new button for this version's release notes.
+
 ### Fixed
 
 - Unloading a tab yourself (Unload Tab, ⌘W or a middle-click on a pinned tab, unloading a space) signed you out of some sites (Discord): the page now gets to save first, as when you close a tab or quit.
