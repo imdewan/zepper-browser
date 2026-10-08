@@ -122,7 +122,13 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
           zepper.send({ type: 'tab.contextMenu', tabId: tab.id })
         }}
       >
-        {tab.developing && <span className="dev-outline" aria-hidden="true" />}
+        {/* A site you're building (Developer Mode), on the tab you're on: a dashed yellow outline, as in Arc. */}
+        {tab.developing && active && (
+          <svg className="dev-outline" aria-hidden="true">
+            <rect className="dev-outline-under" />
+            <rect className="dev-outline-dash" />
+          </svg>
+        )}
         {changed && tab.pinned ? (
           <button
             className={cx('pin-reset', resetHover && 'hover')}

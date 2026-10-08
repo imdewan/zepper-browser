@@ -136,6 +136,8 @@ const SHORTCUTS: [string, string][] = [
   ['Back / forward', '⌘[ / ⌘]'],
   ['Zoom in / out / reset', '⌘+ / ⌘− / ⌘0'],
   ['Developer tools', '⌥⌘I'],
+  ['JavaScript console', '⌥⌘J'],
+  ['Developer Mode for this site', '⌥⇧⌘D'],
   ['Settings', '⌘,']
 ]
 
@@ -781,7 +783,7 @@ export function SettingsPanel({
                   </Row>
                   <SiteListLink
                     label="Sites you’re building"
-                    hint="Turn Developer Mode on for any site from its lock icon, its tab’s menu, the </> button at the bottom of the sidebar, or View › Developer Mode for This Site."
+                    hint="Turn Developer Mode on or off for any site with ⌥⇧⌘D, from its lock icon, its tab’s menu, or the </> button at the bottom of the sidebar."
                     count={settings.developerSites.length}
                     onOpen={() => openPage('developerSites')}
                   />

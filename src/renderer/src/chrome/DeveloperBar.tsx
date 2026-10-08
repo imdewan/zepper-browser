@@ -126,7 +126,7 @@ function DeveloperBar({
         </button>
         <button
           className="dev-button"
-          title={`Turn off Developer Mode for ${address.hostname}`}
+          title={`Turn off Developer Mode for ${address.hostname} (⌥⇧⌘D)`}
           onClick={() => zepper.send({ type: 'developer.toggle', tabId: tab.id })}
         >
           <IconClose size={13} />

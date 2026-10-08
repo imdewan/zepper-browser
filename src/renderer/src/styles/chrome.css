@@ -2071,25 +2071,41 @@ button.site-button.insecure:hover {
 
 /* ---- Developer Mode ------------------------------------------------------------ */
 
-/* A site you're building: a caution-tape outline on its tab, as in Arc (full on the tab you're on). */
+/* A site you're building, on the tab you're on: a thin dashed outline, yellow over a darker line, as in Arc. */
 .tab .dev-outline {
   position: absolute;
   inset: 0;
-  border-radius: inherit;
-  padding: 1.5px;
-  background: repeating-linear-gradient(-45deg, #f2c200 0 5px, #29292c 5px 10px);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0.45;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
   pointer-events: none;
 }
 
-.tab.active .dev-outline {
-  padding: 2px;
-  opacity: 1;
+.dev-outline rect {
+  x: 0.75px;
+  y: 0.75px;
+  width: calc(100% - 1.5px);
+  height: calc(100% - 1.5px);
+  rx: 9.25px;
+  fill: none;
+  stroke-width: 1.5px;
+}
+
+.dev-outline-under {
+  stroke: rgba(60, 50, 20, 0.35);
+}
+
+.dev-outline-dash {
+  stroke: #e9b92e;
+  stroke-dasharray: 7 4;
+}
+
+[data-ui='dark'] .dev-outline-under {
+  stroke: rgba(0, 0, 0, 0.5);
+}
+
+[data-ui='dark'] .dev-outline-dash {
+  stroke: #e3b63a;
 }
 
 .developer-button.on {

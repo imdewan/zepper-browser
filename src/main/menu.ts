@@ -179,8 +179,12 @@ export function buildMenu(hub: Hub): Menu {
             (popup) => popup.webContents.openDevTools()
           )
         },
-        // No shortcut: macOS has ⌥⌘D (hide the Dock).
-        { label: 'Developer Mode for This Site', click: run((browser) => browser.toggleDeveloperForActive()) },
+        // ⌥⇧⌘D: ⌥⌘D is macOS's (hiding the Dock).
+        {
+          label: 'Developer Mode for This Site',
+          accelerator: 'CmdOrCtrl+Alt+Shift+D',
+          click: run((browser) => browser.toggleDeveloperForActive())
+        },
         ...(isDev
           ? [
               {

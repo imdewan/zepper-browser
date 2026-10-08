@@ -3796,7 +3796,7 @@ export class Browser {
     else this.showDevTools(id, 'elements', false)
   }
 
-  /** View › Developer Mode for This Site: on or off for the site you're on. */
+  /** ⌥⇧⌘D (View › Developer Mode for This Site): on or off for the site you're on. */
   toggleDeveloperForActive(): void {
     if (this.activeTabId) this.toggleDeveloper(this.activeTabId)
   }

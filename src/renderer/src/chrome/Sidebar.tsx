@@ -318,7 +318,13 @@ function DeveloperButton({ snapshot }: { snapshot: Snapshot }): React.JSX.Elemen
   return (
     <button
       className={cx('icon-button', 'developer-button', on && 'on')}
-      title={!web ? 'Developer Mode (for web pages)' : on ? `Turn off Developer Mode for ${host}` : `Turn on Developer Mode for ${host}`}
+      title={
+        !web
+          ? 'Developer Mode (for web pages)'
+          : on
+            ? `Turn off Developer Mode for ${host} (⌥⇧⌘D)`
+            : `Turn on Developer Mode for ${host} (⌥⇧⌘D)`
+      }
       disabled={!web}
       onClick={() => tab && zepper.send({ type: 'developer.toggle', tabId: tab.id })}
     >
