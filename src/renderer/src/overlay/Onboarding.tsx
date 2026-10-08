@@ -143,7 +143,7 @@ function Welcome(): React.JSX.Element {
     <div className="ob-welcome">
       <img className="ob-logo" src={logo} alt="" draggable={false} />
       <Heading title="Welcome to Zepper">
-        A calm browser for the Mac: spaces for each part of your life, a sidebar built for tabs, and privacy that’s on from the start.
+        Your new browser for the Mac: spaces for each part of your life, a sidebar built for tabs, and privacy that’s on from the start.
       </Heading>
       <p className="ob-note">This takes about a minute. You can change everything later in Settings.</p>
     </div>

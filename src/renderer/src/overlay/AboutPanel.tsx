@@ -141,7 +141,7 @@ export function AboutPanel({ info, update, onClose }: { info: AboutInfo; update:
         <div className="about-hero">
           <img className="about-logo" src={logo} alt="" draggable={false} />
           <h1 className="about-name">Zepper</h1>
-          <p className="about-tagline">A calm browser with Spaces and built-in ad blocking, on Chromium.</p>
+          <p className="about-tagline">A private browser with Spaces and built-in ad blocking, on Chromium.</p>
           <div className="about-version">Version {info.version}</div>
           <UpdateStatusLine update={update} />
         </div>
