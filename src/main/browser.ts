@@ -4521,8 +4521,10 @@ export class Browser {
    * it. Then it stays until the pointer really leaves.
    */
   private holdPeekWhilePointerOnCard(): void {
-    if (this.peekWatch || !this.pointerOnPeekCard()) return
+    if (!this.pointerOnPeekCard()) return
+    // Every time: the pointer can come back onto the card and leave it again while it's followed.
     this.emit({ type: 'peek.hold' }, 'overlay')
+    if (this.peekWatch) return
     this.peekWatch = setInterval(() => {
       if (!this.peeking || this.win.isDestroyed()) return this.stopPeekWatch()
       if (this.pointerOnPeekCard()) return

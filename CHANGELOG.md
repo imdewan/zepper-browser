@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- The floating sidebar could still close over its traffic lights or top row if the pointer went back onto it and up again.
+
 ## [0.1.5] - 2026-10-08
 
 ### Added
