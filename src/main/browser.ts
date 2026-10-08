@@ -80,6 +80,7 @@ import {
 } from '@shared/types'
 import type { Hub } from './hub'
 import { PipPlayer } from './pip'
+import { CallWindow, type CallWindowHost } from './call-window'
 import { AutofillController, type PageMessage } from './autofill'
 import { startDebugServer } from './devtools-server'
 import { JsonFile } from './persist'
@@ -610,6 +611,8 @@ export class Browser {
   private linkStatusTimers: { expand?: NodeJS.Timeout; linger?: NodeJS.Timeout; fade?: NodeJS.Timeout; watch?: NodeJS.Timeout } = {}
   private layoutAnimation: NodeJS.Timeout | null = null
   private pip!: PipPlayer
+  /** What a page's floating call window needs from this window: Zepper's UI pages for its title bar. */
+  private callHost!: CallWindowHost
   private autofill!: AutofillController
   private readonly disposers: (() => void)[] = []
   /** Tabs we already offered to pause other media for, so the tip never nags. */
@@ -682,7 +685,7 @@ export class Browser {
   private metaFetching = 0
   private readonly metaTried = new Set<string>()
   /** Pages' floating call windows (Document Picture-in-Picture), by the tab that opened each. */
-  private readonly docPips = new Map<string, BrowserWindow>()
+  private readonly docPips = new Map<string, CallWindow>()
   /** Tabs whose floating call window Zepper asked for when you left them: it closes when you come back. */
   private readonly autoDocPips = new Set<string>()
   /** What each tab's frames are capturing (camera, microphone, screen), by frame. */
@@ -913,6 +916,7 @@ export class Browser {
     nativeTheme.on('updated', onTheme)
     this.disposers.push(() => nativeTheme.off('updated', onTheme))
 
+    this.callHost = { preload, load }
     this.pip = new PipPlayer({
       preload,
       load,
@@ -1041,7 +1045,7 @@ export class Browser {
   ): void {
     if (this.permissions.isAlwaysAllowed(permission)) return callback(true)
     // A prompt for a popup would show in the window behind it; popups don't get permissions.
-    if (this.popupWindow(wc.id)) return callback(false)
+    if (this.popupWindow(wc.id) || this.callWindow(wc.id)?.page === wc) return callback(false)
     const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes as string[] | undefined) : undefined
     const externalURL = 'externalURL' in details ? details.externalURL : undefined
     const keys = settingKeys(permission, mediaTypes, externalURL)
@@ -1199,7 +1203,8 @@ export class Browser {
       id === this.pip?.controlsWebContents()?.id ||
       id === this.autofill?.webContents()?.id ||
       this.tabByWebContents.has(id) ||
-      this.popupWindow(id) !== undefined
+      this.popupWindow(id) !== undefined ||
+      this.callWindow(id) !== undefined
     )
   }
 
@@ -1223,6 +1228,11 @@ export class Browser {
       retitle()
     })
     wc.on('did-navigate', retitle)
+    this.watchPopupPage(wc, openerId)
+  }
+
+  /** A popup's page (or a call window's): its clicks count for pop-up blocking, and what it opens goes here too. */
+  private watchPopupPage(wc: WebContents, openerId: string): void {
     const wcId = wc.id
     wc.on('input-event', (_event, input) => {
       if (USER_INPUT.has(input.type)) this.lastInput.set(wcId, Date.now())
@@ -1252,6 +1262,14 @@ export class Browser {
 
   private popupWindow(webContentsId: number): BrowserWindow | undefined {
     for (const win of this.popups.keys()) if (!win.isDestroyed() && win.webContents.id === webContentsId) return win
+    return undefined
+  }
+
+  /** The floating call window whose page or title bar `webContentsId` is. */
+  private callWindow(webContentsId: number): CallWindow | undefined {
+    for (const call of this.docPips.values()) {
+      if ((!call.page.isDestroyed() && call.page.id === webContentsId) || call.bar?.id === webContentsId) return call
+    }
     return undefined
   }
 
@@ -1297,7 +1315,8 @@ export class Browser {
       this.overlay.webContents.id,
       this.pageHints?.webContents.id,
       this.pip.controlsWebContents()?.id,
-      this.autofill.webContents()?.id
+      this.autofill.webContents()?.id,
+      ...[...this.docPips.values()].map((call) => call.bar?.id)
     ].includes(wc.id)
   }
 
@@ -1377,6 +1396,7 @@ export class Browser {
     this.tabByWebContents.clear()
     for (const popup of this.popups.keys()) if (!popup.isDestroyed()) popup.destroy()
     this.popups.clear()
+    for (const call of this.docPips.values()) call.close()
     // Child views' pages outlive their window unless closed.
     close(this.overlay.webContents)
     if (this.swipeArrowTimer) clearTimeout(this.swipeArrowTimer)
@@ -1655,6 +1675,13 @@ export class Browser {
         const id = this.pip.activeTabId
         if (id) this.pipBack(id)
         return
+      }
+      case 'call.back': {
+        // As in Chrome: the call comes back into its tab, and the floating window closes.
+        const call = this.docPips.get(command.tabId)
+        if (!call) return
+        this.pipBack(command.tabId)
+        return call.close()
       }
       case 'pip.close':
         // The video goes back to its tab and keeps playing there.
@@ -3999,10 +4026,7 @@ export class Browser {
     on('input-event', (_event, input) => {
       if (USER_INPUT.has(input.type)) this.lastInput.set(wcId, Date.now())
     })
-    on('did-create-window', (win, details) => {
-      this.adoptPopup(win, tabId)
-      if (details.frameName === DOCUMENT_PIP_FRAME) this.floatDocumentPip(win, tabId)
-    })
+    on('did-create-window', (win) => this.adoptPopup(win, tabId))
     // A page (or frame) that goes elsewhere leaves its camera, microphone and screen behind.
     on('did-start-navigation', (details) => {
       if (details.isMainFrame && !details.isSameDocument) {
@@ -4101,7 +4125,19 @@ export class Browser {
     // A page's floating call window: only when you asked (a click) or Zepper did (leaving a call).
     if (details.frameName === DOCUMENT_PIP_FRAME && openerContents) {
       const asked = Date.now() - (this.lastInput.get(openerContents.id) ?? 0) <= USER_ACTIVATION_MS || this.autoDocPips.has(openerId)
-      return asked ? { action: 'allow', overrideBrowserWindowOptions: this.documentPipOptions(details.features) } : { action: 'deny' }
+      if (!asked) return { action: 'deny' }
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          webPreferences: { sandbox: true, contextIsolation: true, nodeIntegrationInSubFrames: true, safeDialogs: true }
+        },
+        // Zepper makes the window itself, to give it a title bar with Back to tab (see CallWindow).
+        createWindow: (options) => {
+          const page = (options as typeof options & { webContents: WebContents }).webContents
+          this.openCallWindow(openerId, page, details.features)
+          return page
+        }
+      }
     }
     if (openerContents && this.blocksPopup(openerContents)) {
       if (openerId === this.activeTabId || this.attached.has(openerId)) {
@@ -4177,44 +4213,27 @@ export class Browser {
     return recent.length > POPUP_BURST_LIMIT
   }
 
-  /** The floating call window: the size the page asked for, bottom right, above everything (like Chrome's). */
-  private documentPipOptions(features: string): Electron.BrowserWindowConstructorOptions {
+  /** A page's floating call window: the size the page asked for, bottom right, above everything (like Chrome's). */
+  private openCallWindow(tabId: string, page: WebContents, features: string): void {
     const size = (key: string, fallback: number): number => Number(new RegExp(`${key}=(\\d+)`).exec(features)?.[1]) || fallback
-    const width = size('width', 400)
-    const height = size('height', 300)
     const area = screen.getDisplayMatching(this.win.getBounds()).workArea
-    const margin = Math.round(Math.max(20, area.width * 0.015))
-    return {
-      width,
-      height,
-      x: area.x + area.width - width - margin,
-      y: area.y + area.height - height - margin,
-      // A floating panel: stays above full-screen apps and on every desktop, and clicking it doesn't activate Zepper.
-      type: 'panel',
-      alwaysOnTop: true,
-      minimizable: false,
-      maximizable: false,
-      fullscreenable: false,
-      skipTaskbar: true,
-      backgroundColor: '#000000',
-      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegrationInSubFrames: true, safeDialogs: true }
-    }
-  }
-
-  private floatDocumentPip(win: BrowserWindow, tabId: string): void {
-    win.setAlwaysOnTop(true, 'floating')
     this.docPips.get(tabId)?.close()
-    this.docPips.set(tabId, win)
     // The page draws this window from its own tab, which is in the background once you've switched
     // away; a background tab gets no animation frames, so the window would stay black. It keeps
     // drawing while the window is open, as in Chrome.
     const opener = this.views.get(tabId)?.webContents
     opener?.setBackgroundThrottling(false)
-    win.once('closed', () => {
-      if (this.docPips.get(tabId) === win) this.docPips.delete(tabId)
-      this.autoDocPips.delete(tabId)
+    const call = new CallWindow(this.callHost, tabId, page, { width: size('width', 400), height: size('height', 300) }, area, () => {
+      if (this.docPips.get(tabId) === call) {
+        this.docPips.delete(tabId)
+        this.autoDocPips.delete(tabId)
+      }
       if (opener && !opener.isDestroyed() && !this.docPips.has(tabId)) opener.setBackgroundThrottling(true)
     })
+    this.docPips.set(tabId, call)
+    this.watchPopupPage(page, tabId)
+    call.win.setTitle(safeHost(opener?.getURL() ?? '') || 'Call')
+    this.broadcast()
   }
 
   /** A choice you made in Zepper's own UI for a page (a prompt, the share picker) counts as a click there. */
@@ -5928,6 +5947,7 @@ export class Browser {
       this.win.webContents.send(IPC.snapshot, snapshot)
       this.overlay.webContents.send(IPC.snapshot, snapshot)
       this.pip?.controlsWebContents()?.send(IPC.snapshot, snapshot)
+      for (const call of this.docPips.values()) call.bar?.send(IPC.snapshot, snapshot)
       this.stateFile?.schedule(this.persistedState())
     }, 16)
   }

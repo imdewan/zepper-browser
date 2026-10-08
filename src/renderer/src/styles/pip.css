@@ -213,3 +213,70 @@
   text-overflow: ellipsis;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
+
+/* ---- A page's floating call window: its title bar (the call is drawn below it) --------- */
+
+.call-bar {
+  position: fixed;
+  inset: 0;
+  background: var(--window-base);
+  color: var(--text-2);
+  -webkit-app-region: drag;
+}
+
+.call-row {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  /* Clear of the traffic lights. */
+  padding: 0 5px 0 76px;
+}
+
+.call-site {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.call-back {
+  flex: none;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--element);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 500;
+  transition:
+    background-color 0.12s ease,
+    transform 0.12s ease;
+}
+
+.call-back:hover {
+  background: var(--element-hover);
+}
+
+.call-back:active {
+  transform: scale(0.96);
+}
+
+/* A narrow window keeps just the icon. */
+@media (max-width: 300px) {
+  .call-back {
+    width: 26px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .call-back-label {
+    display: none;
+  }
+}

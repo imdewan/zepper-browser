@@ -613,6 +613,8 @@ export type Command =
   | { type: 'ui.createSpace' }
   | { type: 'pip.back' }
   | { type: 'pip.close' }
+  /** Back to tab, from a page's floating call window: the tab comes forward and the window closes. */
+  | { type: 'call.back'; tabId: string }
   | { type: 'split.add'; tabId: string }
   | { type: 'split.remove'; tabId: string }
   | { type: 'split.dissolve'; splitId: string }

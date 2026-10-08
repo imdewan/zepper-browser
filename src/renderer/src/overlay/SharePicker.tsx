@@ -85,7 +85,9 @@ export function SharePicker({
           {kind !== 'tab' && !request.screenAccess && (
             <div className="share-notice">
               <span>
-                macOS needs to let Zepper record your screen. Turn on Zepper in Screen &amp; System Audio Recording, then try again.
+                macOS needs to let Zepper record your screen: turn on Zepper in Screen &amp; System Audio Recording, then quit and reopen
+                Zepper. Already on? macOS can hold on to an earlier version: remove Zepper there with −, add it back with +, and reopen
+                Zepper.
               </span>
               <button className="panel-button" onClick={() => zepper.send({ type: 'app.openMediaPrivacySettings', kind: 'screen' })}>
                 Open Settings

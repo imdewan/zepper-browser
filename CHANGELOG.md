@@ -4,6 +4,14 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- A call's floating window (Meet, Teams, Zoom) has a title bar like Chrome's: the site and a Back to tab button, which brings the call's tab forward and puts the call back into it.
+
+### Changed
+
+- Sharing your screen: when macOS hasn't let Zepper record it, the notice says what to do if Zepper is already on in Screen & System Audio Recording (macOS can hold on to an earlier version of Zepper there).
+
 ## [0.1.6] - 2026-10-08
 
 ### Changed
