@@ -8,6 +8,8 @@ import { cx, hostOf } from '../util'
 
 /** Typed text survives closing the palette for 45 seconds. */
 const KEEP_TYPED_MS = 45_000
+/** The most rows, once the search engine's suggestions have joined the rest. */
+const MAX_RESULTS = 11
 let lastTyped = { text: '', at: 0 }
 
 interface PaletteProps {
@@ -45,10 +47,19 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
     const query = text === currentUrl ? '' : text
     const timer = setTimeout(
       async () => {
+        // What's on this Mac shows at once; the search engine's suggestions join below when they arrive
+        // (a slow network, a page loading, never holds up the rest).
         const next = await zepper.suggest(query)
         if (id !== request.current) return
         setResults({ query, results: next })
         setSelected(0)
+        const more = query ? await zepper.searchSuggestions(query) : []
+        if (id !== request.current || more.length === 0) return
+        setResults((current) =>
+          current.query === query
+            ? { query, results: [...current.results, ...more].slice(0, Math.max(current.results.length, MAX_RESULTS)) }
+            : current
+        )
       },
       query ? 35 : 0
     )

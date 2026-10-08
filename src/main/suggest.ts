@@ -4,7 +4,8 @@ import { bangs } from './bangs'
 import { popularByAddress, popularMatches } from './popular-sites'
 import { hostOf, looksLikeUrl, resolveInput, searchUrl, stripHash, suggestUrl } from './url'
 
-const PROVIDER_TIMEOUT_MS = 700
+/** The search engine gets this long; its suggestions hold nothing up, so a slow answer is still worth waiting for. */
+const PROVIDER_TIMEOUT_MS = 1500
 
 /** Fetches OpenSearch-style suggestions (`[query, [phrases…]]`) from the chosen engine. */
 async function fetchSearchSuggestions(text: string): Promise<string[]> {
@@ -26,17 +27,11 @@ async function fetchSearchSuggestions(text: string): Promise<string[]> {
 }
 
 /**
- * Builds URL bar results: the direct action first (go to URL or search),
- * then open tabs, history, and search-engine suggestions.
+ * Builds URL bar results: the direct action first (go to URL or search), then open tabs, history
+ * and popular sites. All of it is on this Mac, so it's instant; the search engine's suggestions
+ * come separately (searchSuggestions), added below once they arrive.
  */
-export async function suggest(
-  text: string,
-  tabs: Tab[],
-  history: History,
-  useProvider = true,
-  skipHistory = false,
-  recents = true
-): Promise<Suggestion[]> {
+export function suggest(text: string, tabs: Tab[], history: History, skipHistory = false, recents = true): Suggestion[] {
   const query = text.trim()
   if (!query) {
     // Nothing typed: your recent tabs, then the sites you visit most.
@@ -123,11 +118,15 @@ export async function suggest(
     added++
   }
 
-  const provider = useProvider ? await fetchSearchSuggestions(query) : []
-  for (const phrase of provider) {
-    if (phrase.toLowerCase() === lower) continue
-    results.push({ kind: 'search', query: phrase, url: searchUrl(phrase), fromProvider: true })
-    if (results.length >= 11) break
-  }
   return results
+}
+
+/** The search engine's suggestions for what's typed (none for a bang, which goes to its own site). */
+export async function searchSuggestions(text: string): Promise<Suggestion[]> {
+  const query = text.trim()
+  if (!query || bangs.resolve(query) || bangs.complete(query).length > 0) return []
+  const lower = query.toLowerCase()
+  return (await fetchSearchSuggestions(query))
+    .filter((phrase) => phrase.toLowerCase() !== lower)
+    .map((phrase) => ({ kind: 'search', query: phrase, url: searchUrl(phrase), fromProvider: true }))
 }

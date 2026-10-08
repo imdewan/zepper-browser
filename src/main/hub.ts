@@ -126,6 +126,7 @@ export class Hub {
     // These answer only Zepper's own UI, never web pages.
     ipcMain.handle(IPC.getSnapshot, (event) => this.uiOwner(event.sender)?.publicSnapshot() ?? null)
     ipcMain.handle(IPC.suggest, (event, text: string) => this.uiOwner(event.sender)?.suggestions(String(text ?? '')) ?? [])
+    ipcMain.handle(IPC.searchSuggestions, (event, text: string) => this.uiOwner(event.sender)?.searchSuggestions(String(text ?? '')) ?? [])
     ipcMain.handle(IPC.extensions, (event) => (this.uiOwner(event.sender) ? (this.services.extensions?.list() ?? []) : []))
     ipcMain.handle(IPC.downloadIcon, (event, id: unknown) => (this.uiOwner(event.sender) ? this.downloads.iconOf(String(id)) : null))
     // Private windows keep no history, so their history page is empty.

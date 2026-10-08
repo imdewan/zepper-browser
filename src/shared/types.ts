@@ -677,7 +677,10 @@ export interface ZepperApi {
   onSnapshot(callback: (snapshot: Snapshot) => void): () => void
   onEvent(callback: (event: UiEvent) => void): () => void
   send(command: Command): void
+  /** Results from this Mac (tabs, history, sites): instant. */
   suggest(text: string): Promise<Suggestion[]>
+  /** The search engine's suggestions, which take a moment (shown below the rest once they arrive). */
+  searchSuggestions(text: string): Promise<Suggestion[]>
   /** History page entries, newest first. */
   history(query: string): Promise<HistoryEntry[]>
   /** History pages that match what a query means (on-device), best first. */
@@ -785,6 +788,7 @@ export const IPC = {
   event: 'zepper:event',
   command: 'zepper:command',
   suggest: 'zepper:suggest',
+  searchSuggestions: 'zepper:search-suggestions',
   extensions: 'zepper:extensions',
   history: 'zepper:history',
   historyMeaning: 'zepper:history-meaning',

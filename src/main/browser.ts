@@ -87,7 +87,7 @@ import { parse as parseDomain } from 'tldts-experimental'
 import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
 import { isFolder, type ImportedItem, type ImportedSession } from './session-import'
 import { fetchPageMeta } from './page-meta'
-import { suggest } from './suggest'
+import { searchSuggestions, suggest } from './suggest'
 import { BROWSING_PARTITION } from './extensions'
 import { tidyGroups } from './tidy'
 import { AiError, intelligence } from './ai'
@@ -1259,9 +1259,14 @@ export class Browser {
     return this.snapshot()
   }
 
-  suggestions(text: string): Promise<Suggestion[]> {
+  suggestions(text: string): Suggestion[] {
     // Private windows don't draw on (or show) browsing history.
-    return suggest(text, this.tabs, this.history, this.settings.searchSuggestions, this.kind === 'private', this.settings.paletteRecents)
+    return suggest(text, this.tabs, this.history, this.kind === 'private', this.settings.paletteRecents)
+  }
+
+  /** The search engine's suggestions, if they're on (Settings › Search). */
+  async searchSuggestions(text: string): Promise<Suggestion[]> {
+    return this.settings.searchSuggestions ? searchSuggestions(text) : []
   }
 
   /** Commands from this window's own UI (chrome, overlay, player controls) only, never from web pages. */

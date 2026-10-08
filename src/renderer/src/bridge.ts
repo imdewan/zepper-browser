@@ -285,9 +285,11 @@ function createMock(): ZepperApi {
       return [
         { kind: 'search', query: text, url: '', fromProvider: false },
         { kind: 'tab', tabId: 'n2', url: 'https://www.youtube.com', title: 'YouTube', favicon: favicon('youtube.com') },
-        { kind: 'history', url: 'https://github.com/electron', title: 'Electron · GitHub' },
-        { kind: 'search', query: `${text} browser`, url: '', fromProvider: true }
+        { kind: 'history', url: 'https://github.com/electron', title: 'Electron · GitHub' }
       ]
+    },
+    async searchSuggestions(text: string): Promise<Suggestion[]> {
+      return text ? [{ kind: 'search', query: `${text} browser`, url: '', fromProvider: true }] : []
     }
   }
 }
