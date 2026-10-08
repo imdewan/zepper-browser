@@ -98,6 +98,10 @@ interface SpacesViewportProps {
 
 /** A pause this long ends a wheel stream. */
 const QUIET_MS = 140
+/** After a switch, deltas this small mean the fingers have lifted (or momentum stopped), so the next growth is a new swipe. */
+const LIFTED_DELTA = 2.5
+/** And never sooner than this after the switch. */
+const LOCK_MIN_MS = 200
 
 /**
  * All spaces laid side by side; the track slides to the active one with a
@@ -107,8 +111,10 @@ const QUIET_MS = 140
  * Each wheel stream is classified once (vertical scrolling is left alone).
  * The sidebar decides the target space itself, so back-to-back swipes build on
  * where the track visually is instead of waiting for the main process. After
- * a switch, the momentum tail is ignored, but a new swipe is recognised at
- * once: momentum only ever shrinks, a new swipe grows.
+ * a switch, the rest of that swipe and its momentum are ignored: one swipe is
+ * one space, however it speeds up or slows down. A new swipe is recognised
+ * once the deltas have died down to almost nothing (fingers lifted, or
+ * momentum stopped by new fingers) and grow again.
  */
 export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRename }: SpacesViewportProps): React.JSX.Element {
   const viewport = useRef<HTMLDivElement>(null)
@@ -121,8 +127,9 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
   const x = useMotionValue(0)
   const gesture = useRef({
     mode: 'idle' as 'idle' | 'pending' | 'drag' | 'ignore' | 'locked',
-    /** After a switch: still the same swipe ('finger'), or its momentum ('momentum'). */
-    lockPhase: 'finger' as 'finger' | 'momentum',
+    /** After a switch: when it locked, and the smallest delta seen since (a new swipe starts from rest). */
+    lockedAt: 0,
+    floor: Infinity,
     dx: 0,
     dy: 0,
     offset: 0,
@@ -204,6 +211,13 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
       g.mode = 'idle'
       g.dx = g.dy = g.lastDelta = g.shrinking = g.rising = 0
     }
+    const lock = (delta: number): void => {
+      g.mode = 'locked'
+      g.lockedAt = Date.now()
+      g.floor = delta
+      g.lastDelta = delta
+      g.rising = g.shrinking = 0
+    }
     const startDrag = (): void => {
       x.stop()
       g.mode = 'drag'
@@ -221,23 +235,16 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
       if (g.mode === 'ignore') return
       if (g.mode === 'locked') {
         e.preventDefault()
-        if (g.lockPhase === 'finger') {
-          // Still the swipe that switched; once it starts decaying, it's momentum.
-          g.shrinking = delta < g.lastDelta ? g.shrinking + 1 : 0
-          if (g.shrinking >= 3) {
-            g.lockPhase = 'momentum'
-            g.rising = 0
-          }
-        } else {
-          // Momentum only shrinks; growing deltas mean new fingers: a new swipe.
-          g.rising = delta > g.lastDelta + 1 ? g.rising + 1 : 0
-          if (g.rising >= 2) {
-            g.lastDelta = delta
-            startDrag()
-            g.offset -= e.deltaX
-            x.set(-current() * width + g.offset)
-            return
-          }
+        // The swipe that switched (and its momentum) can slow down and speed up again; only deltas
+        // that have died down to almost nothing and then grow are new fingers, a new swipe.
+        g.floor = Math.min(g.floor, delta)
+        g.rising = delta > g.lastDelta + 0.5 ? g.rising + 1 : 0
+        if (g.floor <= LIFTED_DELTA && g.rising >= 2 && Date.now() - g.lockedAt > LOCK_MIN_MS) {
+          g.lastDelta = delta
+          startDrag()
+          g.offset -= e.deltaX
+          x.set(-current() * width + g.offset)
+          return
         }
         g.lastDelta = delta
         return
@@ -275,10 +282,7 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
         if (g.shrinking >= 4) {
           e.preventDefault()
           release()
-          g.mode = 'locked'
-          g.lockPhase = 'momentum'
-          g.lastDelta = delta
-          g.rising = 0
+          lock(delta)
           return
         }
       }
@@ -293,9 +297,7 @@ export function SpacesViewport({ snapshot, renamingId, onRenameDone, onStartRena
       if (!atStart && !atEnd && count > 1 && Math.abs(g.offset) > width * 0.3) {
         commit(g.offset < 0 ? 1 : -1)
         g.offset = 0
-        g.mode = 'locked'
-        g.lockPhase = 'finger'
-        g.shrinking = 0
+        lock(delta)
       }
     }
     el.addEventListener('wheel', onWheel, { passive: false })
