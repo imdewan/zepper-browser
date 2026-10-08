@@ -4,6 +4,15 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- **Developer Mode**, as in Arc:
+  - Sites you're building get a bar over the page: the full address, and buttons to copy it, capture in Portrait Mode, take a capture, open the Console, Network or Inspect, open extensions or split view, and turn Developer Mode off.
+  - It's on by itself for localhost and other local sites (`.test`, `.local`, your network). Turn it on for any site, from then on, from its lock icon, its tab's menu, the new `</>` button at the bottom of the sidebar or View › Developer Mode for This Site.
+  - Its tabs have a caution-tape outline in the sidebar, and Settings › Developer lists your sites.
+- **DevTools dock beside the page**, rather than opening in a window of their own (⌥⌘I, and ⌥⌘J for the Console). Drag the divider to resize them.
+- **Portrait Mode:** a framed screenshot of the page, on white, a colour you pick or your desktop picture, copied to the clipboard and ready to save.
+
 ### Changed
 
 - The command bar works like Chrome's address bar:

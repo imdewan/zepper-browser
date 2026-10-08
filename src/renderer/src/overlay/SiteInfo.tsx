@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { CertificateChain, PermissionPrompt, PermissionState, SiteInfo } from '@shared/types'
 import { zepper } from '../bridge'
-import { IconArrowRight, IconBack, IconChevronDown, IconCookie, IconGlobe, IconLock, IconShield, IconTrash } from '../icons'
+import { IconArrowRight, IconBack, IconChevronDown, IconCode, IconCookie, IconGlobe, IconLock, IconShield, IconTrash } from '../icons'
 import { cx } from '../util'
 import { Toggle } from './Toggle'
 
@@ -59,6 +59,7 @@ function SiteSummary({ info, onShowCertificate, onShowData }: SiteSummaryProps):
   const [blocking, setBlocking] = useState(info.adblockSite)
   const [protections, setProtections] = useState(info.protections)
   const [expanded, setExpanded] = useState(false)
+  const [developing, setDeveloping] = useState(info.developing)
   const offHere = protections.filter((p) => p.global && !p.site).length
   const web = /^https?:/.test(info.url)
   const cert = info.certificate
@@ -159,6 +160,29 @@ function SiteSummary({ info, onShowCertificate, onShowData }: SiteSummaryProps):
               </motion.div>
             )}
           </AnimatePresence>
+        </section>
+      )}
+
+      {info.developerHost && (
+        <section className="site-section">
+          <div className="site-row">
+            <IconCode size={15} className="site-row-icon" />
+            <div className="site-row-label">
+              Developer Mode
+              <div className="site-row-sub">
+                {developing
+                  ? `The developer bar and tools, on ${info.developerHost}`
+                  : 'For a site you’re building: its full address, DevTools and Portrait Mode'}
+              </div>
+            </div>
+            <Toggle
+              checked={developing}
+              onChange={(on) => {
+                setDeveloping(on)
+                zepper.send({ type: 'developer.toggle' })
+              }}
+            />
+          </div>
         </section>
       )}
 

@@ -130,6 +130,15 @@ export interface Settings {
   passwords: boolean
   /** Sites (registrable domains) where Zepper never offers to save passwords. */
   neverSavePasswords: string[]
+  /**
+   * Developer Mode: sites you're building get the developer bar (the full address, DevTools,
+   * Portrait Mode). On for local sites (localhost, *.test…) and the hosts in developerSites.
+   */
+  developerMode: boolean
+  /** Hosts you turned Developer Mode on for. */
+  developerSites: string[]
+  /** Local hosts you turned it off for. */
+  notDeveloperSites: string[]
   /** Where downloads are saved ('' means the Downloads folder). */
   downloadPath: string
   /** Ask where to save each download. */
@@ -201,6 +210,9 @@ export const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
   passwords: true,
   neverSavePasswords: [],
+  developerMode: true,
+  developerSites: [],
+  notDeveloperSites: [],
   hideCookieBanners: true,
   blockFingerprinting: true,
   blockCrossSiteCookies: true,

@@ -171,6 +171,16 @@ export function buildMenu(hub: Hub): Menu {
             (popup) => popup.webContents.toggleDevTools()
           )
         },
+        {
+          label: 'JavaScript Console',
+          accelerator: 'CmdOrCtrl+Alt+J',
+          click: run(
+            (browser) => browser.showConsole(),
+            (popup) => popup.webContents.openDevTools()
+          )
+        },
+        // No shortcut: macOS has ⌥⌘D (hide the Dock).
+        { label: 'Developer Mode for This Site', click: run((browser) => browser.toggleDeveloperForActive()) },
         ...(isDev
           ? [
               {

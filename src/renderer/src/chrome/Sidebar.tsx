@@ -6,6 +6,7 @@ import { useDrop } from './dnd'
 import {
   IconBack,
   IconCheck,
+  IconCode,
   IconCopy,
   IconDownload,
   IconForward,
@@ -286,6 +287,7 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
       <button className="icon-button" title="Settings" onClick={() => zepper.send({ type: 'ui.openSettings' })}>
         <IconSettings size={16} />
       </button>
+      <DeveloperButton snapshot={snapshot} />
       <SpaceSwitcher snapshot={snapshot} />
       <button
         ref={downloadsRef}
@@ -304,6 +306,24 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
         <IconDownload size={16} />
       </button>
     </div>
+  )
+}
+
+/** Developer Mode for the site you're on (lit while it's on); not for pages that aren't web sites. */
+function DeveloperButton({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
+  const tab = snapshot.tabs.find((t) => t.id === snapshot.activeTabId)
+  const web = !!tab && /^https?:/.test(tab.url)
+  const on = !!tab?.developing
+  const host = tab ? hostOf(tab.url) : ''
+  return (
+    <button
+      className={cx('icon-button', 'developer-button', on && 'on')}
+      title={!web ? 'Developer Mode (for web pages)' : on ? `Turn off Developer Mode for ${host}` : `Turn on Developer Mode for ${host}`}
+      disabled={!web}
+      onClick={() => tab && zepper.send({ type: 'developer.toggle', tabId: tab.id })}
+    >
+      <IconCode size={16} />
+    </button>
   )
 }
 

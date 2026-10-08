@@ -17,6 +17,8 @@ export interface Tab {
   /** The space the tab belongs to (Essentials too). */
   spaceId: string | null
   url: string
+  /** In snapshots only: its page is a site you're building (Developer Mode). */
+  developing?: boolean
   title: string
   favicon: string | null
   pinned: PinnedInfo | null
@@ -131,7 +133,14 @@ export interface Split {
 
 export interface Pane {
   tabId: string
+  /** The whole pane: the page, and the developer bar and DevTools when it has them. */
   rect: Rect
+  /** Where the web view itself is. */
+  page: Rect
+  /** The developer bar above the page (Developer Mode). */
+  bar?: Rect
+  /** DevTools, docked beside the page. */
+  devtools?: Rect
 }
 
 /** A download, for the downloads panel. */
@@ -204,7 +213,12 @@ export interface Snapshot {
   splits: Split[]
   /** Where each visible web view sits in the window; more than one while a split is shown. */
   panes: Pane[]
+  /** Tabs with DevTools docked, and the panel the developer bar last showed. */
+  devtools: { tabId: string; panel: DevToolsPanel }[]
 }
+
+/** The DevTools panels the developer bar opens (inspect: Elements, picking an element on the page). */
+export type DevToolsPanel = 'console' | 'network' | 'elements' | 'inspect'
 
 export interface Rect {
   x: number
@@ -304,6 +318,9 @@ export interface SiteInfo {
   /** Each protection: on in Settings, and on for this site. */
   protections: { key: Protection; label: string; global: boolean; site: boolean }[]
   permissions: { permission: string; label: string; state: PermissionState }[]
+  /** Developer Mode is on for this site, and the host it goes by (null: not a web page). */
+  developing: boolean
+  developerHost: string | null
 }
 
 /** A page's alert(), confirm() or prompt(), shown in Zepper's own dialog. */
@@ -347,6 +364,8 @@ export type PopoverSpec =
   | { kind: 'jsDialog'; anchor: Rect; dialog: JsDialogSpec }
   | { kind: 'auth'; anchor: Rect; auth: AuthSpec }
   | { kind: 'assistant'; anchor: Rect; title: string; host: string }
+  /** Portrait Mode: the page as it is (a PNG data URL, at `scale` pixels a point) and your desktop picture (JPEG data URL). */
+  | { kind: 'portrait'; anchor: Rect; tabId: string; image: string; width: number; height: number; scale: number; wallpaper: string | null }
 
 /** A saved login offered under a sign-in field. Never carries the password itself. */
 export interface SavedLogin {
@@ -528,6 +547,20 @@ export type Command =
   | { type: 'app.relaunch' }
   | { type: 'app.makeDefaultBrowser' }
   /** Screen captures: take one (window coordinates for a region or element), cancel, and act on the result. */
+  /** Developer Mode on or off for a tab's site (its host), from then on (no tab: the one you're on). */
+  | { type: 'developer.toggle'; tabId?: string }
+  | { type: 'developer.copyUrl'; tabId: string }
+  /** The developer bar's capture button: Zepper's capture, on that tab. */
+  | { type: 'developer.capture'; tabId: string }
+  /** Opens Portrait Mode's popover under the developer bar's button. */
+  | { type: 'developer.portrait'; tabId: string; anchor: Rect }
+  /** Portrait Mode's finished picture (a PNG data URL): onto the clipboard, then as a capture. */
+  | { type: 'developer.portraitDone'; png: string; scale: number }
+  /** DevTools docked beside a tab's page, on a panel; the same panel again closes them. */
+  | { type: 'devtools.show'; tabId: string; panel: DevToolsPanel }
+  | { type: 'devtools.close'; tabId: string }
+  /** The docked DevTools' width (dragging the divider). */
+  | { type: 'devtools.resize'; width: number }
   | { type: 'capture.take'; mode: 'visible' | 'full' | 'area'; rect?: Rect }
   | { type: 'capture.cancel' }
   | { type: 'capture.save' }

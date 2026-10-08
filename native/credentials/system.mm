@@ -110,3 +110,49 @@ napi_value FileTypeIcon(napi_env env, napi_callback_info info) {
   napi_create_string_utf8(env, url.UTF8String, NAPI_AUTO_LENGTH, &result);
   return result;
 }
+
+/**
+ * desktopPicture(maxWidth: number): string — the main screen's desktop picture as a JPEG data URL, at
+ * most maxWidth pixels wide ('' when macOS doesn't say, or it isn't an image file), for Portrait Mode.
+ */
+napi_value DesktopPicture(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  double maxWidth = 1600;
+  if (argc > 0) napi_get_value_double(env, argv[0], &maxWidth);
+  maxWidth = MAX(64, MIN(maxWidth, 4096));
+  NSString *url = @"";
+  @autoreleasepool {
+    NSScreen *screen = NSScreen.mainScreen;
+    NSURL *file = screen ? [[NSWorkspace sharedWorkspace] desktopImageURLForScreen:screen] : nil;
+    NSImage *image = file ? [[NSImage alloc] initWithContentsOfURL:file] : nil;
+    NSImageRep *rep = image.representations.firstObject;
+    CGFloat pixelsWide = rep && rep.pixelsWide > 0 ? rep.pixelsWide : image.size.width;
+    CGFloat pixelsHigh = rep && rep.pixelsHigh > 0 ? rep.pixelsHigh : image.size.height;
+    if (image && pixelsWide > 0 && pixelsHigh > 0) {
+      CGFloat width = MIN(maxWidth, pixelsWide);
+      CGFloat height = round(width * pixelsHigh / pixelsWide);
+      NSBitmapImageRep *bitmap = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nullptr
+                                                                         pixelsWide:(NSInteger)width
+                                                                         pixelsHigh:(NSInteger)height
+                                                                      bitsPerSample:8
+                                                                    samplesPerPixel:4
+                                                                           hasAlpha:YES
+                                                                           isPlanar:NO
+                                                                     colorSpaceName:NSDeviceRGBColorSpace
+                                                                        bytesPerRow:0
+                                                                       bitsPerPixel:0];
+      bitmap.size = NSMakeSize(width, height);
+      [NSGraphicsContext saveGraphicsState];
+      NSGraphicsContext.currentContext = [NSGraphicsContext graphicsContextWithBitmapImageRep:bitmap];
+      [image drawInRect:NSMakeRect(0, 0, width, height) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1];
+      [NSGraphicsContext restoreGraphicsState];
+      NSData *jpeg = [bitmap representationUsingType:NSBitmapImageFileTypeJPEG properties:@{NSImageCompressionFactor : @0.85}];
+      if (jpeg) url = [@"data:image/jpeg;base64," stringByAppendingString:[jpeg base64EncodedStringWithOptions:0]];
+    }
+  }
+  napi_value result;
+  napi_create_string_utf8(env, url.UTF8String, NAPI_AUTO_LENGTH, &result);
+  return result;
+}

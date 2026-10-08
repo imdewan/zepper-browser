@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ArrowDownToLine,
+  CodeXml,
   Hand,
   KeyRound,
   Keyboard,
@@ -66,7 +67,18 @@ const TRANSLATION_LANGUAGES = [
 ]
 
 type Section =
-  'general' | 'appearance' | 'tabs' | 'media' | 'search' | 'downloads' | 'gestures' | 'privacy' | 'passwords' | 'extensions' | 'shortcuts'
+  | 'general'
+  | 'appearance'
+  | 'tabs'
+  | 'media'
+  | 'search'
+  | 'downloads'
+  | 'gestures'
+  | 'privacy'
+  | 'passwords'
+  | 'extensions'
+  | 'developer'
+  | 'shortcuts'
 
 /** Sidebar sections, each with a Lucide glyph on a coloured square, like System Settings. */
 /** The settings sections; `title` heads the page when it differs from the sidebar's label. */
@@ -81,15 +93,18 @@ const SECTIONS: { id: Section; label: string; title?: string; Icon: LucideIcon; 
   { id: 'privacy', label: 'Privacy', Icon: ShieldCheck, color: '#34c759' },
   { id: 'passwords', label: 'Passwords', Icon: KeyRound, color: '#636366' },
   { id: 'extensions', label: 'Extensions', Icon: Puzzle, color: '#ff453a' },
+  { id: 'developer', label: 'Developer', Icon: CodeXml, color: '#d99a00' },
   { id: 'shortcuts', label: 'Shortcuts', title: 'Keyboard Shortcuts', Icon: Keyboard, color: '#48484a' }
 ]
 
 /** Pages a section opens for its longer lists: what they're called, and the section they're in. */
-type SubPage = 'sitePermissions' | 'protectionsOff' | 'neverSaved'
+type SubPage = 'sitePermissions' | 'protectionsOff' | 'neverSaved' | 'developerSites' | 'notDeveloperSites'
 const SUB_PAGES: Record<SubPage, { title: string; section: Section }> = {
   sitePermissions: { title: 'Site permissions', section: 'privacy' },
   protectionsOff: { title: 'Sites with protections off', section: 'privacy' },
-  neverSaved: { title: 'Passwords never saved', section: 'passwords' }
+  neverSaved: { title: 'Passwords never saved', section: 'passwords' },
+  developerSites: { title: 'Sites you’re building', section: 'developer' },
+  notDeveloperSites: { title: 'Local sites without Developer Mode', section: 'developer' }
 }
 
 const SHORTCUTS: [string, string][] = [
@@ -270,6 +285,24 @@ export function SettingsPanel({
                   actionTitle={(item) => `Offer to save passwords on ${item.site} again`}
                   empty="Sites you choose Never for, when Zepper offers to save a password, show up here."
                   onAction={(item) => set({ neverSavePasswords: settings.neverSavePasswords.filter((d) => d !== item.key) })}
+                />
+              )}
+              {page === 'developerSites' && (
+                <SiteListPage
+                  items={settings.developerSites.map((host) => ({ key: host, site: host }))}
+                  action="Remove"
+                  actionTitle={(item) => `Turn off Developer Mode for ${item.site}`}
+                  empty="Sites you turn Developer Mode on for (from their lock icon, their tab’s menu or the </> button) show up here."
+                  onAction={(item) => set({ developerSites: settings.developerSites.filter((h) => h !== item.key) })}
+                />
+              )}
+              {page === 'notDeveloperSites' && (
+                <SiteListPage
+                  items={settings.notDeveloperSites.map((host) => ({ key: host, site: host }))}
+                  action="Turn On"
+                  actionTitle={(item) => `Turn Developer Mode back on for ${item.site}`}
+                  empty="Local sites you turn Developer Mode off for show up here."
+                  onAction={(item) => set({ notDeveloperSites: settings.notDeveloperSites.filter((h) => h !== item.key) })}
                 />
               )}
               {!page && section === 'general' && (
@@ -737,6 +770,29 @@ export function SettingsPanel({
               )}
 
               {!page && section === 'extensions' && <ExtensionsSettings settings={settings} />}
+
+              {!page && section === 'developer' && (
+                <>
+                  <Row
+                    label="Developer Mode"
+                    hint="Sites you’re building get a bar over the page: the full address, DevTools (Console, Network, Inspect), Portrait Mode, captures and split view. On by itself for local sites: localhost, .test and .local addresses, and your network."
+                  >
+                    <Toggle checked={settings.developerMode} onChange={(developerMode) => set({ developerMode })} />
+                  </Row>
+                  <SiteListLink
+                    label="Sites you’re building"
+                    hint="Turn Developer Mode on for any site from its lock icon, its tab’s menu, the </> button at the bottom of the sidebar, or View › Developer Mode for This Site."
+                    count={settings.developerSites.length}
+                    onOpen={() => openPage('developerSites')}
+                  />
+                  <SiteListLink
+                    label="Local sites without it"
+                    hint="Local sites you turned Developer Mode off for."
+                    count={settings.notDeveloperSites.length}
+                    onOpen={() => openPage('notDeveloperSites')}
+                  />
+                </>
+              )}
 
               {!page && section === 'shortcuts' && (
                 <>

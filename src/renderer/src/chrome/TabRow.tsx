@@ -74,7 +74,8 @@ function sameRow(a: TabRowProps, b: TabRowProps): boolean {
     x.capture?.screen === y.capture?.screen &&
     x.capture?.call === y.capture?.call &&
     x.pinned?.url === y.pinned?.url &&
-    x.pinned?.favicon === y.pinned?.favicon
+    x.pinned?.favicon === y.pinned?.favicon &&
+    x.developing === y.developing
   )
 }
 
@@ -103,7 +104,15 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
       <div
         {...(place ? dragProps({ kind: 'tab', id: tab.id }) : {})}
         {...drop.props}
-        className={cx('tab', active && 'active', !tab.loaded && 'unloaded', changed && 'changed', drop.position && `dnd-${drop.position}`)}
+        className={cx(
+          'tab',
+          active && 'active',
+          !tab.loaded && 'unloaded',
+          changed && 'changed',
+          // A site you're building (Developer Mode): outlined like caution tape, as in Arc.
+          tab.developing && 'developing',
+          drop.position && `dnd-${drop.position}`
+        )}
         title={tab.title || tab.url}
         onClick={() => zepper.send({ type: 'tab.activate', tabId: tab.id })}
         onMouseDown={(e) => e.button === 1 && e.preventDefault()}
@@ -113,6 +122,7 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
           zepper.send({ type: 'tab.contextMenu', tabId: tab.id })
         }}
       >
+        {tab.developing && <span className="dev-outline" aria-hidden="true" />}
         {changed && tab.pinned ? (
           <button
             className={cx('pin-reset', resetHover && 'hover')}

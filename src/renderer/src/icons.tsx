@@ -1,5 +1,24 @@
 import type { SVGProps } from 'react'
-import { CircleArrowUp, KeyRound, Mic, Monitor, MonitorUp, Smartphone, UserRoundKey, Video, type LucideProps } from 'lucide-react'
+import {
+  Camera,
+  CircleArrowUp,
+  CodeXml,
+  Columns2,
+  Crosshair,
+  Frame,
+  Globe,
+  Info,
+  KeyRound,
+  Link,
+  Mic,
+  Monitor,
+  MonitorUp,
+  Smartphone,
+  SquareTerminal,
+  UserRoundKey,
+  Video,
+  type LucideProps
+} from 'lucide-react'
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number }
 
@@ -298,3 +317,23 @@ export const IconMic = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
 export const IconScreenShare = ({ size = 16, ...p }: IconProps): React.JSX.Element => (
   <MonitorUp size={size} strokeWidth={2.2} aria-hidden="true" {...(p as LucideProps)} />
 )
+
+// ---- Developer Mode's bar ----
+const lucide = (Glyph: React.ComponentType<LucideProps>, strokeWidth = 1.9) =>
+  function DeveloperIcon({ size = 16, ...p }: IconProps): React.JSX.Element {
+    return <Glyph size={size} strokeWidth={strokeWidth} aria-hidden="true" {...(p as LucideProps)} />
+  }
+/** Copy the address. */
+export const IconLink = lucide(Link)
+/** Portrait Mode: the page, framed. */
+export const IconFrame = lucide(Frame)
+/** A screenshot (Zepper's capture). */
+export const IconScreenshot = lucide(Camera)
+export const IconConsole = lucide(SquareTerminal)
+export const IconNetwork = lucide(Globe)
+/** Inspect an element. */
+export const IconInspect = lucide(Crosshair)
+export const IconSplit = lucide(Columns2)
+export const IconInfo = lucide(Info)
+/** Developer Mode. */
+export const IconCode = lucide(CodeXml, 2)

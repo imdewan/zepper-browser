@@ -145,6 +145,7 @@ function createMock(): ZepperApi {
     update: { state: 'off' },
     sitePermissions: [],
     profileScope: null,
+    devtools: [],
     systemAccess: { camera: 'allowed', microphone: 'allowed', screen: 'allowed', location: 'allowed' },
     extensionsPartition: 'zepper-browsing',
     intelligence: { ai: true, translation: true, embeddings: true },

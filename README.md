@@ -101,6 +101,8 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 
 **A password manager, built in.** Saved logins under sign-in fields, strong passwords for new accounts, and passkeys with Touch ID, all kept encrypted on your Mac. Import from Chrome, Brave, Edge, Arc and others in one click, or from Apple Passwords, Firefox, 1Password and Bitwarden exports.
 
+**Developer Mode.** Sites you're building (localhost, and any site you turn it on for) get a bar over the page with the full address, Console, Network and Inspect in DevTools docked beside the page, captures, Portrait Mode for framed screenshots of work in progress, extensions and split view.
+
 **Arc-style captures.** ⇧⌘2: click an element, drag a region, or take the visible screen or the whole page. It's copied straight away, with a thumbnail you can drag into other apps.
 
 **Media.** A now-playing card for audio in other tabs, automatic picture-in-picture when you leave a playing video, and optional Google Widevine for Netflix and other streaming services.

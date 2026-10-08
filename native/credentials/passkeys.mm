@@ -373,6 +373,7 @@ static napi_value Init(napi_env env, napi_value exports) {
       {"bleStop", nullptr, BleStop, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"locationAccess", nullptr, LocationAccess, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"fileTypeIcon", nullptr, FileTypeIcon, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"desktopPicture", nullptr, DesktopPicture, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"requestLocationAccess", nullptr, RequestLocationAccess, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(properties) / sizeof(properties[0]), properties);

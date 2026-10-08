@@ -10,6 +10,7 @@ import { AssistantPanel } from './AssistantPanel'
 import { AuthDialog, JsDialog } from './Dialogs'
 import { ExtensionsPanel } from './ExtensionsPanel'
 import { PermissionPanel, SiteInfoPanel, WidevinePrompt } from './SiteInfo'
+import { PortraitPanel } from './PortraitPanel'
 import { SpacesPicker } from './SpacesPicker'
 
 const POPOVER_WIDTHS: Partial<Record<PopoverSpec['kind'], number>> = {
@@ -18,7 +19,8 @@ const POPOVER_WIDTHS: Partial<Record<PopoverSpec['kind'], number>> = {
   widevine: 360,
   siteInfo: 340,
   assistant: 400,
-  theme: 352
+  theme: 352,
+  portrait: 360
 }
 
 interface PopoverProps {
@@ -51,9 +53,14 @@ export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }:
   // Panels from the bottom bar rise above their button; from the top of the window they drop down.
   const above = popover.kind === 'extensions' && anchor.y > window.innerHeight / 2
   const width = popover.kind === 'spaces' ? Math.max(250, anchor.width) : (POPOVER_WIDTHS[popover.kind] ?? 300)
+  // Portrait Mode's panel hangs centred under its button in the developer bar.
+  const centred = popover.kind === 'portrait'
   const left = beside
     ? Math.min(anchor.x + anchor.width + 12, window.innerWidth - width - 12)
-    : Math.min(Math.max(12, above ? anchor.x - 6 : anchor.x), window.innerWidth - width - 12)
+    : Math.min(
+        Math.max(12, centred ? anchor.x + anchor.width / 2 - width / 2 : above ? anchor.x - 6 : anchor.x),
+        window.innerWidth - width - 12
+      )
   const estimatedHeight = popover.kind === 'theme' ? 600 : 420
   // Page dialogs sit centred at the top of the page, like Chrome's.
   const position = modal
@@ -111,6 +118,7 @@ export function Popover({ popover, space, snapshot, pinnedExtensions, onClose }:
           </>
         )}
         {popover.kind === 'siteInfo' && <SiteInfoPanel info={popover.info} onClose={onClose} />}
+        {popover.kind === 'portrait' && <PortraitPanel popover={popover} onClose={onClose} />}
         {popover.kind === 'permission' && <PermissionPanel prompt={popover.prompt} onDone={onClose} />}
         {popover.kind === 'extensions' && <ExtensionsPanel pinned={pinnedExtensions} anchor={anchor} onClose={onClose} />}
         {popover.kind === 'spaces' && snapshot && <SpacesPicker snapshot={snapshot} onClose={onClose} />}

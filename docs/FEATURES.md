@@ -110,6 +110,14 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
 - **Search history by meaning:** on the History page, a query of a few words shows Best matches by meaning, re-ranked by Apple Intelligence. The index lives with your history and goes when history is cleared.
 - **Tidy Tabs** (see Tabs).
 
+## Developer Mode
+
+- On by itself for local sites (localhost, `.test` and `.local` addresses, 127.0.0.1 and your network); turn it on for any other site from its lock icon, its tab's menu, the `</>` button at the bottom of the sidebar or View › Developer Mode for This Site. It stays on for that host from then on (Settings › Developer lists them)
+- A bar over the page: the full address (scheme, host and port, path), and buttons to copy it, capture in Portrait Mode, take a capture, open the Console, Network or Inspect, extensions, split view, and turn Developer Mode off for the site
+- DevTools dock beside the page (⌥⌘I for Elements, ⌥⌘J for the Console), with a divider to drag; the bar's buttons switch panels, and the panel that's showing closes them
+- **Portrait Mode:** the page framed like a window on white, a colour from the slider, or your desktop picture; copied to the clipboard, with Save, Show in Finder and drag
+- Its tab has a caution-tape outline in the sidebar
+
 ## Captures
 
 - ⇧⌘2 freezes and dims the page. Hover to highlight an element and click to capture it, or drag a region; Visible (V) and Full page (F) take the screen or the whole page; Esc cancels.

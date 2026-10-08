@@ -23,6 +23,8 @@ export interface CredentialsAddon {
   requestLocationAccess(): Promise<string>
   /** The icon Finder shows for a kind of file ("pdf"), as a PNG data URL ('' if none). */
   fileTypeIcon(extension: string, size: number): string
+  /** The main screen's desktop picture, as a JPEG data URL at most maxWidth wide ('' if there isn't one to read). */
+  desktopPicture?(maxWidth: number): string
 }
 
 let addon: CredentialsAddon | null | undefined
@@ -97,6 +99,15 @@ export async function requestLocationAccess(): Promise<'allowed' | 'denied' | 'a
 export function fileTypeIcon(extension: string, size = 64): string | null {
   try {
     return credentialsAddon()?.fileTypeIcon?.(extension, size) || null
+  } catch {
+    return null
+  }
+}
+
+/** Your desktop picture (the main screen's), as a JPEG data URL, for Portrait Mode's background. */
+export function desktopPicture(maxWidth = 1600): string | null {
+  try {
+    return credentialsAddon()?.desktopPicture?.(maxWidth) || null
   } catch {
     return null
   }

@@ -8,6 +8,7 @@ import { IconPrivate } from '../icons'
 import { useSnapshot, useSystemDark } from '../useSnapshot'
 import logo from '../assets/logo.png'
 import { cx } from '../util'
+import { DeveloperLayer } from './DeveloperBar'
 import { Sidebar } from './Sidebar'
 
 export const GRAIN =
@@ -107,6 +108,7 @@ export function App(): React.JSX.Element | null {
         ) : (
           <ContentCard tab={activeTab} isPrivate={snapshot.kind === 'private'} quiet={snapshot.paletteOpen} />
         )}
+        <DeveloperLayer snapshot={snapshot} />
       </div>
     </MotionConfig>
   )

@@ -2068,3 +2068,147 @@ button.site-button.insecure:hover {
     animation: none;
   }
 }
+
+/* ---- Developer Mode ------------------------------------------------------------ */
+
+/* A site you're building: a caution-tape outline on its tab, as in Arc (full on the tab you're on). */
+.tab .dev-outline {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: repeating-linear-gradient(-45deg, #f2c200 0 5px, #29292c 5px 10px);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.tab.active .dev-outline {
+  padding: 2px;
+  opacity: 1;
+}
+
+.developer-button.on {
+  color: #b58a00;
+  background: color-mix(in srgb, #f2c200 22%, transparent);
+}
+
+[data-ui='dark'] .developer-button.on {
+  color: #f2c200;
+}
+
+/* The bar over the page: its full address, and developer tools. Part of the page's card. */
+.dev-bar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 6px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.022) 0 6px, transparent 6px 12px), var(--card);
+  border-bottom: 1px solid var(--separator);
+  color: var(--text-2);
+  -webkit-app-region: no-drag;
+}
+
+[data-ui='dark'] .dev-bar {
+  background: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 0 6px, transparent 6px 12px), var(--card);
+}
+
+.dev-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font:
+    12.5px/1 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+  color: var(--text-2);
+  user-select: text;
+  cursor: text;
+}
+
+.dev-url-scheme {
+  color: var(--text-3);
+}
+
+.dev-url-host {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.dev-tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dev-button {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--text-2);
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease,
+    transform 0.15s ease;
+}
+
+.dev-button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.dev-button:active {
+  transform: scale(0.92);
+  background: var(--press);
+}
+
+/* The DevTools panel the bar is showing. */
+.dev-button.on {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.dev-separator {
+  width: 1px;
+  height: 16px;
+  margin: 0 5px;
+  background: var(--separator);
+}
+
+/* Between the page and docked DevTools. */
+.devtools-divider {
+  position: absolute;
+  cursor: col-resize;
+  -webkit-app-region: no-drag;
+}
+
+.devtools-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 36px;
+  border-radius: 2px;
+  translate: -50% -50%;
+  background: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.devtools-divider:hover::after {
+  opacity: 0.7;
+}
