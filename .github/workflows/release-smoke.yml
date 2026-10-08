@@ -1,0 +1,98 @@
+name: Release smoke test
+
+# Tries a release's .dmg on real Macs, an Intel one and one with Apple silicon, before it's published:
+# run it by hand with the release's tag while the release is still a draft. Each Mac installs Zepper
+# from the .dmg, checks it's built for that Mac and signed, opens a page in it, quits, and checks the
+# visit was saved. A screenshot and Zepper's log are kept with the run.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (a draft is fine), e.g. v0.1.7
+        required: true
+
+# Reading a draft release's files needs write access to the repository's contents.
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Intel
+            runner: macos-15-intel
+            arch: x64
+            cpu: x86_64
+          - name: Apple silicon
+            runner: macos-15
+            arch: arm64
+            cpu: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Download the .dmg
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "APP=$RUNNER_TEMP/Zepper.app"
+            echo "PROFILE=$RUNNER_TEMP/profile"
+            echo "OUT=$RUNNER_TEMP/out"
+          } >> "$GITHUB_ENV"
+          echo "This Mac: $(uname -m), macOS $(sw_vers -productVersion)"
+          test "$(uname -m)" = "${{ matrix.cpu }}"
+          gh release download "${{ inputs.tag }}" --repo "${{ github.repository }}" --pattern "*-${{ matrix.arch }}.dmg" --dir "$RUNNER_TEMP"
+
+      - name: Install it
+        run: |
+          hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/dmg" "$RUNNER_TEMP"/*-${{ matrix.arch }}.dmg
+          ditto "$RUNNER_TEMP/dmg/Zepper.app" "$APP"
+          hdiutil detach "$RUNNER_TEMP/dmg"
+
+      - name: Check it's built for this Mac and signed
+        run: |
+          for file in "MacOS/Zepper" "Frameworks/Electron Framework.framework/Electron Framework" \
+            "Frameworks/Zepper Helper (Renderer).app/Contents/MacOS/Zepper Helper (Renderer)" \
+            "Resources/bin/zepper-ai" "Resources/bin/zepper_credentials.node"; do
+            archs=$(lipo -archs "$APP/Contents/$file")
+            echo "$archs  $file"
+            test "$archs" = "${{ matrix.cpu }}"
+          done
+          codesign --verify --deep --strict "$APP"
+          codesign -dvv "$APP" 2>&1 | grep -E "^(Identifier|Authority)="
+          test -f "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/Electron Framework.sig"
+
+      - name: Open a page in it
+        run: |
+          mkdir -p "$PROFILE" "$OUT"
+          # Past the welcome, straight to the window.
+          echo '{"onboarded": true}' > "$PROFILE/settings.json"
+          ZEPPER_PROFILE="$PROFILE" "$APP/Contents/MacOS/Zepper" > "$OUT/zepper.log" 2>&1 &
+          echo $! > "$OUT/pid"
+          sleep 25
+          kill -0 "$(cat "$OUT/pid")"
+          open -a "$APP" --env "ZEPPER_PROFILE=$PROFILE" "https://example.com/"
+          sleep 20
+          screencapture -x "$OUT/screen.png" || echo "No screenshot (screen recording isn't allowed here)"
+          echo "Zepper's processes:"
+          pgrep -fl "$APP/Contents" | sed "s|$APP/Contents/||"
+          test "$(pgrep -f "$APP/Contents" | wc -l)" -ge 3
+
+      - name: Quit, and check the visit was saved
+        run: |
+          osascript -e 'tell application id "app.zepper.browser" to quit' || kill -TERM "$(cat "$OUT/pid")"
+          for i in $(seq 1 30); do kill -0 "$(cat "$OUT/pid")" 2>/dev/null || break; sleep 1; done
+          if kill -0 "$(cat "$OUT/pid")" 2>/dev/null; then echo "Zepper didn't quit"; exit 1; fi
+          grep -q "example.com" "$PROFILE/history.json"
+          echo "Saved in history: example.com"
+          if ls ~/Library/Logs/DiagnosticReports/ 2>/dev/null | grep -i zepper; then echo "Zepper crashed"; exit 1; fi
+
+      - name: Keep the screenshot and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zepper-${{ matrix.arch }}
+          path: ${{ runner.temp }}/out
+          if-no-files-found: ignore
