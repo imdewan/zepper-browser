@@ -6,6 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
+- Picture in picture's Back to tab button points up, into the window, rather than down.
 - About Zepper is redone, in the logo's blue throughout: the close button back in its corner, the blue glowing behind the logo, whether you're up to date in a pill (with Restart to Update beside it when there's one), every detail on one line, and a What's new button for this version's release notes.
 
 ### Fixed

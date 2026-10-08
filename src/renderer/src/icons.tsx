@@ -274,10 +274,11 @@ export const IconCookie = (p: IconProps): React.JSX.Element => (
   </Icon>
 )
 
+/** Back to the tab: an arrow up into the window's corner. */
 export const IconPopIn = (p: IconProps): React.JSX.Element => (
   <Icon {...p}>
     <rect x="3" y="4" width="18" height="16" rx="3" />
-    <path d="M14 10l-4 4M10 10v4h4" />
+    <path d="M14 14l-4-4M10 14v-4h4" />
   </Icon>
 )
 /** An update is ready. */
