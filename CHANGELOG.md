@@ -6,6 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
+- Unloading a tab yourself (Unload Tab, ⌘W or a middle-click on a pinned tab, unloading a space) signed you out of some sites (Discord): the page now gets to save first, as when you close a tab or quit.
 - The floating sidebar could still close over its traffic lights or top row if the pointer went back onto it and up again.
 
 ## [0.1.5] - 2026-10-08

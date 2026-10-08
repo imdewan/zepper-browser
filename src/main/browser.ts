@@ -3789,7 +3789,11 @@ export class Browser {
     for (const [wcId, id] of this.tabByWebContents) if (id === tab.id) this.tabByWebContents.delete(wcId)
     this.closedHere.add(view.webContents)
     this.unwire.delete(tab.id)
-    if (!view.webContents.isDestroyed()) view.webContents.close()
+    if (view.webContents.isDestroyed()) return
+    // Out of sight, the page closes the way a tab you close does: running its closing code first, where
+    // some sites save what they need (Discord its sign-in; without it you're signed out next time).
+    view.webContents.setAudioMuted(true)
+    void this.closeGently(view.webContents, true)
   }
 
   private wire(tabId: string, wc: WebContents): void {
