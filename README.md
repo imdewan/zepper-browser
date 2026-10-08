@@ -16,7 +16,7 @@ Fork it, change anything, and see it in a second. No Chromium to compile.
 [![CI](https://github.com/imdewan/zepper-browser/actions/workflows/ci.yml/badge.svg)](https://github.com/imdewan/zepper-browser/actions/workflows/ci.yml)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-34a853?style=flat-square)](CONTRIBUTING.md)
 
-[Download](#download) · [Features](#features) · [Make it yours](#make-it-yours) · [Getting started](#getting-started) · [Docs](#documentation) · [Contributing](#contributing)
+[Website](https://mrdsa.dev/zepper) · [Download](#download) · [Features](#features) · [Make it yours](#make-it-yours) · [Getting started](#getting-started) · [Docs](#documentation) · [Contributing](#contributing)
 
 <br>
 
@@ -28,7 +28,7 @@ Fork it, change anything, and see it in a second. No Chromium to compile.
 
 ## Download
 
-**[Download Zepper for Mac](https://github.com/imdewan/zepper-browser/releases/latest)** (Apple silicon, macOS 14 or later)
+**[Download Zepper for Mac at mrdsa.dev/zepper](https://mrdsa.dev/zepper)** (Apple silicon, macOS 14 or later). The `.dmg` is also on the [latest release](https://github.com/imdewan/zepper-browser/releases/latest).
 
 1. Open the `.dmg` and drag Zepper into Applications.
 2. Zepper isn't notarized by Apple yet, so macOS blocks it the first time you open it. Go to **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. You only need to do this once.
@@ -143,14 +143,14 @@ npm install
 npm run dev
 ```
 
-| Command                | What it does                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------- |
-| `npm run dev`          | Runs Zepper with hot reload for the UI                                          |
-| `npm run check`        | Type-checks, lints and checks formatting                                        |
-| `npm run build`        | Bundles main, preload and UI into `out/`                                        |
-| `npm run dist`         | Builds the macOS app (`.dmg` and `.zip`) into `dist/`                           |
-| `npm run build:native` | Builds the on-device intelligence helper (`native/zepper-ai`) into `build/bin/` |
-| `npm run brand:dev`    | Shows the development runtime as "Zepper" in the menu bar and Dock              |
+| Command                | What it does                                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| `npm run dev`          | Runs Zepper with hot reload for the UI                                              |
+| `npm run check`        | Type-checks, lints and checks formatting                                            |
+| `npm run build`        | Bundles main, preload and UI into `out/`                                            |
+| `npm run dist`         | Builds the macOS app (`.dmg` and `.zip`, for Apple silicon and Intel) into `dist/`  |
+| `npm run build:native` | Builds the native helpers (`native/`) for Apple silicon and Intel into `build/bin/` |
+| `npm run brand:dev`    | Shows the development runtime as "Zepper" in the menu bar and Dock                  |
 
 ### Protected video (Widevine)
 

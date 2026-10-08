@@ -23,11 +23,10 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "check": "npm run typecheck && npm run lint && prettier --check .",
-    "dist": "electron-vite build && npm run build:native && node scripts/stage-electron.mjs && electron-builder --mac && cp dist/latest-mac.yml dist/Zepper-update-mac.yml",
+    "dist": "electron-vite build && npm run build:native && node scripts/stage-electron.mjs && electron-builder --mac --arm64 --x64 && cp dist/latest-mac.yml dist/Zepper-update-mac.yml",
     "dist:browser": "node scripts/dist-browser.mjs",
     "brand:dev": "node scripts/brand-dev-runtime.mjs",
-    "build:native": "mkdir -p build/bin && swiftc -O -parse-as-library -swift-version 5 -target arm64-apple-macos26.0 native/zepper-ai/main.swift -o build/bin/zepper-ai && npm run build:credentials",
-    "build:credentials": "node-gyp rebuild -C native/credentials --arch=arm64 && mkdir -p build/bin && rm -f build/bin/zepper_credentials.node && cp native/credentials/build/Release/zepper_credentials.node build/bin/",
+    "build:native": "node scripts/build-native.mjs",
     "vmp:signup": ".evs/bin/python -m castlabs_evs.account signup",
     "vmp:login": ".evs/bin/python -m castlabs_evs.account reauth",
     "vmp:sign": ".evs/bin/python -m castlabs_evs.vmp sign-pkg node_modules/electron/dist",
@@ -103,11 +102,11 @@
     ],
     "extraResources": [
       {
-        "from": "build/bin/zepper-ai",
+        "from": "build/bin/${arch}/zepper-ai",
         "to": "bin/zepper-ai"
       },
       {
-        "from": "build/bin/zepper_credentials.node",
+        "from": "build/bin/${arch}/zepper_credentials.node",
         "to": "bin/zepper_credentials.node"
       },
       {

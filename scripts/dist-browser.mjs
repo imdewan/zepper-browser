@@ -52,6 +52,6 @@ const run = (command, args) => execFileSync(command, args, { cwd: root, stdio: '
 run('npx', ['electron-vite', 'build'])
 run('npm', ['run', 'build:native'])
 run('node', ['scripts/stage-electron.mjs'])
-run('npx', ['electron-builder', '--mac', `-c.mac.entitlements=${generated}`, `-c.mac.provisioningProfile=${profile}`])
+run('npx', ['electron-builder', '--mac', '--arm64', '--x64', `-c.mac.entitlements=${generated}`, `-c.mac.provisioningProfile=${profile}`])
 // The update feed, under the name the app looks for (see FEED_FILE in src/main/updater.ts).
 copyFileSync(join(root, 'dist', 'latest-mac.yml'), join(root, 'dist', 'Zepper-update-mac.yml'))

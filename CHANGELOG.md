@@ -6,6 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Added
 
+- Zepper for Intel Macs (macOS 14 or later), alongside Apple silicon. Translate and summarise need Apple Intelligence, so they stay on Apple silicon; everything else is the same.
 - A call's floating window (Meet, Teams, Zoom) has a title bar like Chrome's: the site and a Back to tab button, which brings the call's tab forward and puts the call back into it.
 
 ### Changed
