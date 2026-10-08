@@ -114,7 +114,7 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
 
 - On by itself for local sites (localhost, `.test` and `.local` addresses, 127.0.0.1 and your network); turn it on for any other site with ⌥⇧⌘D, from its lock icon or its tab's menu. It stays on for that host from then on (Settings › Developer lists them)
 - A bar over the page: the full address (scheme, host and port, path), and buttons to copy it, capture in Portrait Mode, take a capture, open the Console, Network or Inspect, extensions, split view, and turn Developer Mode off for the site
-- DevTools (on any tab) dock to the right of the page or below it, or open in a window of their own, from their own bar, which also closes them; drag the divider to resize them, and where you put them is remembered. ⌥⌘I for Elements, ⌥⌘J for the Console, ⌥⌘C to pick an element; the developer bar's buttons switch panels, and the panel that's showing closes them
+- DevTools (on any tab) dock in the tab as in Chrome, with the device toolbar, and DevTools' own menu to dock them on another side or in a window of their own (remembered). ⌥⌘I for Elements, ⌥⌘J for the Console, ⌥⌘C to pick an element; the developer bar's buttons switch panels, and the panel that's showing closes them. The page's corners are square while DevTools are open
 - **Portrait Mode:** the page framed like a window on white, a colour from the slider, or your desktop picture; copied to the clipboard, with Save, Show in Finder and drag
 - Its tab has a caution-tape outline in the sidebar
 

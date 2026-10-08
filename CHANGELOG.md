@@ -10,10 +10,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
   - Sites you're building get a bar over the page: the full address, and buttons to copy it, capture in Portrait Mode, take a capture, open the Console, Network or Inspect, open extensions or split view, and turn Developer Mode off.
   - It's on by itself for localhost and other local sites (`.test`, `.local`, your network). Turn it on or off for any site, from then on, with ⌥⇧⌘D, from its lock icon or its tab's menu.
   - Its tabs have a caution-tape outline in the sidebar, and Settings › Developer lists your sites.
-- **DevTools dock in the page's card** on any tab, rather than always opening in a window of their own (⌥⌘I; ⌥⌘J for the Console; ⌥⌘C to pick an element, as in Chrome).
-  - Their own bar docks them to the right or the bottom, moves them to a window of their own, or closes them.
-  - Drag the divider to resize them. Where you put them, and their size, is remembered.
-  - ⌥⌘I, ⌥⌘J and ⌥⌘C work with the focus inside DevTools too, and turning Developer Mode off for a site closes its DevTools.
+- **DevTools dock in the tab, as in Chrome**, on any tab, rather than always opening in a window of their own: with the device toolbar, and DevTools' own menu to dock them elsewhere or in a window of their own (Zepper remembers where you put them). ⌥⌘I; ⌥⌘J for the Console; ⌥⌘C to pick an element. The page's corners are square while they're open. Turning Developer Mode off for a site closes its DevTools.
+- **Portrait in the capture bar** (⇧⌘2, then P): Portrait Mode on any page.
 - **Portrait Mode:** a framed screenshot of the page, on white, a colour you pick or your desktop picture, copied to the clipboard and ready to save.
 
 ### Changed

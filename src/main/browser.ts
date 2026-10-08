@@ -3827,6 +3827,9 @@ export class Browser {
     page.once('devtools-opened', () => {
       if (page.devToolsWebContents) void showDevToolsPanel(page.devToolsWebContents, panel)
     })
+    // Square while DevTools are open: rounding only reaches the page, leaving DevTools' colour in its
+    // corners (and rounding it once they're open would hide them). Rounded again when they close.
+    this.views.get(tabId)?.setBorderRadius(0)
     if (this.settings.devtoolsPlaced) page.openDevTools()
     else {
       page.openDevTools({ mode: 'right' })
@@ -6018,7 +6021,7 @@ export class Browser {
         view.setVisible(!hidden)
         if (hidden) continue
         view.setBounds(pane.page)
-        // Rounding a page drops DevTools docked in it (Electron), so while they're open it's square.
+        // Square while its DevTools are open (see showDevTools).
         if (!view.webContents.isDevToolsOpened()) view.setBorderRadius(this.htmlFullscreen ? 0 : this.settings.cornerRadius)
       }
     }

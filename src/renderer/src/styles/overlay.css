@@ -3009,6 +3009,9 @@
 .capture-toolbar {
   position: absolute;
   transform: translateX(-50%);
+  /* Its own width, on one line (centred by the transform, it would be squeezed to half the page). */
+  width: max-content;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 4px;
