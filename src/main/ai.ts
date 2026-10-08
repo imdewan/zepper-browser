@@ -33,6 +33,8 @@ export class AiError extends Error {
 
 const IDLE_MS = 3 * 60_000
 const UNAVAILABLE: AiStatus = { ai: false, reason: 'Needs macOS 26 or later.', translation: false, embeddings: false }
+/** The helper is built for macOS 26 (Foundation Models); on an earlier macOS it can't even start. */
+const HELPER_RUNS = process.platform === 'darwin' && Number(process.getSystemVersion().split('.')[0]) >= 26
 
 interface Pending {
   resolve: (result: unknown) => void
@@ -54,15 +56,16 @@ class Intelligence {
 
   /** What's available on this Mac (checked once). */
   status(): Promise<AiStatus> {
-    this.statusCheck ??= existsSync(this.helperPath)
-      ? this.request<AiStatus>('check', {}, undefined, 15_000).catch(() => UNAVAILABLE)
-      : Promise.resolve(UNAVAILABLE)
+    this.statusCheck ??=
+      HELPER_RUNS && existsSync(this.helperPath)
+        ? this.request<AiStatus>('check', {}, undefined, 15_000).catch(() => UNAVAILABLE)
+        : Promise.resolve(UNAVAILABLE)
     return this.statusCheck
   }
 
   /** Runs an operation; streaming ones call `onPartial` with the text so far. */
   request<T>(op: string, body: object, onPartial?: (text: string) => void, timeoutMs = 90_000): Promise<T> {
-    if (process.platform !== 'darwin' || !existsSync(this.helperPath)) {
+    if (!HELPER_RUNS || !existsSync(this.helperPath)) {
       return Promise.reject(new AiError('This needs macOS 26 or later.', 'unavailable'))
     }
     const child = this.ensure()

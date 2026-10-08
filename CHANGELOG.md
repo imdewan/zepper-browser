@@ -15,6 +15,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 - Sharing your screen: when macOS hasn't let Zepper record it, the notice says what to do if Zepper is already on in Screen & System Audio Recording (macOS can hold on to an earlier version of Zepper there).
 
+### Fixed
+
+- On macOS 14 and 15, Zepper kept starting its Apple Intelligence helper, which needs macOS 26 and so crashed each time (leaving crash reports behind). It's only started on macOS 26 and later now.
+
 ## [0.1.6] - 2026-10-08
 
 ### Changed
