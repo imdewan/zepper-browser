@@ -277,6 +277,7 @@ export function Overlay(): React.JSX.Element | null {
             intelligence={snapshot.intelligence}
             update={snapshot.update}
             sitePermissions={snapshot.sitePermissions}
+            profileScope={snapshot.profileScope}
             systemAccess={snapshot.systemAccess}
             initialSection={settingsSection}
             onClose={closeSettings}
@@ -286,9 +287,13 @@ export function Overlay(): React.JSX.Element | null {
         {share && (
           <SharePicker key={`share-${share.id}`} request={share} onDone={(sourceId, audio) => answerShare(share.id, sourceId, audio)} />
         )}
-        {historyOpen && <HistoryPanel key="history" meaning={snapshot.intelligence.embeddings} onClose={closeHistory} />}
+        {historyOpen && (
+          <HistoryPanel key="history" meaning={snapshot.intelligence.embeddings} scope={snapshot.profileScope} onClose={closeHistory} />
+        )}
         {about && <AboutPanel key="about" info={about} update={snapshot.update} onClose={closeAbout} />}
-        {downloadsOpen && <DownloadsPanel key="downloads" downloads={snapshot.downloads} onClose={closeDownloads} />}
+        {downloadsOpen && (
+          <DownloadsPanel key="downloads" downloads={snapshot.downloads} scope={snapshot.profileScope} onClose={closeDownloads} />
+        )}
         {creatingSpace && (
           <CreateSpaceDialog
             key="create"

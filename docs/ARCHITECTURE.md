@@ -58,6 +58,8 @@ Permission requests (camera, microphone, location, notifications…) show Zepper
 
 A tab's page can't change session. When a tab moves to a space with a different profile, it is reloaded in the right one (`Browser.rehome`).
 
+Each profile also has its own data (`profiles.ts`): history and history by meaning, saved passwords and passkeys, and site permissions, in `profiles/<id>/` (the default profile's files stay at the top of the user data folder). Downloads are one list, each marked with its profile. A page uses its own profile's data, found from its session (`Hub.profileOf`): autofill and passkeys, permission prompts and checks, history visits, downloads. The window's UI (command bar, history page, downloads panel, Settings › Passwords and site permissions) shows the active space's. When no space uses a profile any more, its passwords and passkeys move to the default profile and the rest is deleted (`Profiles.retire`). Spaces with their own profile from before this started with a copy of the shared passwords and site permissions (`Profiles.separate`, once).
+
 ### Pinned area and folders
 
 A space's pinned area is a tree: `space.pinnedItems` and each folder's `items` hold tab and folder ids in order. That tree is the source of truth. `this.tabs` keeps pinned tabs in the same flattened order, so code that walks tabs in sidebar order (cycling, ⌘1–9) works unchanged. Every move goes through `Browser.dropItem`, which drag and drop and the context menus both use.

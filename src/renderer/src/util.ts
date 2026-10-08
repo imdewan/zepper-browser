@@ -43,3 +43,9 @@ export function rectOf(el: Element): Rect {
 }
 
 export const isMac = navigator.platform.toLowerCase().includes('mac')
+
+/** Names in a sentence: "Work", "Personal and Work", "Personal, Work and Reading". */
+export function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}

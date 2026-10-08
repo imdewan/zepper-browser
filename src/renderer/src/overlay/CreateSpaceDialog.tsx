@@ -159,11 +159,10 @@ export function CreateSpaceDialog({ systemDark, spaces, activeSpaceId, windowKin
               </select>
               <p className="create-note">
                 {signIns === 'new'
-                  ? 'Its own cookies, logins and site data, like a new profile.'
+                  ? 'Its own cookies, site data, history, passwords, downloads and site permissions, like a new profile.'
                   : signIns.startsWith('copy:')
-                    ? 'Starts signed in where that space is (cookies are copied), then stays separate.'
-                    : 'Uses the same cookies, logins and site data as that space.'}{' '}
-                History is shared between spaces.
+                    ? 'Starts signed in where that space is (cookies, passwords and site permissions are copied, not its history), then stays separate.'
+                    : 'Uses the same cookies, history, passwords, downloads and site permissions as that space.'}
               </p>
             </>
           )}

@@ -3,7 +3,7 @@ import type { Settings } from '@shared/settings'
 import type { ImportResult, ImportSource, LoginSummary, VaultReplies } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose, IconCopy, IconKey, IconPasskey, IconPlus, IconSearch } from '../icons'
-import { cx } from '../util'
+import { cx, listNames } from '../util'
 import { SiteListLink } from './SiteListPage'
 import { Toggle } from './Toggle'
 
@@ -11,7 +11,16 @@ import { Toggle } from './Toggle'
  * Settings › Passwords: Zepper's password manager. Saved passwords (search, show with Touch ID,
  * copy, edit, delete), passkeys, importing from other browsers and password exports, and exporting.
  */
-export function PasswordsSettings({ settings, onOpenNeverSaved }: { settings: Settings; onOpenNeverSaved: () => void }): React.JSX.Element {
+export function PasswordsSettings({
+  settings,
+  scope,
+  onOpenNeverSaved
+}: {
+  settings: Settings
+  /** Whose passwords these are: the active space's profile's (see Snapshot.profileScope). */
+  scope: string[] | null
+  onOpenNeverSaved: () => void
+}): React.JSX.Element {
   const [data, setData] = useState<VaultReplies['list'] | null>(null)
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState<string | null>(null)
@@ -21,7 +30,9 @@ export function PasswordsSettings({ settings, onOpenNeverSaved }: { settings: Se
   const refresh = (): void => {
     void zepper.vault({ type: 'list' }).then(setData)
   }
-  useEffect(refresh, [])
+  // Another space's passwords when the space you're in changes.
+  const scopeKey = scope?.join('\n') ?? ''
+  useEffect(refresh, [scopeKey])
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
 
   const needle = query.trim().toLowerCase()
@@ -47,6 +58,12 @@ export function PasswordsSettings({ settings, onOpenNeverSaved }: { settings: Se
           <Toggle checked={settings.passwords} onChange={(passwords) => set({ passwords })} />
         </div>
       </div>
+
+      {scope && (
+        <p className="pw-scope">
+          Passwords and passkeys saved in <strong>{listNames(scope)}</strong>. Each space with its own sign-ins keeps its own.
+        </p>
+      )}
 
       <div className="pw-toolbar">
         <label className="pw-search">

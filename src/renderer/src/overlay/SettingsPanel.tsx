@@ -29,7 +29,7 @@ import {
 import type { AccessState, IntelligenceStatus, SiteDecisions, Snapshot, SystemAccess, UpdateStatus, WidevineStatus } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconBack, IconClose } from '../icons'
-import { cx, isMac } from '../util'
+import { cx, isMac, listNames } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
 import { PasswordsSettings } from './PasswordsSettings'
 import { SiteListLink, SiteListPage, type SiteListItem } from './SiteListPage'
@@ -132,6 +132,8 @@ interface SettingsPanelProps {
   intelligence: IntelligenceStatus
   update: UpdateStatus
   sitePermissions: SiteDecisions[]
+  /** Whose passwords and site permissions these are (see Snapshot.profileScope). */
+  profileScope: string[] | null
   systemAccess: SystemAccess
   /** The section to open on (e.g. "passwords" from the passwords popup). */
   initialSection?: string
@@ -164,6 +166,7 @@ export function SettingsPanel({
   intelligence,
   update,
   sitePermissions,
+  profileScope,
   systemAccess,
   initialSection,
   onClose
@@ -691,7 +694,7 @@ export function SettingsPanel({
                   </Row>
                   <SiteListLink
                     label="Site permissions"
-                    hint="What you’ve allowed or blocked for each site (camera, microphone, location, notifications, pop-ups)."
+                    hint={`What you’ve allowed or blocked for each site${profileScope ? ` in ${listNames(profileScope)}` : ''} (camera, microphone, location, notifications, pop-ups).`}
                     count={sitePermissions.length}
                     onOpen={() => openPage('sitePermissions')}
                   />
@@ -699,7 +702,7 @@ export function SettingsPanel({
                   <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
                     <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
                   </Row>
-                  <Row label="Clear history when Zepper quits" hint="Your tabs, spaces and sign-ins stay.">
+                  <Row label="Clear history when Zepper quits" hint="Every space’s. Your tabs, spaces and sign-ins stay.">
                     <Toggle checked={settings.clearHistoryOnQuit} onChange={(clearHistoryOnQuit) => set({ clearHistoryOnQuit })} />
                   </Row>
                   <ClearBrowsingData />
@@ -730,7 +733,7 @@ export function SettingsPanel({
               )}
 
               {!page && section === 'passwords' && (
-                <PasswordsSettings settings={settings} onOpenNeverSaved={() => openPage('neverSaved')} />
+                <PasswordsSettings settings={settings} scope={profileScope} onOpenNeverSaved={() => openPage('neverSaved')} />
               )}
 
               {!page && section === 'extensions' && <ExtensionsSettings settings={settings} />}

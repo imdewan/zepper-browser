@@ -20,14 +20,16 @@ const MAX_ENTRIES = 10_000
 /** How long after a visit the page's title is still recorded. */
 const TITLE_SETTLE_MS = 60_000
 
-/** Browsing history used for URL bar suggestions. */
+/** A profile's browsing history, for the command bar's suggestions and the history page. */
 export class History {
-  private readonly file = new JsonFile<Visit[]>('history.json', 3000)
+  private readonly file: JsonFile<Visit[]>
   private readonly entries = new Map<string, Visit>()
   private readonly forgetListeners = new Set<(urls: string[]) => void>()
   private readonly index = new WeakMap<Visit, EntryIndex>()
 
-  constructor() {
+  /** `name`: the file, in the user data folder (each profile has its own). */
+  constructor(name = 'history.json') {
+    this.file = new JsonFile<Visit[]>(name, 3000)
     for (const visit of this.file.read() ?? []) this.entries.set(visit.url, visit)
   }
 
@@ -242,6 +244,12 @@ export class History {
 
   flush(): void {
     this.file.flush()
+  }
+
+  /** Deletes the file (a profile nothing uses any more). */
+  discard(): void {
+    this.entries.clear()
+    this.file.remove()
   }
 
   private save(): void {

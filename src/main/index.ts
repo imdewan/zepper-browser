@@ -3,8 +3,6 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { AdBlock } from './adblock'
 import { bangs } from './bangs'
-import { History } from './history'
-import { SemanticHistory } from './semantic'
 import { Hub } from './hub'
 import { buildMenu } from './menu'
 import { SettingsStore } from './settings-store'
@@ -51,7 +49,6 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   let hub: Hub | null = null
-  const history = new History()
 
   // Links and files opened from other apps (Zepper as the default browser). They can arrive
   // before the first window exists, so they wait for it.
@@ -79,8 +76,6 @@ if (!app.requestSingleInstanceLock()) {
     })
     const adblock = new AdBlock((id) => hub?.ownerOfWebContentsId(id)?.onAdBlocked(id))
     hub = new Hub({
-      history,
-      semantic: new SemanticHistory(history),
       adblock,
       settings: new SettingsStore(),
       rendererUrl: process.env['ELECTRON_RENDERER_URL'],
@@ -124,9 +119,8 @@ if (!app.requestSingleInstanceLock()) {
       })
       return
     }
-    if (hub?.services.settings.get().clearHistoryOnQuit) history.clearSince(0)
+    if (hub?.services.settings.get().clearHistoryOnQuit) hub.forgetHistory()
     hub?.persist()
-    history.flush()
   })
 
   app.on('window-all-closed', () => app.quit())

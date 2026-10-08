@@ -86,6 +86,7 @@ import { startDebugServer } from './devtools-server'
 import { JsonFile } from './persist'
 import { parse as parseDomain } from 'tldts-experimental'
 import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
+import { DEFAULT_PROFILE, type ProfileData } from './profiles'
 import { isFolder, type ImportedItem, type ImportedSession } from './session-import'
 import { fetchPageMeta } from './page-meta'
 import { searchSuggestions, suggest } from './suggest'
@@ -161,6 +162,8 @@ const USER_INPUT = new Set(['mouseDown', 'mouseUp', 'keyDown', 'rawKeyDown', 'ch
 
 interface PendingPrompt extends PermissionPrompt {
   keys: string[]
+  /** Where the answer is remembered: the asking page's profile's permissions. */
+  permissions: SitePermissions
   tabId: string | undefined
   /** The page that asked; its prompts go when it does. */
   webContentsId: number
@@ -514,10 +517,7 @@ const MEDIA_RESUME_SCRIPT = `(() => {
   return 'playing'
 })()`
 
-/** The profile Essentials, extensions and your first space use (Electron's default session). */
-export const DEFAULT_PROFILE = 'default'
-
-/** New spaces get their own profile: separate cookies, logins, storage and cache. */
+/** New spaces get their own profile: separate cookies, storage and cache, history, passwords, downloads and site permissions. */
 function makeSpace(name: string, icon: string, theme: SpaceTheme = DEFAULT_THEME, profile: string = randomUUID()): Space {
   return { id: randomUUID(), name, icon, theme, collapsedPins: false, lastTabId: null, profile, pinnedItems: [] }
 }
@@ -572,7 +572,8 @@ export class Browser {
   private blockedTimer: NodeJS.Timeout | null = null
   private restoreTabId: string | null = null
   private savedWindow: PersistedState['window'] = undefined
-  private readonly permissions: SitePermissions
+  /** A private window's site permissions, kept in memory only (other windows use each profile's). */
+  private readonly privatePermissions: SitePermissions | null
   private prompts: PendingPrompt[] = []
   private promptSeq = 0
   /** The screen-share picker that's open, waiting for your choice. */
@@ -734,8 +735,8 @@ export class Browser {
         : kind === 'blank'
           ? new JsonFile<PersistedState>(`${WINDOWS_DIR}/${this.windowId}.json`, 800)
           : null
-    this.permissions = kind === 'private' ? new SitePermissions(false) : hub.services.permissions
-    if (kind === 'private') this.disposers.push(this.permissions.onChange(() => this.refresh()))
+    this.privatePermissions = kind === 'private' ? new SitePermissions(null) : null
+    if (this.privatePermissions) this.disposers.push(this.privatePermissions.onChange(() => this.refresh()))
     const saved = kind === 'main' || restoreId ? this.stateFile?.read() : null
     if (saved?.version === 1 && saved.spaces.length > 0) {
       // Spaces from before profiles keep sharing the existing sign-ins (as they did); you can
@@ -809,10 +810,51 @@ export class Browser {
       this.sidebarWidth = DEFAULT_SIDEBAR
       this.compact = false
     }
+    // Spaces with their own profile from before each profile had its own data start with the shared passwords.
+    if (kind === 'main') hub.services.profiles.separate(this.spaces.map((space) => space.profile))
   }
 
-  private get history() {
-    return this.hub.services.history
+  /**
+   * The data of the profile you're in, the active space's: its history (for the command bar and the
+   * history page), passwords and passkeys, and site permissions (for Settings and the site panel).
+   * A private window's history isn't kept, and its passwords are the default profile's.
+   */
+  profileData(): ProfileData {
+    return this.hub.services.profiles.get(this.profileId())
+  }
+
+  /** The active space's profile. */
+  private profileId(): string {
+    if (this.kind === 'private') return DEFAULT_PROFILE
+    return this.space(this.activeSpaceId)?.profile ?? DEFAULT_PROFILE
+  }
+
+  /** The data of the profile a page is in (its session's). */
+  private dataFor(wc: WebContents): ProfileData {
+    return this.hub.services.profiles.get(this.hub.profileOf(wc.session))
+  }
+
+  /** Site permissions for pages in a session: its profile's (a private window has its own, in memory). */
+  private permissionsOf(ses: Session): SitePermissions {
+    return this.privatePermissions ?? this.hub.services.profiles.get(this.hub.profileOf(ses)).permissions
+  }
+
+  /** The spaces sharing the active space's profile, when the window's spaces don't all share one (see Snapshot). */
+  private profileScope(): string[] | null {
+    if (this.kind === 'private') return null
+    const profile = this.profileId()
+    if (this.spaces.every((space) => space.profile === profile)) return null
+    return this.spaces.filter((space) => space.profile === profile).map((space) => space.name)
+  }
+
+  /** A tab's site permissions: its space's profile's. */
+  private permissionsFor(tab: Tab): SitePermissions {
+    return this.permissionsOf(this.sessionFor(tab))
+  }
+
+  /** The site permissions Settings and the site panel show: the active space's. */
+  private currentPermissions(): SitePermissions {
+    return this.privatePermissions ?? this.profileData().permissions
   }
 
   private get adblock() {
@@ -943,7 +985,8 @@ export class Browser {
         },
         openPasswordSettings: () => this.handle({ type: 'ui.openSettings', section: 'passwords' })
       },
-      this.hub.services.vault
+      // Each page signs in with its own profile's passwords and passkeys.
+      (wc) => this.dataFor(wc).vault
     )
 
     this.overlay.webContents.once('did-finish-load', () => {
@@ -1043,7 +1086,8 @@ export class Browser {
     callback: (granted: boolean) => void,
     details: Electron.PermissionRequest | Electron.MediaAccessPermissionRequest | Electron.OpenExternalPermissionRequest
   ): void {
-    if (this.permissions.isAlwaysAllowed(permission)) return callback(true)
+    const permissions = this.permissionsOf(wc.session)
+    if (permissions.isAlwaysAllowed(permission)) return callback(true)
     // A prompt for a popup would show in the window behind it; popups don't get permissions.
     if (this.popupWindow(wc.id) || this.callWindow(wc.id)?.page === wc) return callback(false)
     const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes as string[] | undefined) : undefined
@@ -1051,7 +1095,7 @@ export class Browser {
     const keys = settingKeys(permission, mediaTypes, externalURL)
     if (!keys) return callback(false)
     const origin = originOf(details.requestingUrl ?? wc.getURL())
-    const states = keys.map((k) => this.permissions.get(origin, k))
+    const states = keys.map((k) => permissions.get(origin, k))
     if (states.includes('block')) return callback(false)
     if (states.every((s) => s === 'allow')) return this.grant(keys, callback)
     this.prompts.push({
@@ -1060,6 +1104,7 @@ export class Browser {
       host: safeHost(origin) || origin,
       label: promptLabel(permission, keys, externalURL),
       keys,
+      permissions,
       tabId: this.tabByWebContents.get(wc.id),
       webContentsId: wc.id,
       callback
@@ -1116,16 +1161,17 @@ export class Browser {
   }
 
   /** Permissions the site was refused, for the page's own view of its permissions. */
-  blockedPermissions(origin: string): string[] {
-    return this.permissions.blocked(origin)
+  blockedPermissions(page: WebContents, origin: string): string[] {
+    return this.permissionsOf(page.session).blocked(origin)
   }
 
-  checkPermission(permission: string, requestingOrigin: string, details: PermissionCheckHandlerHandlerDetails): boolean {
-    if (this.permissions.isAlwaysAllowed(permission)) return true
+  checkPermission(ses: Session, permission: string, requestingOrigin: string, details: PermissionCheckHandlerHandlerDetails): boolean {
+    const permissions = this.permissionsOf(ses)
+    if (permissions.isAlwaysAllowed(permission)) return true
     const mediaType = 'mediaType' in details ? (details.mediaType as string | undefined) : undefined
     const keys = settingKeys(permission, mediaType && mediaType !== 'unknown' ? [mediaType] : undefined)
     if (!keys) return true
-    return keys.every((k) => this.permissions.get(originOf(requestingOrigin), k) === 'allow')
+    return keys.every((k) => permissions.get(originOf(requestingOrigin), k) === 'allow')
   }
 
   /** Save Image/Link/Video As…: downloads it, asking where to save it (see handleDownload). */
@@ -1149,7 +1195,9 @@ export class Browser {
     // The site you were on (a download link often points at a CDN with an unhelpful name).
     const site = safeHost(source && !source.isDestroyed() ? source.getURL() : '') || safeHost(item.getURL())
     // The downloads button shows progress; the list lives in the downloads panel.
-    this.hub.downloads.track(item, path, this.kind === 'private', site)
+    // It's listed in the profile it was downloaded in (the page's).
+    const profile = source && !source.isDestroyed() ? this.hub.profileOf(source.session) : this.profileId()
+    this.hub.downloads.track(item, path, this.kind === 'private', profile, site)
     // Once it's really under way (after the save dialog, if Zepper asks where): say what and from where.
     // The "complete" toast replaces it, as they share an id.
     let announced = false
@@ -1279,7 +1327,7 @@ export class Browser {
 
   suggestions(text: string): Suggestion[] {
     // Private windows don't draw on (or show) browsing history.
-    return suggest(text, this.tabs, this.history, this.kind === 'private', this.settings.paletteRecents)
+    return suggest(text, this.tabs, this.profileData().history, this.kind === 'private', this.settings.paletteRecents)
   }
 
   /** The search engine's suggestions, if they're on (Settings › Search). */
@@ -1693,10 +1741,10 @@ export class Browser {
         return this.broadcast()
       }
       case 'site.setPermission':
-        this.permissions.set(command.origin, command.permission, command.state)
+        this.currentPermissions().set(command.origin, command.permission, command.state)
         return
       case 'site.resetPermissions':
-        return this.permissions.reset(command.origin)
+        return this.currentPermissions().reset(command.origin)
       case 'tab.setEmoji':
         return this.setEmoji(command.tabId, command.emoji)
       case 'site.clearData':
@@ -1715,7 +1763,7 @@ export class Browser {
       case 'download.action':
         return void this.hub.downloads[command.action](command.id)
       case 'downloads.clear':
-        return this.hub.downloads.clear()
+        return this.hub.downloads.clear(this.profileId())
       case 'downloads.openFolder': {
         const { downloadPath } = this.settings
         return void shell.openPath(downloadPath && existsSync(downloadPath) ? downloadPath : app.getPath('downloads'))
@@ -1736,9 +1784,9 @@ export class Browser {
         this.overlay.webContents.focus()
         return this.emit({ type: 'history.open' }, 'overlay')
       case 'history.remove':
-        return this.history.remove(command.url)
+        return this.profileData().history.remove(command.url)
       case 'history.clear':
-        return this.history.clearSince(command.since)
+        return this.profileData().history.clearSince(command.since)
       case 'ui.downloads':
         this.setOverlayMode('full')
         this.overlay.webContents.focus()
@@ -2509,7 +2557,7 @@ export class Browser {
     const wc = this.views.get(tab.id)?.webContents
     if (!wc || wc.isDestroyed()) return true
     const url = wc.getURL()
-    const notifies = /^https?:/.test(url) && this.permissions.get(originOf(url), 'notifications') === 'allow'
+    const notifies = /^https?:/.test(url) && this.permissionsOf(wc.session).get(originOf(url), 'notifications') === 'allow'
     return (
       (!urgent && ((this.revisits.get(tab.id) ?? 0) > maxRevisits || notifies || this.updatedInBackground.has(tab.id))) ||
       tab.pinned !== null ||
@@ -3525,7 +3573,7 @@ export class Browser {
     void wc
       .executeJavaScriptInIsolatedWorld(ZEPPER_WORLD, [{ code: PAGE_TEXT_SCRIPT }])
       .then((page: { title: string; text: string } | null) => {
-        if (page && !wc.isDestroyed() && wc.getURL() === url) this.hub.services.semantic.note(url, page.title, page.text.slice(0, 1500))
+        if (page && !wc.isDestroyed() && wc.getURL() === url) this.dataFor(wc).semantic.note(url, page.title, page.text.slice(0, 1500))
       })
       .catch(() => {})
   }
@@ -3917,7 +3965,7 @@ export class Browser {
       this.noteBackgroundUpdate(tabId, wc)
       update({ title })
       if (this.tab(tabId)?.media) void this.refreshMedia(tabId, wc)
-      if (this.kind !== 'private') this.history.updateTitle(wc.getURL(), title)
+      if (this.kind !== 'private') this.dataFor(wc).history.updateTitle(wc.getURL(), title)
     })
     on('page-favicon-updated', (_event, favicons) => {
       const favicon = favicons[0] ?? null
@@ -3942,7 +3990,7 @@ export class Browser {
       }
       update({ url, blockedCount: 0, media: null, ...navState() })
       this.applySiteZoom(wc, url)
-      if (this.kind !== 'private') this.history.record(url, wc.getTitle())
+      if (this.kind !== 'private') this.dataFor(wc).history.record(url, wc.getTitle())
     })
     // In-page address changes are visits once they settle: maps and infinite scroll rewrite the
     // address constantly, and every step would otherwise be a visit.
@@ -3954,7 +4002,7 @@ export class Browser {
       if (inPageVisit) clearTimeout(inPageVisit)
       inPageVisit = setTimeout(() => {
         inPageVisit = null
-        if (!wc.isDestroyed() && wc.getURL() === url) this.history.record(url, wc.getTitle())
+        if (!wc.isDestroyed() && wc.getURL() === url) this.dataFor(wc).history.record(url, wc.getTitle())
       }, 2000)
     })
     on('audio-state-changed', (event) => {
@@ -4203,7 +4251,7 @@ export class Browser {
   private blocksPopup(opener: WebContents): boolean {
     const now = Date.now()
     if (now - (this.lastInput.get(opener.id) ?? 0) <= USER_ACTIVATION_MS) return false
-    const state = this.permissions.get(originOf(opener.getURL()), 'popups')
+    const state = this.permissionsOf(opener.session).get(originOf(opener.getURL()), 'popups')
     if (state === 'allow') return false
     if (state === 'block') return true
     if (!this.settings.blockPopups) return false
@@ -4332,7 +4380,33 @@ export class Browser {
       return
     }
     space.profile = randomUUID()
-    if (choice.mode === 'copy' && from) await this.copyCookies(from.profile, space.profile)
+    if (choice.mode === 'copy' && from) {
+      await this.copyCookies(from.profile, space.profile)
+      // Starting signed in includes the passwords, passkeys and site permissions (not the history).
+      this.hub.services.profiles.copy(from.profile, space.profile)
+    }
+  }
+
+  /** Whether a space (in this window or another) still uses a profile. */
+  usesProfile(profile: string): boolean {
+    return this.spaces.some((space) => space.profile === profile)
+  }
+
+  /**
+   * A space left a profile, or went: if no space uses it any more, its sign-ins are cleared and the
+   * rest of its data goes too, except its passwords and passkeys, which move to the default profile.
+   * Returns how many passwords and passkeys moved.
+   */
+  private leftProfile(profile: string): number {
+    if (profile === DEFAULT_PROFILE || [...this.hub.browsers].some((browser) => browser.usesProfile(profile))) return 0
+    void this.clearProfile(profile)
+    return this.hub.retireProfile(profile)
+  }
+
+  /** What the default profile's spaces are called (where a deleted space's passwords go). */
+  private defaultProfileName(): string {
+    const names = this.spaces.filter((space) => space.profile === DEFAULT_PROFILE).map((space) => space.name)
+    return names.length > 0 ? names.join(', ') : 'Essentials'
   }
 
   /** Changes an existing space's sign-ins; its open pages reload in the new profile. */
@@ -4344,7 +4418,7 @@ export class Browser {
     if (space.profile === previous) return
     for (const tab of this.tabs.filter((t) => t.spaceId === id)) this.rehome(tab)
     // A profile nothing uses any more is cleared (the default one always stays).
-    if (previous !== DEFAULT_PROFILE && !this.spaces.some((s) => s.profile === previous)) void this.clearProfile(previous)
+    const moved = this.leftProfile(previous)
     this.broadcast()
     const label =
       choice.mode === 'share'
@@ -4352,7 +4426,9 @@ export class Browser {
         : choice.mode === 'copy'
           ? 'Copied sign-ins'
           : 'Started fresh'
-    this.toast({ id: 'space-profile', message: label, description: space.name })
+    const passwords =
+      moved > 0 ? ` · ${moved === 1 ? '1 saved password' : `${moved} saved passwords`} moved to ${this.defaultProfileName()}` : ''
+    this.toast({ id: 'space-profile', message: label, description: `${space.name}${passwords}` })
   }
 
   /**
@@ -4396,10 +4472,17 @@ export class Browser {
   private async deleteSpace(id: string): Promise<void> {
     const space = this.space(id)
     if (!space || this.spaces.length <= 1) return
+    // Its own profile goes with it: say what happens to what's in it.
+    const ownProfile =
+      this.kind === 'main' &&
+      space.profile !== DEFAULT_PROFILE &&
+      ![...this.hub.browsers].some((browser) => browser.spaces.some((s) => s.id !== id && s.profile === space.profile))
     const { response } = await dialog.showMessageBox(this.win, {
       type: 'warning',
       message: `Delete “${space.name}”?`,
-      detail: 'All of its pinned and open tabs will be closed. This can’t be undone.',
+      detail: ownProfile
+        ? `All of its pinned and open tabs will be closed, and its history, site permissions and downloads list deleted. Its saved passwords and passkeys move to ${this.defaultProfileName()}. This can’t be undone.`
+        : 'All of its pinned and open tabs will be closed. This can’t be undone.',
       buttons: ['Delete Space', 'Cancel'],
       defaultId: 1,
       cancelId: 1
@@ -4415,9 +4498,7 @@ export class Browser {
     const wasActive = this.activeSpaceId === id
     this.spaces = this.spaces.filter((s) => s.id !== id)
     // Its own profile goes with it (the default profile is shared, so it stays).
-    if (this.kind === 'main' && space.profile !== DEFAULT_PROFILE && !this.spaces.some((s) => s.profile === space.profile)) {
-      void this.clearProfile(space.profile)
-    }
+    if (this.kind === 'main') this.leftProfile(space.profile)
     if (wasActive) {
       this.activeSpaceId = '' // forces switchSpace to run
       this.switchSpace(this.spaces[0].id)
@@ -4912,7 +4993,7 @@ export class Browser {
         global: this.settings[setting] === true,
         site: this.adblock.protects(tab.url, key)
       })),
-      permissions: /^https?:/.test(tab.url) ? this.permissions.list(origin) : []
+      permissions: /^https?:/.test(tab.url) ? this.permissionsFor(tab).list(origin) : []
     }
   }
 
@@ -5188,9 +5269,11 @@ export class Browser {
     if (!prompt) return
     this.activatedFromUi(prompt.webContentsId)
     const state: PermissionState = allow ? 'allow' : 'block'
-    for (const key of prompt.keys) this.permissions.set(prompt.origin, key, state)
-    // Requests the decision now covers (queued behind this one) are answered with it.
-    const covered = this.prompts.filter((p) => p.origin === prompt.origin && p.keys.every((k) => prompt.keys.includes(k)))
+    for (const key of prompt.keys) prompt.permissions.set(prompt.origin, key, state)
+    // Requests the decision now covers (queued behind this one, in the same profile) are answered with it.
+    const covered = this.prompts.filter(
+      (p) => p.origin === prompt.origin && p.permissions === prompt.permissions && p.keys.every((k) => prompt.keys.includes(k))
+    )
     const answer = (granted: boolean): void => {
       prompt.callback(granted)
       for (const other of covered) other.callback(granted)
@@ -5916,13 +5999,14 @@ export class Browser {
       settings: this.settings,
       kind: this.kind,
       widevine: this.hub.widevine,
-      downloads: this.hub.downloads.list(this.kind === 'private'),
+      downloads: this.hub.downloads.list(this.kind === 'private', this.profileId()),
       paletteOpen: this.paletteOpen,
       folders: this.folders,
       tidy: this.settings.aiFeatures ? this.hub.tidy : { kind: 'site', reason: 'Apple Intelligence features are turned off in Settings.' },
       defaultBrowser: this.hub.defaultBrowser,
       update: this.hub.updater.status,
-      sitePermissions: this.permissions.sites(),
+      sitePermissions: this.currentPermissions().sites(),
+      profileScope: this.profileScope(),
       systemAccess: this.hub.systemAccess,
       intelligence: this.ai,
       extensionsPartition: this.extensionsPartition(),

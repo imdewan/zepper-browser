@@ -119,10 +119,35 @@ export class SitePermissions {
   private readonly data: Record<string, Record<string, 'allow' | 'block'>>
   private readonly listeners = new Set<() => void>()
 
-  /** `persist: false` keeps decisions in memory only (private windows). */
-  constructor(persist = true) {
-    this.file = persist ? new JsonFile('site-settings.json', 500) : null
+  /**
+   * `name`: the file, in the user data folder (each profile has its own); null keeps decisions in
+   * memory only (private windows).
+   */
+  constructor(name: string | null = 'site-settings.json') {
+    this.file = name ? new JsonFile(name, 500) : null
     this.data = this.file?.read() ?? {}
+  }
+
+  /** Adds what another profile decided for sites this one hasn't decided about (its own decisions stay). */
+  mergeFrom(other: SitePermissions): void {
+    let changed = false
+    for (const [origin, decisions] of Object.entries(other.data)) {
+      const site = (this.data[origin] ??= {})
+      for (const [key, state] of Object.entries(decisions)) {
+        if (site[key]) continue
+        site[key] = state
+        changed = true
+      }
+      if (Object.keys(site).length === 0) delete this.data[origin]
+    }
+    if (changed) this.changed()
+  }
+
+  /** Deletes the file (a profile nothing uses any more). */
+  discard(): void {
+    for (const origin of Object.keys(this.data)) delete this.data[origin]
+    this.file?.remove()
+    for (const listener of this.listeners) listener()
   }
 
   get(origin: string, key: string): PermissionState {

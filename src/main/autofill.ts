@@ -128,7 +128,8 @@ export class AutofillController {
 
   constructor(
     private readonly host: AutofillHost,
-    private readonly vault: Vault
+    /** A page's passwords and passkeys: its profile's. */
+    private readonly vaultFor: (wc: WebContents) => Vault
   ) {
     host.win.on('resize', () => this.hide())
   }
@@ -252,11 +253,11 @@ export class AutofillController {
       const waiting = frame === wc.mainFrame ? this.conditional.get(wc) : undefined
       if (waiting && kind === 'username') {
         const allowed = (waiting.request.allowCredentials ?? []).map((d) => d.id)
-        for (const passkey of this.vault.passkeysFor(waiting.request.rpId, allowed)) {
+        for (const passkey of this.vaultFor(wc).passkeysFor(waiting.request.rpId, allowed)) {
           items.push({ kind: 'passkey', id: passkey.id, username: passkey.userName || passkey.displayName, site: passkey.rpId })
         }
       }
-      if (passwords) for (const login of this.vault.loginsFor(url)) items.push({ kind: 'login', ...login })
+      if (passwords) for (const login of this.vaultFor(wc).loginsFor(url)) items.push({ kind: 'login', ...login })
     }
     if (items.length === 0) return this.close()
     this.show({ kind: 'list', host: parsed.hostname.replace(/^www\./, ''), items })
@@ -271,10 +272,11 @@ export class AutofillController {
     if (frameOrigin(field.frame) !== field.origin) return
     if (item.kind === 'login') {
       // Only a login offered for this page, whatever the request says.
-      const offered = this.vault.loginsFor(field.url).some((login) => login.id === item.id)
-      const login = offered ? this.vault.login(item.id) : undefined
+      const vault = this.vaultFor(field.wc)
+      const offered = vault.loginsFor(field.url).some((login) => login.id === item.id)
+      const login = offered ? vault.login(item.id) : undefined
       if (!login) return
-      this.vault.usedLogin(login.id)
+      vault.usedLogin(login.id)
       field.wc.focus()
       field.frame.send(FILL_CHANNEL, { username: login.username, password: login.password })
     } else if (item.kind === 'generate') {
@@ -316,7 +318,7 @@ export class AutofillController {
     // A password Zepper suggested is saved straight away.
     if (this.generated?.origin === new URL(offer.url).origin && this.generated.password === offer.password) {
       this.generated = null
-      if (this.vault.saveLogin(offer.url, offer.username, offer.password) && this.host.ownsVisiblePage(wc)) {
+      if (this.vaultFor(wc).saveLogin(offer.url, offer.username, offer.password) && this.host.ownsVisiblePage(wc)) {
         this.saving = null
         this.field = null
         this.show({ kind: 'saved', host, username: offer.username })
@@ -324,7 +326,7 @@ export class AutofillController {
       }
       return
     }
-    const existing = this.vault.findLogin(offer.url, offer.username)
+    const existing = this.vaultFor(wc).findLogin(offer.url, offer.username)
     if (existing?.password === offer.password || !this.host.ownsVisiblePage(wc)) return
     this.saving = { wc, url: offer.url, username: offer.username, password: offer.password }
     this.field = null
@@ -344,8 +346,8 @@ export class AutofillController {
       const domain = siteOf(new URL(saving.url).hostname)
       const list = this.host.settings().neverSavePasswords
       if (!list.includes(domain)) this.host.updateSettings({ neverSavePasswords: [...list, domain] })
-    } else if (choice === 'save') {
-      this.vault.saveLogin(saving.url, saving.username, saving.password)
+    } else if (choice === 'save' && !saving.wc.isDestroyed()) {
+      this.vaultFor(saving.wc).saveLogin(saving.url, saving.username, saving.password)
     }
   }
 
@@ -386,7 +388,11 @@ export class AutofillController {
             ? void this.otherDevice()
             : this.finish(ticket, failure('NotSupportedError', 'None of the requested algorithms are supported.'))
         }
-        const saved = new Set(this.vault.passkeysFor(request.rpId).map((p) => p.id))
+        const saved = new Set(
+          this.vaultFor(wc)
+            .passkeysFor(request.rpId)
+            .map((p) => p.id)
+        )
         if (request.excludeCredentials?.some((d) => saved.has(d.id))) {
           return this.finish(ticket, failure('InvalidStateError', 'The authenticator was previously registered.'))
         }
@@ -394,7 +400,7 @@ export class AutofillController {
         this.show({ kind: 'passkeyCreate', rpId: request.rpId, userName: request.user?.name || request.user?.displayName || '', other })
       } else {
         const allowed = (request.allowCredentials ?? []).map((d) => d.id)
-        const passkeys = this.vault
+        const passkeys = this.vaultFor(wc)
           .passkeysFor(request.rpId, allowed)
           .map((p) => ({ id: p.id, userName: p.userName, displayName: p.displayName }))
         this.field = null
@@ -445,7 +451,8 @@ export class AutofillController {
     const verified = await this.verify(request.userVerification, `save a passkey for ${request.rpId}`)
     if (verified === null) return this.finish(ticket, NOT_ALLOWED)
     const { record, response } = makeCredential({ ...request, user: request.user!, verified })
-    this.vault.addPasskey(record)
+    if (ticket.wc.isDestroyed()) return this.finish(ticket, NOT_ALLOWED)
+    this.vaultFor(ticket.wc).addPasskey(record)
     this.finish(ticket, ok(response))
   }
 
@@ -460,7 +467,9 @@ export class AutofillController {
   private async signIn(ticket: Ticket, id: string): Promise<void> {
     const { request } = ticket
     const allowed = (request.allowCredentials ?? []).map((d) => d.id)
-    const passkey = this.vault.passkeysFor(request.rpId, allowed).find((p) => p.id === id)
+    if (ticket.wc.isDestroyed()) return this.finish(ticket, NOT_ALLOWED)
+    const vault = this.vaultFor(ticket.wc)
+    const passkey = vault.passkeysFor(request.rpId, allowed).find((p) => p.id === id)
     if (!passkey) return this.finish(ticket, NOT_ALLOWED)
     const verified = await this.verify(request.userVerification, `sign in to ${request.rpId}`)
     if (verified === null) {
@@ -468,7 +477,7 @@ export class AutofillController {
       if (request.conditional) return
       return this.finish(ticket, NOT_ALLOWED)
     }
-    this.finish(ticket, ok(getAssertion(this.vault, passkey, { ...request, verified })))
+    this.finish(ticket, ok(getAssertion(vault, passkey, { ...request, verified })))
   }
 
   /** iCloud Keychain, a phone nearby or a security key, through macOS (with Apple's browser entitlement). */

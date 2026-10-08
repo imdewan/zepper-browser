@@ -4,7 +4,7 @@ import type { HistoryEntry } from '@shared/types'
 import { zepper } from '../bridge'
 import { Favicon } from '../Favicon'
 import { IconClose, IconSearch, IconSparkle } from '../icons'
-import { hostOf } from '../util'
+import { hostOf, listNames } from '../util'
 
 const DAY = 86_400_000
 const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
@@ -19,7 +19,16 @@ function dayLabel(time: number): string {
 }
 
 /** ⌘Y: everything you've visited, newest first, grouped by day, searchable. */
-export function HistoryPanel({ meaning, onClose }: { meaning: boolean; onClose: () => void }): React.JSX.Element {
+export function HistoryPanel({
+  meaning,
+  scope,
+  onClose
+}: {
+  meaning: boolean
+  /** Whose history this is (see Snapshot.profileScope). */
+  scope: string[] | null
+  onClose: () => void
+}): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
   // Matches by meaning (on-device), for queries of a few words: "that article about…".
@@ -107,7 +116,10 @@ export function HistoryPanel({ meaning, onClose }: { meaning: boolean; onClose: 
         transition={{ type: 'spring', bounce: 0.12, duration: 0.35 }}
       >
         <header className="history-header">
-          <h2>History</h2>
+          <h2>
+            History
+            {scope && <span className="panel-scope">in {listNames(scope)}</span>}
+          </h2>
           <div className="history-clear">
             <button className="panel-button" onClick={() => setClearing((c) => !c)}>
               Clear…

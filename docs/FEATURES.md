@@ -26,10 +26,11 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 ## Spaces
 
-- Each space has its own pinned tabs, normal tabs, emoji, gradient theme and, optionally, its own sign-ins:
+- Each space has its own pinned tabs, normal tabs, emoji, gradient theme and, optionally, its own profile: sign-ins (cookies and site data), history, saved passwords and passkeys, downloads list and site permissions:
   - **Start fresh**
-  - **Copy from** another space (cookies)
+  - **Copy from** another space (its cookies, passwords and site permissions; not its history)
   - **Share with** another space
+  - A space's own profile goes with it when you delete it, except its passwords and passkeys, which move to the default profile's spaces
 - Switch with a trackpad swipe on the sidebar, ⌃1–9, the space dots, or the picker behind the chevron next to the space name
 - Right-click a space to rename it, change its icon or theme, set its sign-ins, clear its data, add a folder, unload or delete it
 

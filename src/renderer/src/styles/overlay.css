@@ -4091,3 +4091,23 @@
   display: flex;
   gap: 8px;
 }
+
+/* Whose history, downloads or passwords a panel shows, when spaces keep theirs apart ("in Work"). */
+.panel-scope {
+  margin-left: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.pw-scope {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.pw-scope strong {
+  font-weight: 600;
+  color: var(--text);
+}

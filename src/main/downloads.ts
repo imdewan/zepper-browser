@@ -5,6 +5,7 @@ import { basename, extname } from 'node:path'
 import type { DownloadEntry } from '@shared/types'
 import { fileTypeIcon } from './native'
 import { JsonFile } from './persist'
+import { DEFAULT_PROFILE } from './profiles'
 
 /** Files that run code when opened. */
 const RUNNABLE = /\.(app|command|tool|terminal|sh|zsh|bash|pkg|mpkg|dmg|scpt|applescript|workflow|jar|py|rb|pl)$/i
@@ -14,9 +15,9 @@ const MAX_ENTRIES = 100
 const NOTIFY_MS = 250
 
 /**
- * Every download, shared by all windows: live progress while it runs, and a
- * list that survives restarts (except private windows' downloads, which are
- * never written to disk).
+ * Every download, in all windows: live progress while it runs, and a list that survives restarts
+ * (except private windows' downloads, which are never written to disk). Each belongs to the profile
+ * it was downloaded in, and a window lists the current space's.
  */
 export class Downloads {
   /** File-type icons (data URLs), by extension. */
@@ -48,12 +49,12 @@ export class Downloads {
     return entry && entry.state === 'completed' && existsSync(entry.path) ? entry.path : null
   }
 
-  /** What a window shows: private windows see their own downloads too. */
-  list(includePrivate: boolean): DownloadEntry[] {
-    return includePrivate ? this.entries : this.entries.filter((e) => !e.private)
+  /** What a window shows: the profile's downloads (private windows see their own too). */
+  list(includePrivate: boolean, profile: string): DownloadEntry[] {
+    return this.entries.filter((e) => (e.private ? includePrivate : (e.profile ?? DEFAULT_PROFILE) === profile))
   }
 
-  track(item: DownloadItem, path: string, isPrivate: boolean, site?: string): void {
+  track(item: DownloadItem, path: string, isPrivate: boolean, profile: string, site?: string): void {
     const entry: DownloadEntry = {
       id: randomUUID(),
       filename: basename(path),
@@ -64,7 +65,8 @@ export class Downloads {
       received: 0,
       total: item.getTotalBytes(),
       startedAt: Date.now(),
-      private: isPrivate
+      private: isPrivate,
+      ...(profile !== DEFAULT_PROFILE ? { profile } : {})
     }
     this.entries = [entry, ...this.entries].slice(0, MAX_ENTRIES)
     this.active.set(entry.id, item)
@@ -144,9 +146,17 @@ export class Downloads {
     this.changed(true)
   }
 
-  /** Clears finished entries; running downloads stay. */
-  clear(): void {
-    this.entries = this.entries.filter((e) => this.active.has(e.id))
+  /** Clears finished entries (a profile's, or everyone's); running downloads stay. */
+  clear(profile?: string): void {
+    this.entries = this.entries.filter(
+      (e) => this.active.has(e.id) || (profile !== undefined && (e.profile ?? DEFAULT_PROFILE) !== profile)
+    )
+    this.changed(true)
+  }
+
+  /** Forgets a profile's downloads (nothing uses it any more); the files stay. */
+  forget(profile: string): void {
+    this.entries = this.entries.filter((e) => this.active.has(e.id) || (e.profile ?? DEFAULT_PROFILE) !== profile)
     this.changed(true)
   }
 

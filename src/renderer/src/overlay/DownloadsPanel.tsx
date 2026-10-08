@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import type { Command, DownloadEntry } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose, IconDownload, IconFolder, IconPause, IconPlay, IconTrash } from '../icons'
-import { cx, hostOf } from '../util'
+import { cx, hostOf, listNames } from '../util'
 
 const units = ['B', 'KB', 'MB', 'GB']
 
@@ -95,7 +95,16 @@ function FileIcon({ download }: { download: DownloadEntry }): React.JSX.Element 
  * downloaded, newest first by day, each with its file icon, size, site and when. A finished one
  * opens with a click and drags out as the file (onto a page to upload it, the tabs, or Finder).
  */
-export function DownloadsPanel({ downloads, onClose }: { downloads: DownloadEntry[]; onClose: () => void }): React.JSX.Element {
+export function DownloadsPanel({
+  downloads,
+  scope,
+  onClose
+}: {
+  downloads: DownloadEntry[]
+  /** Whose downloads these are (see Snapshot.profileScope). */
+  scope: string[] | null
+  onClose: () => void
+}): React.JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -130,7 +139,10 @@ export function DownloadsPanel({ downloads, onClose }: { downloads: DownloadEntr
         transition={{ type: 'spring', bounce: 0.12, duration: 0.35 }}
       >
         <header className="downloads-header">
-          <h2>Downloads</h2>
+          <h2>
+            Downloads
+            {scope && <span className="panel-scope">in {listNames(scope)}</span>}
+          </h2>
           <button
             className="downloads-folder"
             title="Open the Downloads folder"

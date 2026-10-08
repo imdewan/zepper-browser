@@ -1,12 +1,13 @@
 import { app, safeStorage } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parse as parseDomain } from 'tldts-experimental'
 import type { ImportResult, LoginSummary, PasskeySummary, SavedLogin } from '@shared/types'
 
 /**
- * Zepper's password manager: saved passwords and passkeys, kept in one file in the profile and
+ * Zepper's password manager: saved passwords and passkeys, kept in a file per profile (each space's
+ * own, or the default one) and
  * encrypted with the key Chromium keeps in the macOS Keychain (Electron's safeStorage). Nothing
  * here leaves the Mac. Passwords are matched to pages by origin, plus other pages of the same
  * site (accounts.example.com offers what you saved on example.com).
@@ -72,10 +73,42 @@ const hostOf = (origin: string): string => new URL(origin).host
 const siteOf = (host: string): string => parseDomain(host).domain ?? host
 
 export class Vault {
-  private readonly path = join(app.getPath('userData'), FILE)
+  private readonly path: string
   private data: Contents = { version: 1, logins: [], passkeys: [] }
   private loaded = false
   private readonly listeners = new Set<() => void>()
+
+  /** `name`: the file, in the user data folder (each profile has its own). */
+  constructor(name = FILE) {
+    this.path = join(app.getPath('userData'), name)
+  }
+
+  /**
+   * Adds another vault's passwords and passkeys that this one doesn't have (the same account on the
+   * same site, or the same passkey, is kept as it is here). Returns how many came over.
+   */
+  mergeFrom(other: Vault): number {
+    const theirs = other.contents()
+    if (theirs.logins.length === 0 && theirs.passkeys.length === 0) return 0
+    const data = this.contents()
+    const accounts = new Set(data.logins.map((login) => `${login.origin} ${login.username}`))
+    const keys = new Set(data.passkeys.map((passkey) => passkey.id))
+    const logins = theirs.logins.filter((login) => !accounts.has(`${login.origin} ${login.username}`))
+    const passkeys = theirs.passkeys.filter((passkey) => !keys.has(passkey.id))
+    if (logins.length + passkeys.length === 0) return 0
+    data.logins.push(...logins.map((login) => ({ ...login, id: randomUUID() })))
+    data.passkeys.push(...passkeys.map((passkey) => ({ ...passkey })))
+    this.save()
+    return logins.length + passkeys.length
+  }
+
+  /** Deletes the file (a profile nothing uses any more). */
+  discard(): void {
+    this.data = { version: 1, logins: [], passkeys: [] }
+    this.loaded = true
+    rmSync(this.path, { force: true })
+    for (const listener of this.listeners) listener()
+  }
 
   onChange(listener: () => void): () => void {
     this.listeners.add(listener)

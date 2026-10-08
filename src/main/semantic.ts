@@ -36,15 +36,22 @@ function decode(base64: string): Float32Array {
 }
 
 export class SemanticHistory {
-  private readonly file = new JsonFile<Stored>('history-meaning.json', 60_000)
+  private readonly file: JsonFile<Stored>
   private data: Stored
   private readonly queue = new Set<string>()
   private embedding = false
   private timer: NodeJS.Timeout | null = null
   /** Decoded vectors, kept while the index is in use. */
   private vectors = new Map<string, Float32Array>()
+  /** Its profile is gone (discarded): nothing more is written (an embedding under way would bring the file back). */
+  private removed = false
 
-  constructor(private readonly history: History) {
+  /** `name`: the file, in the user data folder (each profile has its own, beside its history). */
+  constructor(
+    private readonly history: History,
+    name = 'history-meaning.json'
+  ) {
+    this.file = new JsonFile<Stored>(name, 60_000)
     this.data = this.file.read() ?? { model: '', notes: {} }
     for (const [url, note] of Object.entries(this.data.notes)) if (!note.vector) this.queue.add(url)
     history.onForget((urls) => this.forget(urls))
@@ -52,7 +59,7 @@ export class SemanticHistory {
 
   /** A page finished loading: remember what it's about (if it's new, or it's been a while). */
   note(url: string, title: string, text: string): void {
-    if (!/^https?:/.test(url)) return
+    if (this.removed || !/^https?:/.test(url)) return
     const existing = this.data.notes[url]
     if (existing && Date.now() - existing.at < RENOTE_MS && existing.title === title) return
     let host: string
@@ -106,6 +113,17 @@ export class SemanticHistory {
     })
   }
 
+  /** Deletes the file (a profile nothing uses any more). */
+  discard(): void {
+    this.removed = true
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = null
+    this.queue.clear()
+    this.data = { model: '', notes: {} }
+    this.vectors.clear()
+    this.file.remove()
+  }
+
   flush(): void {
     this.file.flush()
   }
@@ -156,6 +174,7 @@ export class SemanticHistory {
           return note ? `${note.title}. ${note.host}. ${note.text}` : ''
         })
         const result = await intelligence.request<{ model: string; vectors: (string | null)[] }>('embed', { texts })
+        if (this.removed) return
         // A different embedding model can't be compared with the old vectors: start over.
         if (this.data.model && result.model && result.model !== this.data.model) {
           for (const [url, note] of Object.entries(this.data.notes)) {

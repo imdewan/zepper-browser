@@ -65,7 +65,7 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 
 ## Features
 
-**Spaces.** Group tabs into spaces, each with its own gradient theme (subtle or vivid) and, optionally, its own sign-ins: cookies, logins and site data kept apart like separate profiles. Swipe between spaces on the trackpad or pick one from the sidebar.
+**Spaces.** Group tabs into spaces, each with its own gradient theme (subtle or vivid) and, optionally, its own sign-ins: cookies, site data, history, passwords, downloads and site permissions kept apart like separate profiles. Swipe between spaces on the trackpad or pick one from the sidebar.
 
 **A sidebar built for tabs.**
 

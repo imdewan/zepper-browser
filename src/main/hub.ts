@@ -34,13 +34,11 @@ import { tidyMode, type TidyMode } from './tidy'
 import { intelligence } from './ai'
 import { ZoomLevels } from './zoom'
 import { SECURE_DNS_SERVERS } from '@shared/settings'
-import type { History } from './history'
-import type { SemanticHistory } from './semantic'
 import type { SettingsStore } from './settings-store'
-import { CertificateStore, SitePermissions } from './site'
+import { CertificateStore } from './site'
 import { PASSWORDS_CHANNEL, type PageMessage } from './autofill'
 import { handleVaultRequest } from './password-settings'
-import { Vault } from './vault'
+import { DEFAULT_PROFILE, Profiles } from './profiles'
 import { locationAccess } from './native'
 import { RELEASES_PAGE, Updater } from './updater'
 
@@ -48,17 +46,15 @@ const WEBAUTHN_CHANNEL = 'zepper:webauthn'
 const WEBAUTHN_CANCEL_CHANNEL = 'zepper:webauthn-cancel'
 
 export interface Services {
-  history: History
-  /** History searchable by meaning (on-device embeddings). */
-  semantic: SemanticHistory
   settings: SettingsStore
   adblock: AdBlock
-  /** Remembered site permissions for normal windows. */
-  permissions: SitePermissions
+  /**
+   * Each profile's own data: history, saved passwords and passkeys, and site permissions (a space's
+   * profile, or the default one).
+   */
+  profiles: Profiles
   certificates: CertificateStore
   extensions: Extensions | null
-  /** Zepper's password manager: saved passwords and passkeys. */
-  vault: Vault
   rendererUrl: string | undefined
   rendererDir: string
 }
@@ -100,6 +96,8 @@ export class Hub {
   private main: Browser | null = null
   private privateCount = 0
   private readonly sessions = new Set<Session>()
+  /** Which profile each space session belongs to. */
+  private readonly sessionProfiles = new Map<Session, string>()
   /** Our plain Chrome user agent, before any identity choice. */
   private readonly chromeUa = app.userAgentFallback
   private userAgent = app.userAgentFallback
@@ -113,13 +111,17 @@ export class Hub {
   private readonly widevineInstallableNow: boolean
   private widevineInstall: Promise<void> | null = null
 
-  constructor(services: Omit<Services, 'extensions' | 'certificates' | 'permissions' | 'vault'>) {
+  constructor(services: Omit<Services, 'extensions' | 'certificates' | 'profiles'>) {
     this.services = {
       ...services,
-      permissions: new SitePermissions(),
+      // Site decisions show in Settings, in every window.
+      profiles: new Profiles((data) =>
+        data.permissions.onChange(() => {
+          for (const browser of this.browsers) browser.refresh()
+        })
+      ),
       certificates: new CertificateStore(),
-      extensions: null,
-      vault: new Vault()
+      extensions: null
     }
     this.widevineInstallableNow = services.settings.get().widevine
 
@@ -132,12 +134,15 @@ export class Hub {
     // Private windows keep no history, so their history page is empty.
     ipcMain.handle(IPC.history, (event, query: string) => {
       const browser = this.uiOwner(event.sender)
-      return !browser || browser.kind === 'private' ? [] : services.history.list(String(query ?? ''), 2000)
+      return !browser || browser.kind === 'private' ? [] : browser.profileData().history.list(String(query ?? ''), 2000)
     })
     ipcMain.handle(IPC.historyMeaning, async (event, query: string) => {
       const browser = this.uiOwner(event.sender)
       if (!browser || browser.kind === 'private' || !services.settings.get().aiFeatures) return []
-      return services.semantic.search(String(query ?? '').slice(0, 300)).catch(() => [])
+      return browser
+        .profileData()
+        .semantic.search(String(query ?? '').slice(0, 300))
+        .catch(() => [])
     })
     ipcMain.on(IPC.command, (event, command: Command) => this.owner(event.sender)?.handleFromUi(event.sender, command))
     ipcMain.on(IPC.swipe, (event, phase: 'update' | 'end', dx: number, peak: number) =>
@@ -170,7 +175,7 @@ export class Hub {
       services.settings,
       () => this.userAgent,
       (url) => services.adblock.protects(url, 'fingerprinting'),
-      (sender, origin) => this.owner(sender)?.blockedPermissions(origin) ?? []
+      (sender, origin) => this.owner(sender)?.blockedPermissions(sender, origin) ?? []
     )
     // Passkeys: pages' WebAuthn requests, answered by the window showing the page.
     ipcMain.handle(WEBAUTHN_CHANNEL, async (event, kind: string, options: string) => {
@@ -191,7 +196,9 @@ export class Hub {
     ipcMain.handle(IPC.vault, async (event, request: VaultRequest) => {
       const browser = this.uiOwner(event.sender)
       if (!browser || !request || typeof request !== 'object') return null
-      return handleVaultRequest(this.services.vault, services.history, services.settings, browser.window(), request, (session, name) =>
+      // The passwords of the space you're in (its profile's).
+      const data = browser.profileData()
+      return handleVaultRequest(data.vault, data.history, services.settings, browser.window(), request, (session, name) =>
         browser.importSession(session, name)
       )
     })
@@ -208,11 +215,6 @@ export class Hub {
     })
     this.refreshDefaultBrowser()
     this.refreshSystemAccess()
-    // Site decisions show in Settings, in every window.
-    this.services.permissions.onChange(() => {
-      for (const browser of this.browsers) browser.refresh()
-    })
-
     nativeTheme.on('updated', () => this.applyAppIcon())
     services.settings.onChange((next, prev) => {
       // Sliders change settings many times a second: only redo what the change touched.
@@ -382,9 +384,8 @@ export class Hub {
   persist(): void {
     this.main?.persistNow()
     this.zoom.flush()
-    this.services.semantic.flush()
+    for (const data of this.services.profiles.open()) data.flush()
     this.downloads.flush()
-    this.services.permissions.flush()
     this.services.settings.flush()
   }
 
@@ -393,9 +394,30 @@ export class Hub {
    * wired up like every browsing session. 'default' is Electron's default session.
    */
   profileSession(profile: string): Session {
-    const ses = profile === 'default' ? session.defaultSession : session.fromPartition(`persist:space-${profile}`)
+    const ses = profile === DEFAULT_PROFILE ? session.defaultSession : session.fromPartition(`persist:space-${profile}`)
+    this.sessionProfiles.set(ses, profile)
     this.attachSession(ses)
     return ses
+  }
+
+  /** The profile whose session this is ('default' for the default session, and for private windows'). */
+  profileOf(ses: Session): string {
+    return this.sessionProfiles.get(ses) ?? DEFAULT_PROFILE
+  }
+
+  /**
+   * A profile no space uses any more: its passwords and passkeys move to the default profile, and its
+   * history, site permissions and downloads list go. Returns how many passwords and passkeys moved.
+   */
+  retireProfile(profile: string): number {
+    if (profile === DEFAULT_PROFILE) return 0
+    this.downloads.forget(profile)
+    return this.services.profiles.retire(profile)
+  }
+
+  /** Settings › Privacy › Clear history when quitting: every profile's. */
+  forgetHistory(): void {
+    for (const data of this.services.profiles.all()) data.history.clearSince(0)
   }
 
   /** Permission prompts, certificates, privacy headers, page preload, ad blocking and downloads for a session. */
@@ -424,7 +446,7 @@ export class Hub {
     })
     ses.setPermissionCheckHandler((wc, permission, requestingOrigin, details) => {
       const browser = this.owner(wc) ?? this.focused()
-      return browser ? browser.checkPermission(permission, requestingOrigin, details) : false
+      return browser ? browser.checkPermission(ses, permission, requestingOrigin, details) : false
     })
     ses.on('will-download', (_event, item, wc) => (this.owner(wc) ?? this.focused())?.handleDownload(item, wc))
     // Screen sharing (getDisplayMedia): Zepper's picker, in the window showing the page.
@@ -510,7 +532,7 @@ export class Hub {
 
   /** Clears browsing data in every profile (normal windows; private ones forget everything anyway). */
   async clearBrowsingData(what: { since: number; history: boolean; cookies: boolean; cache: boolean; downloads: boolean }): Promise<void> {
-    if (what.history) this.services.history.clearSince(what.since)
+    if (what.history) for (const data of this.services.profiles.all()) data.history.clearSince(what.since)
     if (what.downloads) this.downloads.clear()
     const sessions = [...this.sessions].filter((ses) => !this.isPrivateSession(ses))
     for (const ses of sessions) {

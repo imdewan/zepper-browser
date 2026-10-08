@@ -88,8 +88,8 @@ export interface Space {
   /** The pinned area, top level: pinned tab ids and folder ids, in order. */
   pinnedItems: string[]
   /**
-   * Where this space keeps cookies, logins, storage and cache:
-   * 'default' (shared with Essentials and extensions) or its own store. History is shared.
+   * Where this space keeps cookies, storage and cache, and its history, passwords and passkeys,
+   * downloads list and site permissions: 'default' (shared with extensions) or its own (see profiles.ts).
    */
   profile: string
   /** When you last dismissed the "tabs you haven't opened lately" suggestion here. */
@@ -149,6 +149,8 @@ export interface DownloadEntry {
   private: boolean
   /** The site you downloaded it from (the link itself often points at a CDN). */
   site?: string
+  /** The profile it was downloaded in (its space's); the downloads list shows the current one's. Missing: 'default'. */
+  profile?: string
 }
 
 /** Google Widevine (DRM): not in this build, turned off, downloading, usable, or failed to install. */
@@ -182,8 +184,13 @@ export interface Snapshot {
   defaultBrowser: boolean
   /** Zepper's own updates. */
   update: UpdateStatus
-  /** Sites you've allowed or blocked something for (Settings › Privacy). */
+  /** Sites you've allowed or blocked something for (Settings › Privacy), in the active space's profile. */
   sitePermissions: SiteDecisions[]
+  /**
+   * Whose history, passwords, downloads and site permissions the window shows: the active space and
+   * any sharing its profile. Null when every space in the window shares one profile (nothing to tell apart).
+   */
+  profileScope: string[] | null
   /** What macOS lets Zepper use. */
   systemAccess: SystemAccess
   /** The session partition whose extensions the UI shows (the active space's); empty in private windows. */
