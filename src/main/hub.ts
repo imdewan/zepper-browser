@@ -379,6 +379,9 @@ export class Hub {
   /** Before quitting: every window's pages close themselves (see Browser.closePagesGently). */
   async closePagesGently(): Promise<void> {
     await Promise.all([...this.browsers].map((browser) => browser.closePagesGently()))
+    // Passwords are written in the background: those just saved get to the file before Zepper goes
+    // (but an unanswered Keychain prompt doesn't keep it from quitting).
+    await Promise.race([this.services.profiles.written(), new Promise((resolve) => setTimeout(resolve, 3000))])
   }
 
   persist(): void {
@@ -409,8 +412,8 @@ export class Hub {
    * A profile no space uses any more: its passwords and passkeys move to the default profile, and its
    * history, site permissions and downloads list go. Returns how many passwords and passkeys moved.
    */
-  retireProfile(profile: string): number {
-    if (profile === DEFAULT_PROFILE) return 0
+  retireProfile(profile: string): Promise<number> {
+    if (profile === DEFAULT_PROFILE) return Promise.resolve(0)
     this.downloads.forget(profile)
     return this.services.profiles.retire(profile)
   }

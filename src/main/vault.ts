@@ -1,6 +1,6 @@
 import { app, safeStorage } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { parse as parseDomain } from 'tldts-experimental'
 import type { ImportResult, LoginSummary, PasskeySummary, SavedLogin } from '@shared/types'
@@ -11,6 +11,10 @@ import type { ImportResult, LoginSummary, PasskeySummary, SavedLogin } from '@sh
  * encrypted with the key Chromium keeps in the macOS Keychain (Electron's safeStorage). Nothing
  * here leaves the Mac. Passwords are matched to pages by origin, plus other pages of the same
  * site (accounts.example.com offers what you saved on example.com).
+ *
+ * The Keychain is only ever reached off the main thread (safeStorage's async calls): macOS can ask
+ * you to allow it, and waiting for that on the main thread froze the whole browser. So the file is
+ * read in the background as soon as its profile opens, and whatever uses it waits for `ready()`.
  */
 
 export interface LoginRecord {
@@ -75,7 +79,18 @@ const siteOf = (host: string): string => parseDomain(host).domain ?? host
 export class Vault {
   private readonly path: string
   private data: Contents = { version: 1, logins: [], passkeys: [] }
+  /** Reading the file (see ready). */
+  private loading: Promise<void> | null = null
   private loaded = false
+  /**
+   * The file is there but its key isn't: macOS didn't give Zepper its Keychain key this time (you
+   * chose Deny). The file is left as it is, and nothing is saved over it until Zepper is reopened.
+   */
+  private locked = false
+  private discarded = false
+  /** The contents still to write (the latest; older ones are skipped) and the writes under way, in order. */
+  private unsaved: string | null = null
+  private writing: Promise<void> = Promise.resolve()
   private readonly listeners = new Set<() => void>()
 
   /** `name`: the file, in the user data folder (each profile has its own). */
@@ -83,11 +98,29 @@ export class Vault {
     this.path = join(app.getPath('userData'), name)
   }
 
+  /** Read (in the background, from when its profile opens): wait for it before using the vault. */
+  ready(): Promise<void> {
+    return (this.loading ??= this.load())
+  }
+
+  /** Whether macOS kept the key from Zepper (see `locked`): the saved passwords can't be shown or added to. */
+  get unavailable(): boolean {
+    return this.locked
+  }
+
+  /** Read, and saved to: nothing is added while it isn't (it would be lost, or written over the file). */
+  private get writable(): boolean {
+    return this.loaded && !this.locked && !this.discarded
+  }
+
   /**
    * Adds another vault's passwords and passkeys that this one doesn't have (the same account on the
-   * same site, or the same passkey, is kept as it is here). Returns how many came over.
+   * same site, or the same passkey, is kept as it is here). Returns how many came over, or null if
+   * either couldn't be opened (nothing moved).
    */
-  mergeFrom(other: Vault): number {
+  async mergeFrom(other: Vault): Promise<number | null> {
+    await Promise.all([this.ready(), other.ready()])
+    if (this.locked || other.locked) return null
     const theirs = other.contents()
     if (theirs.logins.length === 0 && theirs.passkeys.length === 0) return 0
     const data = this.contents()
@@ -102,12 +135,20 @@ export class Vault {
     return logins.length + passkeys.length
   }
 
-  /** Deletes the file (a profile nothing uses any more). */
-  discard(): void {
+  /** Deletes the file (a profile nothing uses any more), once any save under way is done. */
+  discard(): Promise<void> {
     this.data = { version: 1, logins: [], passkeys: [] }
     this.loaded = true
-    rmSync(this.path, { force: true })
+    this.discarded = true
+    this.unsaved = null
     for (const listener of this.listeners) listener()
+    this.writing = this.writing.then(() => rm(this.path, { force: true })).catch(() => {})
+    return this.writing
+  }
+
+  /** Waits for the saves under way (before quitting). */
+  written(): Promise<void> {
+    return this.writing
   }
 
   onChange(listener: () => void): () => void {
@@ -148,7 +189,7 @@ export class Vault {
   /** Saves a login from a page (updating the password if this account is already saved there). */
   saveLogin(url: string, username: string, password: string): LoginRecord | null {
     const origin = loginOrigin(url)
-    if (!origin || !password) return null
+    if (!origin || !password || !this.writable) return null
     const now = Date.now()
     const existing = this.findLogin(origin, username)
     if (existing) {
@@ -211,6 +252,7 @@ export class Vault {
   /** Adds imported logins: exact duplicates are skipped, and a different password for a saved account keeps yours. */
   importLogins(entries: ImportEntry[]): ImportResult {
     const result: ImportResult = { added: 0, skipped: 0, conflicts: 0, invalid: 0 }
+    if (!this.writable) return result
     const data = this.contents()
     const now = Date.now()
     for (const entry of entries) {
@@ -267,6 +309,7 @@ export class Vault {
 
   /** Saves a new passkey; one already saved for the same account on the site is replaced, as other platforms do. */
   addPasskey(passkey: PasskeyRecord): void {
+    if (!this.writable) return
     const data = this.contents()
     data.passkeys = data.passkeys.filter((p) => !(p.rpId === passkey.rpId && p.userHandle === passkey.userHandle))
     data.passkeys.push(passkey)
@@ -301,35 +344,65 @@ export class Vault {
 
   // ---- Storage ----
 
+  /** What's been read so far (nothing until `ready()`). */
   private contents(): Contents {
-    if (this.loaded) return this.data
-    this.loaded = true
-    if (!existsSync(this.path)) return this.data
-    try {
-      const json = safeStorage.decryptString(readFileSync(this.path))
-      const parsed = JSON.parse(json) as Partial<Contents>
-      this.data = { version: 1, logins: parsed.logins ?? [], passkeys: parsed.passkeys ?? [] }
-    } catch (error) {
-      // The Keychain key changed (or the file is damaged): keep the file aside rather than overwrite it.
-      console.warn('[passwords] could not read the vault', error)
-      try {
-        renameSync(this.path, `${this.path}.unreadable-${Date.now()}`)
-      } catch {
-        // Nothing more to do.
-      }
-    }
     return this.data
   }
 
-  private save(): void {
-    if (!safeStorage.isEncryptionAvailable()) {
-      console.warn('[passwords] encryption is not available; not saving')
+  private async load(): Promise<void> {
+    await app.whenReady()
+    let encrypted: Buffer
+    try {
+      encrypted = await readFile(this.path)
+    } catch {
+      // Nothing saved yet.
+      this.loaded = true
       return
     }
-    mkdirSync(dirname(this.path), { recursive: true })
-    const tmp = `${this.path}.tmp`
-    writeFileSync(tmp, safeStorage.encryptString(JSON.stringify(this.data)), { mode: 0o600 })
-    renameSync(tmp, this.path)
+    if (this.discarded) return
+    try {
+      const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(encrypted)
+      if (this.discarded) return
+      const parsed = JSON.parse(result) as Partial<Contents>
+      this.data = { version: 1, logins: parsed.logins ?? [], passkeys: parsed.passkeys ?? [] }
+      this.loaded = true
+      if (shouldReEncrypt) this.save()
+    } catch (error) {
+      if (this.discarded) return
+      if (/temporarily unavailable/i.test(error instanceof Error ? error.message : String(error))) {
+        // No key this time (Keychain access refused): the passwords are still there for next time.
+        console.warn('[passwords] the Keychain key is unavailable; leaving the vault as it is')
+        this.locked = true
+        return
+      }
+      // The key doesn't open it (the Keychain item was replaced) or the file is damaged: keep the file
+      // aside rather than overwrite it.
+      console.warn('[passwords] could not read the vault', error)
+      await rename(this.path, `${this.path}.unreadable-${Date.now()}`).catch(() => {})
+      this.loaded = true
+    }
     for (const listener of this.listeners) listener()
+  }
+
+  /** Writes the contents (in the background, encrypted off the main thread), after any save before it. */
+  private save(): void {
+    for (const listener of this.listeners) listener()
+    if (!this.writable) {
+      console.warn('[passwords] the vault isn’t open; not saving')
+      return
+    }
+    this.unsaved = JSON.stringify(this.data)
+    this.writing = this.writing
+      .then(async () => {
+        const json = this.unsaved
+        this.unsaved = null
+        if (json === null || this.discarded) return
+        const encrypted = await safeStorage.encryptStringAsync(json)
+        await mkdir(dirname(this.path), { recursive: true })
+        const tmp = `${this.path}.tmp`
+        await writeFile(tmp, encrypted, { mode: 0o600 })
+        await rename(tmp, this.path)
+      })
+      .catch((error) => console.warn('[passwords] could not save', error))
   }
 }

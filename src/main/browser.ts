@@ -819,7 +819,7 @@ export class Browser {
       this.compact = false
     }
     // Spaces with their own profile from before each profile had its own data start with the shared passwords.
-    if (kind === 'main') hub.services.profiles.separate(this.spaces.map((space) => space.profile))
+    if (kind === 'main') void hub.services.profiles.separate(this.spaces.map((space) => space.profile))
   }
 
   /**
@@ -4554,7 +4554,7 @@ export class Browser {
     if (choice.mode === 'copy' && from) {
       await this.copyCookies(from.profile, space.profile)
       // Starting signed in includes the passwords, passkeys and site permissions (not the history).
-      this.hub.services.profiles.copy(from.profile, space.profile)
+      await this.hub.services.profiles.copy(from.profile, space.profile)
     }
   }
 
@@ -4568,7 +4568,7 @@ export class Browser {
    * rest of its data goes too, except its passwords and passkeys, which move to the default profile.
    * Returns how many passwords and passkeys moved.
    */
-  private leftProfile(profile: string): number {
+  private async leftProfile(profile: string): Promise<number> {
     if (profile === DEFAULT_PROFILE || [...this.hub.browsers].some((browser) => browser.usesProfile(profile))) return 0
     void this.clearProfile(profile)
     return this.hub.retireProfile(profile)
@@ -4589,7 +4589,7 @@ export class Browser {
     if (space.profile === previous) return
     for (const tab of this.tabs.filter((t) => t.spaceId === id)) this.rehome(tab)
     // A profile nothing uses any more is cleared (the default one always stays).
-    const moved = this.leftProfile(previous)
+    const moved = await this.leftProfile(previous)
     this.broadcast()
     const label =
       choice.mode === 'share'
@@ -4669,7 +4669,7 @@ export class Browser {
     const wasActive = this.activeSpaceId === id
     this.spaces = this.spaces.filter((s) => s.id !== id)
     // Its own profile goes with it (the default profile is shared, so it stays).
-    if (this.kind === 'main') this.leftProfile(space.profile)
+    if (this.kind === 'main') void this.leftProfile(space.profile)
     if (wasActive) {
       this.activeSpaceId = '' // forces switchSpace to run
       this.switchSpace(this.spaces[0].id)

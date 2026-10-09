@@ -30,6 +30,9 @@ export class ProfileData {
     this.semantic = new SemanticHistory(this.history, `${dir}history-meaning.json`)
     this.vault = new Vault(`${dir}passwords.vault`)
     this.permissions = new SitePermissions(`${dir}site-settings.json`)
+    // Read now, in the background, so the passwords are there when a sign-in form asks (and if macOS
+    // wants you to allow its Keychain key, it asks while Zepper opens).
+    void this.vault.ready()
   }
 
   flush(): void {
@@ -39,11 +42,11 @@ export class ProfileData {
   }
 
   /** Deletes all of it. */
-  discard(): void {
+  async discard(): Promise<void> {
     this.history.discard()
     this.semantic.discard()
-    this.vault.discard()
     this.permissions.discard()
+    await this.vault.discard()
     if (this.id !== DEFAULT_PROFILE) rmSync(join(app.getPath('userData'), PROFILES_DIR, this.id), { recursive: true, force: true })
   }
 }
@@ -93,32 +96,45 @@ export class Profiles {
    * passwords, passkeys and site permissions, so nothing that worked stops working. History stays
    * with the default profile.
    */
-  separate(existing: string[]): void {
+  async separate(existing: string[]): Promise<void> {
     const marker = join(app.getPath('userData'), SEPARATED)
     if (existsSync(marker)) return
-    for (const id of new Set(existing)) if (id !== DEFAULT_PROFILE) this.copy(DEFAULT_PROFILE, id)
+    let copied = true
+    for (const id of new Set(existing)) if (id !== DEFAULT_PROFILE) copied = (await this.copy(DEFAULT_PROFILE, id)) && copied
+    // Tried again next time if the passwords couldn't be opened.
+    if (!copied) return
     mkdirSync(dirname(marker), { recursive: true })
     writeFileSync(marker, `${new Date().toISOString()}\n`)
   }
 
-  /** A profile started from another space's (Copy From): its passwords, passkeys and site permissions come too. */
-  copy(from: string, to: string): void {
+  /**
+   * A profile started from another space's (Copy From): its passwords, passkeys and site permissions
+   * come too. False if the passwords couldn't be opened (macOS kept the Keychain key).
+   */
+  async copy(from: string, to: string): Promise<boolean> {
     const source = this.get(from)
     const target = this.get(to)
-    target.vault.mergeFrom(source.vault)
     target.permissions.mergeFrom(source.permissions)
+    return (await target.vault.mergeFrom(source.vault)) !== null
   }
 
   /**
    * A profile no space uses any more: its passwords and passkeys move to the default profile, so none
-   * are lost, and the rest of its data is deleted. Returns how many passwords and passkeys moved.
+   * are lost, and the rest of its data is deleted. Returns how many passwords and passkeys moved. If
+   * they couldn't be opened, the profile's data stays where it is (it can be retired another time).
    */
-  retire(id: string): number {
+  async retire(id: string): Promise<number> {
     if (id === DEFAULT_PROFILE) return 0
     const data = this.get(id)
-    const moved = this.default.vault.mergeFrom(data.vault)
-    data.discard()
+    const moved = await this.default.vault.mergeFrom(data.vault)
+    if (moved === null) return 0
     this.opened.delete(id)
+    await data.discard()
     return moved
+  }
+
+  /** Waits for every profile's password saves under way (before quitting). */
+  async written(): Promise<void> {
+    await Promise.all(this.open().map((data) => data.vault.written()))
   }
 }

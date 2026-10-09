@@ -148,9 +148,17 @@ export class AutofillController {
   onPageMessage(wc: WebContents, frame: WebFrameMain | null, message: PageMessage): void {
     if (!frame) return
     switch (message.type) {
-      case 'focus':
-        if (message.rect) this.openFor(wc, frame, message.field, message.rect, message.pointer ?? null)
+      case 'focus': {
+        const rect = message.rect
+        if (!rect) return
+        // The passwords are read in the background as Zepper opens; this waits only that first moment.
+        void this.vaultFor(wc)
+          .ready()
+          .then(() => {
+            if (!wc.isDestroyed() && !frame.detached) this.openFor(wc, frame, message.field, rect, message.pointer ?? null)
+          })
         return
+      }
       case 'blur':
         return this.scheduleHide()
       case 'key':
@@ -314,11 +322,20 @@ export class AutofillController {
     const offer = this.offer
     if (!offer || offer.wc !== wc) return
     this.clearOffer()
+    void this.offerToSave(offer)
+  }
+
+  private async offerToSave(offer: { wc: WebContents; url: string; username: string; password: string }): Promise<void> {
+    const wc = offer.wc
+    const vault = this.vaultFor(wc)
+    await vault.ready()
+    // Nothing to save into while macOS keeps the Keychain key (see Vault.unavailable).
+    if (wc.isDestroyed() || vault.unavailable) return
     const host = new URL(offer.url).hostname.replace(/^www\./, '')
     // A password Zepper suggested is saved straight away.
     if (this.generated?.origin === new URL(offer.url).origin && this.generated.password === offer.password) {
       this.generated = null
-      if (this.vaultFor(wc).saveLogin(offer.url, offer.username, offer.password) && this.host.ownsVisiblePage(wc)) {
+      if (vault.saveLogin(offer.url, offer.username, offer.password) && this.host.ownsVisiblePage(wc)) {
         this.saving = null
         this.field = null
         this.show({ kind: 'saved', host, username: offer.username })
@@ -326,7 +343,7 @@ export class AutofillController {
       }
       return
     }
-    const existing = this.vaultFor(wc).findLogin(offer.url, offer.username)
+    const existing = vault.findLogin(offer.url, offer.username)
     if (existing?.password === offer.password || !this.host.ownsVisiblePage(wc)) return
     this.saving = { wc, url: offer.url, username: offer.username, password: offer.password }
     this.field = null
@@ -367,6 +384,13 @@ export class AutofillController {
     } catch (error) {
       return Promise.resolve(replyFor(error))
     }
+    // The passkeys are read in the background as Zepper opens; this waits only that first moment.
+    return this.vaultFor(wc)
+      .ready()
+      .then(() => (wc.isDestroyed() ? NOT_ALLOWED : this.answerPasskey(wc, kind, request)))
+  }
+
+  private answerPasskey(wc: WebContents, kind: 'create' | 'get', request: PasskeyRequest): Promise<string> {
     return new Promise((resolve) => {
       const ticket: Ticket = { wc, request, resolve, timer: null }
       this.watch(wc)
@@ -450,9 +474,11 @@ export class AutofillController {
     this.close()
     const verified = await this.verify(request.userVerification, `save a passkey for ${request.rpId}`)
     if (verified === null) return this.finish(ticket, NOT_ALLOWED)
+    const vault = this.vaultFor(ticket.wc)
+    // A passkey that can't be saved would leave the site expecting one you don't have.
+    if (ticket.wc.isDestroyed() || vault.unavailable) return this.finish(ticket, NOT_ALLOWED)
     const { record, response } = makeCredential({ ...request, user: request.user!, verified })
-    if (ticket.wc.isDestroyed()) return this.finish(ticket, NOT_ALLOWED)
-    this.vaultFor(ticket.wc).addPasskey(record)
+    vault.addPasskey(record)
     this.finish(ticket, ok(response))
   }
 

@@ -112,7 +112,13 @@ export function PasswordsSettings({
       )}
 
       <div className="pw-list">
-        {data !== null && data.logins.length === 0 && !adding && (
+        {data?.unavailable && (
+          <p className="pw-empty">
+            Zepper can’t open your saved passwords right now: macOS didn’t give it its key in your Keychain. They’re still saved. Quit and
+            reopen Zepper, and choose Allow when macOS asks.
+          </p>
+        )}
+        {data !== null && !data.unavailable && data.logins.length === 0 && !adding && (
           <p className="pw-empty">
             No saved passwords yet. Zepper offers to save them when you sign in, or import them from another browser.
           </p>

@@ -27,6 +27,11 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
   - A middle-click opens a row in the background.
 - Spaces with their own sign-ins now keep their own history, saved passwords and passkeys, downloads list and site permissions too, like separate browser profiles. The command bar, the history page, the downloads panel and Settings show the space you're in. Spaces that already had their own sign-ins keep working: they start with a copy of the passwords and site permissions you had, and earlier history stays with your main profile. **Copy From** brings a space's passwords and site permissions along with its cookies, and deleting a space with its own profile moves its passwords and passkeys to your main profile's spaces rather than deleting them.
 
+### Fixed
+
+- The whole browser could freeze while macOS asked whether Zepper may use its key in your Keychain (the "wants to use your confidential information" prompt): Zepper waited for your answer on its main thread. It now reads the Keychain in the background, as Zepper opens, so nothing stops while macOS asks.
+- Choosing Deny when macOS asks about Zepper's Keychain key no longer sets your saved passwords aside as unreadable. They stay as they are, and Settings › Passwords explains how to get them back (reopen Zepper and choose Allow).
+
 ## [0.1.7] - 2026-10-09
 
 ### Added

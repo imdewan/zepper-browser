@@ -31,6 +31,10 @@ async function unlock(reason: string): Promise<boolean> {
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
+/** When macOS kept the Keychain key from Zepper (see Vault.unavailable). */
+const UNAVAILABLE =
+  'Zepper can’t open your saved passwords right now. Quit and reopen Zepper, and choose Allow when macOS asks about its Keychain key.'
+
 export async function handleVaultRequest(
   vault: Vault,
   history: History,
@@ -40,9 +44,10 @@ export async function handleVaultRequest(
   /** Puts imported tabs into the window that asked (its spaces). */
   importSession: (session: ImportedSession, browserName: string) => { tabs: number; spaces: number }
 ): Promise<VaultReplies[VaultRequest['type']]> {
+  await vault.ready()
   switch (request.type) {
     case 'list':
-      return { logins: vault.listLogins(), passkeys: vault.listPasskeys() }
+      return { logins: vault.listLogins(), passkeys: vault.listPasskeys(), unavailable: vault.unavailable }
     case 'reveal': {
       const login = vault.login(String(request.id))
       if (!login) return { error: 'That password is no longer saved.' }
@@ -50,6 +55,7 @@ export async function handleVaultRequest(
       return { password: login.password }
     }
     case 'add': {
+      if (vault.unavailable) return { error: UNAVAILABLE }
       const username = String(request.username ?? '').trim()
       if (vault.findLogin(String(request.url ?? ''), username)) return { error: 'That account is already saved for this site.' }
       return vault.saveLogin(String(request.url ?? ''), username, String(request.password ?? ''))
@@ -74,6 +80,7 @@ export async function handleVaultRequest(
     case 'sources':
       return importSources()
     case 'importBrowser': {
+      if (vault.unavailable) return { error: UNAVAILABLE }
       try {
         const { entries, neverSave } = await importFromBrowser(String(request.source), String(request.profile))
         const result = vault.importLogins(entries)
@@ -103,6 +110,7 @@ export async function handleVaultRequest(
       }
     }
     case 'importFile': {
+      if (vault.unavailable) return { error: UNAVAILABLE }
       const choice = await dialog.showOpenDialog(win, {
         title: 'Import Passwords',
         buttonLabel: 'Import',

@@ -460,7 +460,8 @@ export type VaultRequest =
   | { type: 'openPrivacySettings' }
 
 export interface VaultReplies {
-  list: { logins: LoginSummary[]; passkeys: PasskeySummary[] }
+  /** unavailable: macOS kept Zepper's Keychain key this time, so the saved passwords can't be opened. */
+  list: { logins: LoginSummary[]; passkeys: PasskeySummary[]; unavailable: boolean }
   reveal: { password: string } | { error: string }
   add: { error?: string }
   update: { error?: string }

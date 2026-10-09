@@ -250,6 +250,7 @@ function createMock(): ZepperApi {
     async vault<T extends VaultRequest>(request: T): Promise<VaultReplies[T['type']]> {
       const replies: Partial<VaultReplies> = {
         list: {
+          unavailable: false,
           logins: [
             { id: 'l1', origin: 'https://github.com', host: 'github.com', username: 'octocat', note: '', updated: now, lastUsed: now },
             {
