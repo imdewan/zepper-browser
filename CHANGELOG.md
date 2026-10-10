@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-10
+
 ### Added
 
 - **Linux**, on x64 and arm64: an AppImage (which updates itself), a `.deb` for Ubuntu, Debian and Mint, and an `.rpm` for Fedora and openSUSE, each tested on its distro.
@@ -38,6 +40,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 - The whole browser could freeze while macOS asked whether Zepper may use its key in your Keychain (the "wants to use your confidential information" prompt): Zepper waited for your answer on its main thread. It now reads the Keychain in the background, as Zepper opens, so nothing stops while macOS asks.
 - Choosing Deny when macOS asks about Zepper's Keychain key no longer sets your saved passwords aside as unreadable. They stay as they are, and Settings › Passwords explains how to get them back (reopen Zepper and choose Allow).
+- A split of a pinned tab and an unpinned one showed twice in the sidebar, once in each section. It shows once, with the pinned tabs.
+- `LICENSE` is the GPL-3.0 text as published: its example section had kept another project's copyright lines.
 
 ## [0.1.7] - 2026-10-09
 
@@ -184,7 +188,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/imdewan/zepper-browser/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/imdewan/zepper-browser/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/imdewan/zepper-browser/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/imdewan/zepper-browser/compare/v0.1.4...v0.1.5
