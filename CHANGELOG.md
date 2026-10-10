@@ -16,6 +16,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
+- AI chats have bangs that send your question straight there: `!chat` (also `!chatgpt`, `!gpt`) to ChatGPT rather than Duck.ai, `!claude` to Claude, `!gemini` to Gemini, `!perplexity` (`!pplx`) to Perplexity, `!copilot` to Microsoft Copilot and `!mistral` (`!lechat`) to Le Chat. `!ai` still goes to Duck.ai.
 - The command bar works like Chrome's address bar:
   - Arrowing to a suggestion shows it in the field (its address, or its search), ready to go to or to edit.
   - Esc first takes it back, then closes.

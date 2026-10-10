@@ -23,6 +23,31 @@ export interface Bang {
   r: number
 }
 
+/**
+ * AI chats, which DuckDuckGo's list leaves out (or, for `!chat`, sends to its own Duck.ai): the
+ * question goes straight to the chat, as Chrome's @gemini does. These win over DuckDuckGo's.
+ */
+const OWN: Bang[] = [
+  ...['chat', 'chatgpt', 'gpt'].map((t) => ({ t, s: 'ChatGPT', d: 'chatgpt.com', u: 'https://chatgpt.com/?q={{{s}}}', r: 60_000 })),
+  { t: 'claude', s: 'Claude', d: 'claude.ai', u: 'https://claude.ai/new?q={{{s}}}', r: 60_000 },
+  { t: 'gemini', s: 'Gemini', d: 'gemini.google.com', u: 'https://gemini.google.com/app?q={{{s}}}', r: 60_000 },
+  ...['perplexity', 'pplx'].map((t) => ({
+    t,
+    s: 'Perplexity',
+    d: 'www.perplexity.ai',
+    u: 'https://www.perplexity.ai/search/new?q={{{s}}}',
+    r: 30_000
+  })),
+  { t: 'copilot', s: 'Microsoft Copilot', d: 'copilot.microsoft.com', u: 'https://copilot.microsoft.com/?q={{{s}}}', r: 30_000 },
+  ...['mistral', 'lechat'].map((t) => ({
+    t,
+    s: 'Le Chat (Mistral)',
+    d: 'chat.mistral.ai',
+    u: 'https://chat.mistral.ai/chat?q={{{s}}}',
+    r: 30_000
+  }))
+]
+
 const SOURCE = 'https://duckduckgo.com/bang.js'
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000
 /** `!yt`, at the start or after a space, as DuckDuckGo reads it: `!yt cats` or `cats !yt`. */
@@ -100,8 +125,10 @@ class Bangs {
   }
 
   private use(list: Bang[]): void {
-    this.byTrigger = new Map(list.map((b) => [b.t.toLowerCase(), b]))
-    this.ranked = [...list].sort((a, b) => b.r - a.r)
+    const own = new Set(OWN.map((b) => b.t))
+    const all = [...list.filter((b) => !own.has(b.t.toLowerCase())), ...OWN]
+    this.byTrigger = new Map(all.map((b) => [b.t.toLowerCase(), b]))
+    this.ranked = all.sort((a, b) => b.r - a.r)
   }
 }
 
