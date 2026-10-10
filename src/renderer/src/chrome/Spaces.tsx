@@ -11,15 +11,19 @@ import { FolderRow } from './FolderRow'
 import { StaleTabs } from './StaleTabs'
 import { TabRow, type RowPlace } from './TabRow'
 
-/** Tab rows for a section, with each split collapsed into one grouped row at its first member. */
+/**
+ * Tab rows for a section, with each split collapsed into one grouped row at its first member.
+ * `rendered`: the splits already shown in this space (a split of a pinned and an unpinned tab shows
+ * once, in the pinned area, not again with the other tabs).
+ */
 function renderRows(
   tabs: Tab[],
   all: Tab[],
   splits: Split[],
   activeTabId: string | null,
-  placeOf?: (tab: Tab, index: number) => RowPlace
+  placeOf?: (tab: Tab, index: number) => RowPlace,
+  rendered = new Set<string>()
 ): React.JSX.Element[] {
-  const rendered = new Set<string>()
   const rows: React.JSX.Element[] = []
   tabs.forEach((tab, index) => {
     const split = splits.find((s) => s.tabIds.includes(tab.id))
@@ -43,7 +47,15 @@ function pinnedRows(
   items: string[],
   parentId: string | null,
   depth: number,
-  ctx: { space: Space; tabs: Map<string, Tab>; folders: Map<string, Folder>; all: Tab[]; splits: Split[]; activeTabId: string | null }
+  ctx: {
+    space: Space
+    tabs: Map<string, Tab>
+    folders: Map<string, Folder>
+    all: Tab[]
+    splits: Split[]
+    activeTabId: string | null
+    rendered: Set<string>
+  }
 ): React.JSX.Element[] {
   const rows: React.JSX.Element[] = []
   const tabsUnder = (ids: string[]): string[] => ids.flatMap((id) => (ctx.folders.has(id) ? tabsUnder(ctx.folders.get(id)!.items) : [id]))
@@ -69,7 +81,7 @@ function pinnedRows(
       return
     }
     const tab = ctx.tabs.get(id)
-    if (tab) rows.push(...renderRows([tab], ctx.all, ctx.splits, ctx.activeTabId, () => place))
+    if (tab) rows.push(...renderRows([tab], ctx.all, ctx.splits, ctx.activeTabId, () => place, ctx.rendered))
   })
   return rows
 }
@@ -370,7 +382,9 @@ function SpaceView({
     folders: new Map(folders.filter((f) => f.spaceId === space.id).map((f) => [f.id, f])),
     all: tabs,
     splits,
-    activeTabId
+    activeTabId,
+    // Splits shown so far: the pinned area's first, then the other tabs'.
+    rendered: new Set<string>()
   }
   const hasPinnedArea = space.pinnedItems.length > 0
   // Collapsed pinned area: just the pinned tab you're on.
@@ -379,7 +393,9 @@ function SpaceView({
         pinned.filter((t) => t.id === activeTabId),
         tabs,
         splits,
-        activeTabId
+        activeTabId,
+        undefined,
+        ctx.rendered
       )
     : pinnedRows(space.pinnedItems, null, 0, ctx)
   const normalPlace = (_tab: Tab, index: number): RowPlace => ({ zone: 'normal', spaceId: space.id, parentId: null, index, depth: 0 })
@@ -433,7 +449,7 @@ function SpaceView({
           />
         </AnimatePresence>
         {!newTabAtBottom && <NewTabRow spaceId={space.id} index={0} />}
-        <AnimatePresence initial={false}>{renderRows(normal, tabs, splits, activeTabId, normalPlace)}</AnimatePresence>
+        <AnimatePresence initial={false}>{renderRows(normal, tabs, splits, activeTabId, normalPlace, ctx.rendered)}</AnimatePresence>
         {newTabAtBottom && <NewTabRow spaceId={space.id} index={normal.length} />}
         <SpaceFill spaceId={space.id} index={normal.length} />
       </div>
