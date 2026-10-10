@@ -6029,8 +6029,8 @@ export class Browser {
     const edge = this.settings.compactRevealOnHover ? Math.max(gap, MIN_REVEAL_EDGE) : gap
     const sidebar = this.compact ? edge : this.sidebarWidth
     const right = this.settings.sidebarPosition === 'right'
-    // With the sidebar on the right, the traffic lights need a strip above the page.
-    const top = right && !this.compact ? Math.max(gap, TITLEBAR_STRIP) : gap
+    // With the sidebar on the right, macOS's traffic lights need a strip above the page.
+    const top = right && !this.compact && process.platform === 'darwin' ? Math.max(gap, TITLEBAR_STRIP) : gap
     return {
       x: right ? gap : sidebar,
       y: top,

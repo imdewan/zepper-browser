@@ -28,7 +28,8 @@ export function layoutVars(snapshot: Snapshot, sidebarWidth: number, accent: str
     '--sidebar-w': `${sidebarWidth}px`,
     '--content-left': `${right ? s.contentGap : side}px`,
     '--content-right': `${right ? side : s.contentGap}px`,
-    '--content-top': `${right && showSidebar ? Math.max(s.contentGap, TITLEBAR_STRIP) : s.contentGap}px`,
+    // macOS's traffic lights need a strip above the page when the sidebar is on the right.
+    '--content-top': `${right && showSidebar && isMac ? Math.max(s.contentGap, TITLEBAR_STRIP) : s.contentGap}px`,
     ...(accent ? { '--accent': accent } : {})
   } as React.CSSProperties
 }

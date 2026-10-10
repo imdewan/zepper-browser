@@ -68,8 +68,8 @@ export interface Settings {
    */
   transparency: number
   /**
-   * Linux: the desktop's own title bar and borders around the window (and its rounded corners), as
-   * Linux apps have. Off: no title bar, and Zepper's window buttons in the sidebar. New windows.
+   * Linux: the desktop's own title bar and borders around the window, as Linux apps have. Off (the
+   * default): no title bar, Zepper's window buttons in the sidebar and rounded corners. New windows.
    */
   systemTitleBar: boolean
   // Tabs
@@ -190,7 +190,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reduceMotion: false,
   appIcon: 'auto',
   transparency: 0.5,
-  systemTitleBar: true,
+  systemTitleBar: false,
   newTabPosition: 'top',
   memorySaver: true,
   memorySaverMode: 'balanced',
@@ -269,4 +269,12 @@ export const PINNED_CLOSE_LABELS: Record<PinnedCloseBehavior, string> = {
   switch: 'Just switch to another tab',
   reset: 'Only reset the URL',
   close: 'Close the tab'
+}
+
+/**
+ * The defaults on a platform. Linux: the sidebar on the right, so with no title bar the window's
+ * buttons are in its top-right corner, where Linux puts them.
+ */
+export function defaultSettings(platform: string): Settings {
+  return platform === 'linux' ? { ...DEFAULT_SETTINGS, sidebarPosition: 'right' } : DEFAULT_SETTINGS
 }

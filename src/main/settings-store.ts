@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type Settings } from '@shared/settings'
+import { defaultSettings, type Settings } from '@shared/settings'
 import { JsonFile } from './persist'
 
 /** User preferences, persisted to settings.json and merged over the defaults. */
@@ -12,7 +12,7 @@ export class SettingsStore {
     // Transparency used to top out at what is now 50% (the scale now goes further); keep the same look.
     if (saved.windowTransparency !== undefined && saved.transparency === undefined) saved.transparency = saved.windowTransparency / 2
     delete saved.windowTransparency
-    this.value = { ...DEFAULT_SETTINGS, ...saved }
+    this.value = { ...defaultSettings(process.platform), ...saved }
   }
 
   get(): Settings {
