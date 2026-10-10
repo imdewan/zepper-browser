@@ -93,14 +93,22 @@ export class Profiles {
   /**
    * Once, after the update that gave each profile its own data: the profiles that existed before
    * (spaces with their own sign-ins) start with what they were using until then, the shared
-   * passwords, passkeys and site permissions, so nothing that worked stops working. History stays
-   * with the default profile.
+   * history, passwords, passkeys and site permissions, so nothing that worked stops working and no
+   * history goes out of sight. (Visits weren't recorded by space, so each gets all of it.) From then
+   * on each keeps its own.
    */
   async separate(existing: string[]): Promise<void> {
     const marker = join(app.getPath('userData'), SEPARATED)
     if (existsSync(marker)) return
     let copied = true
-    for (const id of new Set(existing)) if (id !== DEFAULT_PROFILE) copied = (await this.copy(DEFAULT_PROFILE, id)) && copied
+    for (const id of new Set(existing)) {
+      if (id === DEFAULT_PROFILE) continue
+      const source = this.get(DEFAULT_PROFILE)
+      const target = this.get(id)
+      target.history.importVisits(source.history.list('', Infinity))
+      target.semantic.mergeFrom(source.semantic)
+      copied = (await this.copy(DEFAULT_PROFILE, id)) && copied
+    }
     // Tried again next time if the passwords couldn't be opened.
     if (!copied) return
     mkdirSync(dirname(marker), { recursive: true })

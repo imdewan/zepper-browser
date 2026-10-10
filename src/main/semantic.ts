@@ -113,6 +113,22 @@ export class SemanticHistory {
     })
   }
 
+  /** Adds another profile's notes that this one doesn't have (a space starting with the history it had before). */
+  mergeFrom(other: SemanticHistory): void {
+    if (this.removed) return
+    // Vectors from another embedding model can't be compared with these: they're made again.
+    const sameModel = !this.data.model || !other.data.model || this.data.model === other.data.model
+    if (!this.data.model) this.data.model = other.data.model
+    for (const [url, note] of Object.entries(other.data.notes)) {
+      if (this.data.notes[url]) continue
+      this.data.notes[url] = { ...note, vector: sameModel ? note.vector : undefined }
+      if (!this.data.notes[url].vector) this.queue.add(url)
+    }
+    this.trim()
+    this.file.schedule(this.data)
+    if (this.queue.size > 0) this.schedule(15_000)
+  }
+
   /** Deletes the file (a profile nothing uses any more). */
   discard(): void {
     this.removed = true
