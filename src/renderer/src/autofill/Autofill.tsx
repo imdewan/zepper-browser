@@ -3,7 +3,7 @@ import qrcode from 'qrcode-generator'
 import type { AutofillItem, AutofillState, PhoneStatus } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconCheck, IconChevronRight, IconKey, IconPasskey, IconPhone, IconSparkle } from '../icons'
-import { cx } from '../util'
+import { THIS_COMPUTER, cx, isMac } from '../util'
 
 /**
  * Zepper's password popup: the dropdown under a sign-in field, the "Save password?" prompt after
@@ -94,7 +94,11 @@ export function Autofill(): React.JSX.Element | null {
             </span>
             <span className="af-text">
               <span className="af-name">{state.username || 'No user name'}</span>
-              <span className="af-sub">Saved in Zepper on this Mac, encrypted with your Keychain.</span>
+              <span className="af-sub">
+                {isMac
+                  ? 'Saved in Zepper on this Mac, encrypted with your Keychain.'
+                  : 'Saved in Zepper on this computer, encrypted with your keyring.'}
+              </span>
             </span>
           </div>
           <div className="af-actions">
@@ -133,8 +137,9 @@ export function Autofill(): React.JSX.Element | null {
             <span className="af-text">
               <span className="af-name">Create a passkey for {state.rpId}?</span>
               <span className="af-sub">
-                {state.userName ? <strong>{state.userName}</strong> : 'Your account'} · saved in Zepper on this Mac. You’ll sign in with
-                Touch ID instead of a password.
+                {state.userName ? <strong>{state.userName}</strong> : 'Your account'} · saved in Zepper on {THIS_COMPUTER}. You’ll sign in
+                with
+                {isMac ? ' Touch ID' : ' it'} instead of a password.
               </span>
             </span>
           </div>

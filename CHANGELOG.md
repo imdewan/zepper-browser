@@ -6,6 +6,12 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Added
 
+- **Linux**, on x64 and arm64: an AppImage (which updates itself), a `.deb` for Ubuntu, Debian and Mint, and an `.rpm` for Fedora and openSUSE, each tested on its distro.
+  - Zepper draws the window's buttons at the end of the sidebar's top row, and the window is solid.
+  - Shortcuts use Ctrl, and the few that would clash on Linux take Chrome's Linux keys: Ctrl+H for history, Ctrl+J for downloads, Ctrl+Shift+I for DevTools, Ctrl+Page Down and Up for the next and previous tab, Ctrl+Alt+1–9 for spaces. F5, Alt+← and Alt+→ work too.
+  - Saved passwords are encrypted with a key in your desktop's keyring (GNOME Keyring or KWallet).
+  - Links from other apps open in Zepper once it's your default browser, and history and open tabs import from Chrome, Brave, Edge, Vivaldi, Opera, Chromium and Firefox.
+  - The Apple Intelligence features, passkeys through macOS and importing passwords straight from other browsers are macOS-only.
 - **Developer Mode**, as in Arc:
   - Sites you're building get a bar over the page: the full address, and buttons to copy it, capture in Portrait Mode, take a capture, open the Console, Network or Inspect, open extensions or split view, and turn Developer Mode off.
   - It's on by itself for localhost and other local sites (`.test`, `.local`, your network). Turn it on or off for any site, from then on, with ⌥⇧⌘D, from its lock icon or its tab's menu.

@@ -7,7 +7,7 @@ import { zepper } from '../bridge'
 import { IconPrivate } from '../icons'
 import { useSnapshot, useSystemDark } from '../useSnapshot'
 import logo from '../assets/logo.png'
-import { cx } from '../util'
+import { YOUR_COMPUTER, cx, isLinux, isMac } from '../util'
 import { DeveloperLayer } from './DeveloperBar'
 import { Sidebar } from './Sidebar'
 
@@ -84,7 +84,8 @@ export function App(): React.JSX.Element | null {
         {...uiAttributes(snapshot.settings)}
         style={layoutVars(snapshot, sidebarWidth, accent)}
       >
-        <Background theme={space.theme} spaceKey={space.id} transparency={snapshot.settings.transparency} />
+        {/* Linux has no system material to see through: the window is solid there. */}
+        <Background theme={space.theme} spaceKey={space.id} transparency={isLinux ? 0 : snapshot.settings.transparency} />
         <div className="drag-strip drag" />
         <AnimatePresence initial={false}>
           {showSidebar && (
@@ -159,10 +160,10 @@ function ContentCard({ tab, isPrivate, quiet }: { tab: Tab | null; isPrivate: bo
             <div className="private-title">You're browsing privately</div>
             <p className="private-text">
               Zepper won't save your history, and this window's cookies, site data and permissions are erased when you close it. Files you
-              download stay on your Mac, and ads and trackers are still blocked.
+              download stay on {YOUR_COMPUTER}, and ads and trackers are still blocked.
             </p>
             <div className="empty-hint">
-              Press <kbd>⌘</kbd>
+              Press <kbd>{isMac ? '⌘' : 'Ctrl'}</kbd>
               <kbd>T</kbd> to search or enter an address
             </div>
           </div>
@@ -171,7 +172,7 @@ function ContentCard({ tab, isPrivate, quiet }: { tab: Tab | null; isPrivate: bo
           <div className="empty-state">
             <img className="empty-logo" src={logo} alt="Zepper" draggable={false} />
             <div className="empty-hint">
-              Press <kbd>⌘</kbd>
+              Press <kbd>{isMac ? '⌘' : 'Ctrl'}</kbd>
               <kbd>T</kbd> to search or enter an address
             </div>
           </div>

@@ -15,6 +15,7 @@
   },
   "author": "Dewan Shakil",
   "main": "out/main/index.js",
+  "desktopName": "zepper.desktop",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -24,6 +25,7 @@
     "format": "prettier --write .",
     "check": "npm run typecheck && npm run lint && prettier --check .",
     "dist": "electron-vite build && npm run build:native && node scripts/stage-electron.mjs && electron-builder --mac --arm64 --x64 && cp dist/latest-mac.yml dist/Zepper-update-mac.yml",
+    "dist:linux": "electron-vite build && node scripts/stage-electron.mjs linux && electron-builder --linux",
     "dist:browser": "node scripts/dist-browser.mjs",
     "brand:dev": "node scripts/brand-dev-runtime.mjs",
     "build:native": "node scripts/build-native.mjs",
@@ -70,6 +72,9 @@
     "productName": "Zepper",
     "electronDist": "node_modules/.cache/zepper-electron-dist",
     "afterPack": "scripts/after-pack.cjs",
+    "toolsets": {
+      "appimage": "1.0.3"
+    },
     "protocols": [
       {
         "name": "Web page",
@@ -100,20 +105,6 @@
         "rank": "Alternate"
       }
     ],
-    "extraResources": [
-      {
-        "from": "build/bin/${arch}/zepper-ai",
-        "to": "bin/zepper-ai"
-      },
-      {
-        "from": "build/bin/${arch}/zepper_credentials.node",
-        "to": "bin/zepper_credentials.node"
-      },
-      {
-        "from": "build/Assets.car",
-        "to": "Assets.car"
-      }
-    ],
     "directories": {
       "buildResources": "build",
       "output": "dist"
@@ -142,7 +133,21 @@
         "dmg",
         "zip"
       ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "extraResources": [
+        {
+          "from": "build/bin/${arch}/zepper-ai",
+          "to": "bin/zepper-ai"
+        },
+        {
+          "from": "build/bin/${arch}/zepper_credentials.node",
+          "to": "bin/zepper_credentials.node"
+        },
+        {
+          "from": "build/Assets.car",
+          "to": "Assets.car"
+        }
+      ]
     },
     "dmg": {
       "title": "${productName}",
@@ -164,6 +169,81 @@
           "type": "link",
           "path": "/Applications"
         }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "executableName": "zepper",
+      "category": "Network;WebBrowser",
+      "synopsis": "A private, sidebar-first web browser",
+      "description": "Zepper is a free, open-source web browser built on Chromium, with spaces, split view, a command bar and a sidebar for your tabs. Ad and tracker blocking is on from the start.",
+      "mimeTypes": [
+        "x-scheme-handler/http",
+        "x-scheme-handler/https",
+        "text/html",
+        "application/xhtml+xml",
+        "application/pdf"
+      ],
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "zepper",
+          "Keywords": "browser;web;internet;"
+        }
+      },
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0 | libgtk-3-0t64",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0 | libatspi2.0-0t64",
+        "libuuid1",
+        "libsecret-1-0",
+        "libasound2 | libasound2t64",
+        "libgbm1",
+        "libcups2 | libcups2t64"
+      ]
+    },
+    "rpm": {
+      "depends": [
+        "gtk3",
+        "libnotify",
+        "nss",
+        "libXScrnSaver",
+        "(libXtst or libXtst6)",
+        "xdg-utils",
+        "at-spi2-core",
+        "(libuuid or libuuid1)",
+        "(libsecret or libsecret-1-0)",
+        "(alsa-lib or libasound2)",
+        "(mesa-libgbm or libgbm1)",
+        "(cups-libs or libcups2)"
       ]
     }
   }

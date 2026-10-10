@@ -1,5 +1,5 @@
 // electron-builder afterPack hook, in this order (both change the app, so both must come
-// before Apple code signing, which runs after this hook):
+// before Apple code signing, which runs after this hook; on Linux only the first):
 // 1. Flip Electron's fuses: no running as plain Node, no Node debugging flags, app code
 //    only from the (integrity-checked) asar, and cookies encrypted on disk.
 // 2. VMP-sign with castLabs EVS so Widevine licence servers (Netflix, Crunchyroll…) accept
@@ -29,6 +29,8 @@ const FUSES = {
 exports.default = async function afterPack(context) {
   const fuses = await context.packager.generateFuseConfig(FUSES)
   await context.packager.addElectronFuses(context, fuses)
+  // Linux: the fuses are all (Widevine needs no VMP signature there, and nothing is code signed).
+  if (context.electronPlatformName !== 'darwin') return
 
   vmpSign(context.appOutDir)
 

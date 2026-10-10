@@ -30,7 +30,7 @@ import {
 import type { AccessState, IntelligenceStatus, SiteDecisions, Snapshot, SystemAccess, UpdateStatus, WidevineStatus } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconBack, IconClose } from '../icons'
-import { cx, isMac, listNames } from '../util'
+import { SHOW_IN_FOLDER, YOUR_COMPUTER, cx, isLinux, isMac, listNames, shortcut } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
 import { PasswordsSettings } from './PasswordsSettings'
 import { SiteListLink, SiteListPage, type SiteListItem } from './SiteListPage'
@@ -38,9 +38,9 @@ import { Toggle } from './Toggle'
 
 /** What each Memory Saver mode does (Chrome's and Brave's timings). */
 const MEMORY_SAVER_HINTS: Record<MemorySaverMode, string> = {
-  moderate: 'Tabs unload after 6 hours out of sight, or sooner if your Mac runs short of memory.',
-  balanced: 'Recommended. Tabs unload after 4 hours out of sight, or sooner if your Mac runs short of memory.',
-  maximum: 'Tabs unload after 2 hours out of sight, or sooner if your Mac runs short of memory.'
+  moderate: `Tabs unload after 6 hours out of sight, or sooner if ${YOUR_COMPUTER} runs short of memory.`,
+  balanced: `Recommended. Tabs unload after 4 hours out of sight, or sooner if ${YOUR_COMPUTER} runs short of memory.`,
+  maximum: `Tabs unload after 2 hours out of sight, or sooner if ${YOUR_COMPUTER} runs short of memory.`
 }
 
 /** Languages Apple's on-device translation supports. */
@@ -294,7 +294,7 @@ export function SettingsPanel({
                   items={settings.developerSites.map((host) => ({ key: host, site: host }))}
                   action="Remove"
                   actionTitle={(item) => `Turn off Developer Mode for ${item.site}`}
-                  empty="Sites you turn Developer Mode on for (⌥⇧⌘D, their lock icon or their tab’s menu) show up here."
+                  empty={`Sites you turn Developer Mode on for (${shortcut('⌥⇧⌘D')}, their lock icon or their tab’s menu) show up here.`}
                   onAction={(item) => set({ developerSites: settings.developerSites.filter((h) => h !== item.key) })}
                 />
               )}
@@ -325,39 +325,43 @@ export function SettingsPanel({
                       </button>
                     )}
                   </Row>
-                  <Row
-                    label="Apple Intelligence features"
-                    hint={
-                      settings.aiFeatures && !intelligence.ai && !intelligence.translation
-                        ? (intelligence.reason ?? 'Not available on this Mac.')
-                        : 'Page summaries and questions, translation, history search by meaning and Tidy Tabs. Everything runs on your Mac.'
-                    }
-                  >
-                    <Toggle checked={settings.aiFeatures} onChange={(aiFeatures) => set({ aiFeatures })} />
-                  </Row>
-                  <Row
-                    label="Offer to translate pages"
-                    hint="When a page isn’t in your language, a translate button appears in the address bar. Translation runs on your Mac."
-                  >
-                    <Toggle
-                      checked={settings.aiFeatures && settings.offerTranslation}
-                      disabled={!settings.aiFeatures}
-                      onChange={(offerTranslation) => set({ offerTranslation })}
-                    />
-                  </Row>
-                  <Row label="Translate into" hint="Your Mac’s language, or another one.">
-                    <select value={settings.translateTo} onChange={(e) => set({ translateTo: e.target.value })}>
-                      <option value="">My Mac’s language</option>
-                      {TRANSLATION_LANGUAGES.map((code) => (
-                        <option key={code} value={code}>
-                          {new Intl.DisplayNames([navigator.language], { type: 'language' }).of(code)}
-                        </option>
-                      ))}
-                    </select>
-                  </Row>
+                  {isMac && (
+                    <>
+                      <Row
+                        label="Apple Intelligence features"
+                        hint={
+                          settings.aiFeatures && !intelligence.ai && !intelligence.translation
+                            ? (intelligence.reason ?? 'Not available on this Mac.')
+                            : 'Page summaries and questions, translation, history search by meaning and Tidy Tabs. Everything runs on your Mac.'
+                        }
+                      >
+                        <Toggle checked={settings.aiFeatures} onChange={(aiFeatures) => set({ aiFeatures })} />
+                      </Row>
+                      <Row
+                        label="Offer to translate pages"
+                        hint="When a page isn’t in your language, a translate button appears in the address bar. Translation runs on your Mac."
+                      >
+                        <Toggle
+                          checked={settings.aiFeatures && settings.offerTranslation}
+                          disabled={!settings.aiFeatures}
+                          onChange={(offerTranslation) => set({ offerTranslation })}
+                        />
+                      </Row>
+                      <Row label="Translate into" hint="Your Mac’s language, or another one.">
+                        <select value={settings.translateTo} onChange={(e) => set({ translateTo: e.target.value })}>
+                          <option value="">My Mac’s language</option>
+                          {TRANSLATION_LANGUAGES.map((code) => (
+                            <option key={code} value={code}>
+                              {new Intl.DisplayNames([navigator.language], { type: 'language' }).of(code)}
+                            </option>
+                          ))}
+                        </select>
+                      </Row>
+                    </>
+                  )}
                   <Row
                     label="New windows open"
-                    hint="⌘N. With your spaces: every space, with its sign-ins and Essentials, starting on the one you're in (pinned and open tabs stay in your main window)."
+                    hint={`${shortcut('⌘N')}. With your spaces: every space, with its sign-ins and Essentials, starting on the one you're in (pinned and open tabs stay in your main window).`}
                   >
                     <Segmented
                       value={settings.newWindowSpace}
@@ -408,17 +412,19 @@ export function SettingsPanel({
                       onChange={(colorScheme) => set({ colorScheme })}
                     />
                   </Row>
-                  <Row label="App icon" hint="Auto follows your Mac’s icon style (System Settings › Appearance), like your other apps.">
-                    <Segmented
-                      value={settings.appIcon}
-                      options={[
-                        ['auto', 'Auto'],
-                        ['light', 'Light'],
-                        ['dark', 'Dark']
-                      ]}
-                      onChange={(appIcon) => set({ appIcon })}
-                    />
-                  </Row>
+                  {isMac && (
+                    <Row label="App icon" hint="Auto follows your Mac’s icon style (System Settings › Appearance), like your other apps.">
+                      <Segmented
+                        value={settings.appIcon}
+                        options={[
+                          ['auto', 'Auto'],
+                          ['light', 'Light'],
+                          ['dark', 'Dark']
+                        ]}
+                        onChange={(appIcon) => set({ appIcon })}
+                      />
+                    </Row>
+                  )}
                   <Row label="Sidebar position">
                     <Segmented
                       value={settings.sidebarPosition}
@@ -439,19 +445,22 @@ export function SettingsPanel({
                       onChange={(density) => set({ density })}
                     />
                   </Row>
-                  <Row
-                    label="Transparency"
-                    hint={settings.transparency === 0 ? 'Solid window' : `${Math.round(settings.transparency * 100)}% see-through`}
-                  >
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={settings.transparency}
-                      onChange={(e) => set({ transparency: Number(e.target.value) })}
-                    />
-                  </Row>
+                  {/* Linux has no system material to see through (the window is solid there). */}
+                  {!isLinux && (
+                    <Row
+                      label="Transparency"
+                      hint={settings.transparency === 0 ? 'Solid window' : `${Math.round(settings.transparency * 100)}% see-through`}
+                    >
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={settings.transparency}
+                        onChange={(e) => set({ transparency: Number(e.target.value) })}
+                      />
+                    </Row>
+                  )}
                   <Row label="Content gap" hint={`${settings.contentGap}px around the page`}>
                     <input
                       type="range"
@@ -495,7 +504,7 @@ export function SettingsPanel({
                   </Row>
                   <Row
                     label="Memory Saver"
-                    hint="Tabs you haven’t looked at for a while give back their memory and reload when you open them. Time your Mac is asleep or locked doesn’t count. Tabs you keep coming back to, pinned tabs, and tabs playing sound, in a call or with something typed stay."
+                    hint={`Tabs you haven’t looked at for a while give back their memory and reload when you open them. Time ${YOUR_COMPUTER} is asleep or locked doesn’t count. Tabs you keep coming back to, pinned tabs, and tabs playing sound, in a call or with something typed stay.`}
                   >
                     <Toggle checked={settings.memorySaver} onChange={(memorySaver) => set({ memorySaver })} />
                   </Row>
@@ -510,7 +519,7 @@ export function SettingsPanel({
                       onChange={(memorySaverMode) => set({ memorySaverMode })}
                     />
                   </Row>
-                  <Row label="Closing a pinned tab" hint="What ⌘W does on pinned tabs and Essentials.">
+                  <Row label="Closing a pinned tab" hint={`What ${shortcut('⌘W')} does on pinned tabs and Essentials.`}>
                     <select
                       value={settings.pinnedCloseBehavior}
                       onChange={(e) => set({ pinnedCloseBehavior: e.target.value as PinnedCloseBehavior })}
@@ -548,7 +557,7 @@ export function SettingsPanel({
                     hint={
                       tidy.kind === 'ai'
                         ? 'Groups related tabs into folders with Apple Intelligence, on this Mac.'
-                        : `Groups tabs from the same site into folders. ${tidy.reason}`
+                        : `Groups tabs from the same site into folders. ${tidy.reason}`.trim()
                     }
                   >
                     <Toggle checked={settings.showTidy} onChange={(showTidy) => set({ showTidy })} />
@@ -643,7 +652,7 @@ export function SettingsPanel({
                   <Row label="Ask where to save each file">
                     <Toggle checked={settings.downloadAsk} onChange={(downloadAsk) => set({ downloadAsk })} />
                   </Row>
-                  <Row label="Your downloads" hint="Progress, finished files and Show in Finder. ⌥⌘L">
+                  <Row label="Your downloads" hint={`Progress, finished files and ${SHOW_IN_FOLDER}. ${shortcut('⌥⌘L')}`}>
                     <button className="panel-button" onClick={() => zepper.send({ type: 'ui.downloads' })}>
                       Show Downloads
                     </button>
@@ -733,7 +742,7 @@ export function SettingsPanel({
                     count={sitePermissions.length}
                     onOpen={() => openPage('sitePermissions')}
                   />
-                  <SystemAccessRows access={systemAccess} />
+                  {isMac && <SystemAccessRows access={systemAccess} />}
                   <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
                     <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
                   </Row>
@@ -741,7 +750,7 @@ export function SettingsPanel({
                     <Toggle checked={settings.clearHistoryOnQuit} onChange={(clearHistoryOnQuit) => set({ clearHistoryOnQuit })} />
                   </Row>
                   <ClearBrowsingData />
-                  <Row label="Browsing history" hint="Search it, open pages again or delete them. ⌘Y">
+                  <Row label="Browsing history" hint={`Search it, open pages again or delete them. ${shortcut('⌘Y')}`}>
                     <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openHistory' })}>
                       Show History
                     </button>
@@ -783,7 +792,7 @@ export function SettingsPanel({
                   </Row>
                   <SiteListLink
                     label="Sites you’re building"
-                    hint="Turn Developer Mode on or off for any site with ⌥⇧⌘D, from its lock icon, or from its tab’s menu."
+                    hint={`Turn Developer Mode on or off for any site with ${shortcut('⌥⇧⌘D')}, from its lock icon, or from its tab’s menu.`}
                     count={settings.developerSites.length}
                     onOpen={() => openPage('developerSites')}
                   />
@@ -802,7 +811,7 @@ export function SettingsPanel({
                     {SHORTCUTS.map(([label, keys]) => (
                       <div key={label} className="shortcut-row">
                         <span>{label}</span>
-                        <kbd>{isMac ? keys : keys.replace(/⌘/g, 'Ctrl+')}</kbd>
+                        <kbd>{shortcut(keys)}</kbd>
                       </div>
                     ))}
                   </div>

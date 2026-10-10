@@ -178,6 +178,8 @@ export interface Snapshot {
   fullscreen: boolean
   /** The window is in macOS full screen, where the traffic lights leave the sidebar (they come down with the menu bar). */
   fullScreenWindow: boolean
+  /** Maximised (for the maximise button Zepper draws on Linux). */
+  maximizedWindow: boolean
   adblockEnabled: boolean
   settings: Settings
   /** Window type: the main window, a temporary window, or a private window. */
@@ -596,6 +598,9 @@ export type Command =
   | { type: 'site.resetProtections'; domain: string }
   | { type: 'data.clear'; since: number; history: boolean; cookies: boolean; cache: boolean; downloads: boolean }
   | { type: 'window.open'; kind: 'blank' | 'private' }
+  | { type: 'window.minimize' }
+  | { type: 'window.maximize' }
+  | { type: 'window.close' }
   /** Compact-mode peek: the card has slid in (show the traffic lights) or started leaving (hide them). */
   | { type: 'ui.peekLights'; visible: boolean }
   | { type: 'dialog.respond'; id: number; ok: boolean; value: string; suppress: boolean }

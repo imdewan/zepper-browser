@@ -1,4 +1,5 @@
 import { Menu, app, type BrowserWindow, type MenuItemConstructorOptions } from 'electron'
+import { linuxAccelerator } from '@shared/shortcuts'
 import type { Browser } from './browser'
 import type { Hub } from './hub'
 
@@ -18,6 +19,20 @@ export function buildMenu(hub: Hub): Menu {
     if (browser) fn(browser)
   }
   const isDev = !app.isPackaged
+  const linux = process.platform === 'linux'
+  /** The accelerator, or on Linux the one that doesn't clash there (see LINUX_SHORTCUTS), by its Mac label. */
+  const keys = (mac: string, accelerator: string): string => (linux && linuxAccelerator(mac)) || accelerator
+  /** On Linux, also the keys Linux browsers use (F5, Alt+←…), not shown in the menu. (F11 is Full Screen's own there.) */
+  const linuxExtras: MenuItemConstructorOptions[] = linux
+    ? [
+        { label: 'Reload', accelerator: 'F5', visible: false, click: run((browser) => browser.handle({ type: 'nav.reload' })) },
+        { label: 'Reload Ignoring Cache', accelerator: 'Ctrl+F5', visible: false, click: run((browser) => browser.reloadActive(true)) },
+        { label: 'Reload Ignoring Cache', accelerator: 'Shift+F5', visible: false, click: run((browser) => browser.reloadActive(true)) },
+        { label: 'Back', accelerator: 'Alt+Left', visible: false, click: run((browser) => browser.handle({ type: 'nav.back' })) },
+        { label: 'Forward', accelerator: 'Alt+Right', visible: false, click: run((browser) => browser.handle({ type: 'nav.forward' })) },
+        { label: 'Developer Tools', accelerator: 'F12', visible: false, click: run((browser) => browser.toggleDevTools()) }
+      ]
+    : []
 
   const tabItems: MenuItemConstructorOptions[] = Array.from({ length: 8 }, (_, i) => ({
     label: `Select Tab ${i + 1}`,
@@ -33,7 +48,7 @@ export function buildMenu(hub: Hub): Menu {
   }))
   const spaceItems: MenuItemConstructorOptions[] = Array.from({ length: 9 }, (_, i) => ({
     label: `Switch to Space ${i + 1}`,
-    accelerator: `Control+${i + 1}`,
+    accelerator: keys(`⌃${i + 1}`, `Control+${i + 1}`),
     visible: false,
     click: run((browser) => browser.switchSpaceIndex(i + 1))
   }))
@@ -48,12 +63,16 @@ export function buildMenu(hub: Hub): Menu {
         { type: 'separator' },
         { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: run((browser) => browser.handle({ type: 'ui.openSettings' })) },
         { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
+        ...(linux
+          ? []
+          : ([
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' }
+            ] as const)),
         { role: 'quit' }
       ]
     },
@@ -165,7 +184,7 @@ export function buildMenu(hub: Hub): Menu {
         { label: 'Summarise or Ask This Page', accelerator: 'CmdOrCtrl+Shift+A', click: run((browser) => browser.openAssistant()) },
         {
           label: 'Developer Tools',
-          accelerator: 'CmdOrCtrl+Alt+I',
+          accelerator: keys('⌥⌘I', 'CmdOrCtrl+Alt+I'),
           click: run(
             (browser) => browser.toggleDevTools(),
             (popup) => popup.webContents.toggleDevTools()
@@ -178,7 +197,7 @@ export function buildMenu(hub: Hub): Menu {
         },
         {
           label: 'JavaScript Console',
-          accelerator: 'CmdOrCtrl+Alt+J',
+          accelerator: keys('⌥⌘J', 'CmdOrCtrl+Alt+J'),
           click: run(
             (browser) => browser.showConsole(),
             (popup) => popup.webContents.openDevTools()
@@ -200,7 +219,8 @@ export function buildMenu(hub: Hub): Menu {
             ]
           : []),
         { type: 'separator' },
-        { role: 'togglefullscreen' }
+        { role: 'togglefullscreen' },
+        ...linuxExtras
       ]
     },
     {
@@ -209,8 +229,16 @@ export function buildMenu(hub: Hub): Menu {
         { label: 'Back', accelerator: 'CmdOrCtrl+[', click: run((browser) => browser.handle({ type: 'nav.back' })) },
         { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: run((browser) => browser.handle({ type: 'nav.forward' })) },
         { type: 'separator' },
-        { label: 'Show All History', accelerator: 'CmdOrCtrl+Y', click: run((browser) => browser.handle({ type: 'ui.openHistory' })) },
-        { label: 'Downloads', accelerator: 'Alt+CmdOrCtrl+L', click: run((browser) => browser.handle({ type: 'ui.downloads' })) }
+        {
+          label: 'Show All History',
+          accelerator: keys('⌘Y', 'CmdOrCtrl+Y'),
+          click: run((browser) => browser.handle({ type: 'ui.openHistory' }))
+        },
+        {
+          label: 'Downloads',
+          accelerator: keys('⌥⌘L', 'Alt+CmdOrCtrl+L'),
+          click: run((browser) => browser.handle({ type: 'ui.downloads' }))
+        }
       ]
     },
     {
@@ -218,8 +246,8 @@ export function buildMenu(hub: Hub): Menu {
       submenu: [
         { label: 'Switch to Recent Tab', accelerator: 'Control+Tab', click: run((browser) => browser.cycleRecent(1)) },
         { label: 'Switch to Recent Tab (Back)', accelerator: 'Control+Shift+Tab', click: run((browser) => browser.cycleRecent(-1)) },
-        { label: 'Next Tab', accelerator: 'CmdOrCtrl+Alt+Down', click: run((browser) => browser.cycleTab(1)) },
-        { label: 'Previous Tab', accelerator: 'CmdOrCtrl+Alt+Up', click: run((browser) => browser.cycleTab(-1)) },
+        { label: 'Next Tab', accelerator: keys('⌥⌘↓', 'CmdOrCtrl+Alt+Down'), click: run((browser) => browser.cycleTab(1)) },
+        { label: 'Previous Tab', accelerator: keys('⌥⌘↑', 'CmdOrCtrl+Alt+Up'), click: run((browser) => browser.cycleTab(-1)) },
         { type: 'separator' },
         { label: 'Pin / Unpin Tab', accelerator: 'CmdOrCtrl+D', click: run((browser) => browser.togglePinActive()) },
         { label: 'Pin / Unpin Tab', accelerator: 'CmdOrCtrl+Shift+D', visible: false, click: run((browser) => browser.togglePinActive()) },
@@ -233,8 +261,8 @@ export function buildMenu(hub: Hub): Menu {
     {
       label: 'Split View',
       submenu: [
-        { label: 'Add Split Pane', accelerator: 'Control+Shift+=', click: run((browser) => browser.addSplitPane()) },
-        { label: 'Remove Split Pane', accelerator: 'Control+Shift+-', click: run((browser) => browser.removeSplitPane()) },
+        { label: 'Add Split Pane', accelerator: keys('⌃⇧=', 'Control+Shift+='), click: run((browser) => browser.addSplitPane()) },
+        { label: 'Remove Split Pane', accelerator: keys('⌃⇧-', 'Control+Shift+-'), click: run((browser) => browser.removeSplitPane()) },
         { type: 'separator' },
         { label: 'Side by Side', accelerator: 'CmdOrCtrl+Alt+V', click: run((browser) => browser.splitWithLayout('horizontal')) },
         { label: 'Stacked', accelerator: 'CmdOrCtrl+Alt+H', click: run((browser) => browser.splitWithLayout('vertical')) },
@@ -246,12 +274,17 @@ export function buildMenu(hub: Hub): Menu {
     {
       label: 'Spaces',
       submenu: [
-        { label: 'Next Space', accelerator: 'CmdOrCtrl+Alt+Right', click: run((browser) => browser.switchSpaceRelative(1)) },
-        { label: 'Previous Space', accelerator: 'CmdOrCtrl+Alt+Left', click: run((browser) => browser.switchSpaceRelative(-1)) },
+        { label: 'Next Space', accelerator: keys('⌥⌘→', 'CmdOrCtrl+Alt+Right'), click: run((browser) => browser.switchSpaceRelative(1)) },
+        {
+          label: 'Previous Space',
+          accelerator: keys('⌥⌘←', 'CmdOrCtrl+Alt+Left'),
+          click: run((browser) => browser.switchSpaceRelative(-1))
+        },
         ...spaceItems
       ]
     },
-    { role: 'windowMenu' }
+    // Linux's Window menu would add Close with Ctrl+W, which is Close Tab here.
+    linux ? { label: 'Window', submenu: [{ role: 'minimize' }] } : { role: 'windowMenu' }
   ]
   return Menu.buildFromTemplate(template)
 }

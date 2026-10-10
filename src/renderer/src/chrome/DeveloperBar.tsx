@@ -12,7 +12,7 @@ import {
   IconScreenshot,
   IconSplit
 } from '../icons'
-import { cx, rectOf } from '../util'
+import { cx, rectOf, shortcut } from '../util'
 
 /**
  * Developer Mode, as in Arc: over the page of a site you're building, a bar with its full address
@@ -84,11 +84,19 @@ function DeveloperBar({
         >
           <IconFrame size={15} />
         </button>
-        <button className="dev-button" title="Capture (⇧⌘2)" onClick={() => zepper.send({ type: 'developer.capture', tabId: tab.id })}>
+        <button
+          className="dev-button"
+          title={`Capture (${shortcut('⇧⌘2')})`}
+          onClick={() => zepper.send({ type: 'developer.capture', tabId: tab.id })}
+        >
           <IconScreenshot size={15} />
         </button>
         <span className="dev-separator" />
-        <button className={cx('dev-button', panel === 'console' && 'on')} title="Console (⌥⌘J)" onClick={() => devtools('console')}>
+        <button
+          className={cx('dev-button', panel === 'console' && 'on')}
+          title={`Console (${shortcut('⌥⌘J')})`}
+          onClick={() => devtools('console')}
+        >
           <IconConsole size={15} />
         </button>
         <button className={cx('dev-button', panel === 'network' && 'on')} title="Network" onClick={() => devtools('network')}>
@@ -96,7 +104,7 @@ function DeveloperBar({
         </button>
         <button
           className={cx('dev-button', (panel === 'inspect' || panel === 'elements') && 'on')}
-          title="Inspect an element (⌥⌘I for Elements)"
+          title={`Inspect an element (${shortcut('⌥⌘I')} for Elements)`}
           onClick={() => devtools('inspect')}
         >
           <IconInspect size={15} />
@@ -124,7 +132,7 @@ function DeveloperBar({
         </button>
         <button
           className="dev-button"
-          title={`Turn off Developer Mode for ${address.hostname} (⌥⇧⌘D)`}
+          title={`Turn off Developer Mode for ${address.hostname} (${shortcut('⌥⇧⌘D')})`}
           onClick={() => zepper.send({ type: 'developer.toggle', tabId: tab.id })}
         >
           <IconClose size={13} />

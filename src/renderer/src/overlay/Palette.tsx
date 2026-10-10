@@ -4,7 +4,7 @@ import type { Suggestion } from '@shared/types'
 import { zepper } from '../bridge'
 import { Favicon } from '../Favicon'
 import { IconArrowRight, IconClock, IconClose, IconGlobe, IconSearch } from '../icons'
-import { cx, hostOf } from '../util'
+import { cx, hostOf, isMac, primaryKey } from '../util'
 
 /** Typed text survives closing the palette for 45 seconds. */
 const KEEP_TYPED_MS = 45_000
@@ -367,7 +367,7 @@ function SuggestionRow({
       onMouseMove={onHover}
       // The field keeps the focus; a click opens the row when the button comes up, as in Chrome.
       onMouseDown={(e) => e.preventDefault()}
-      onClick={(e) => onChoose(e.metaKey ? 'background' : e.shiftKey ? 'window' : undefined)}
+      onClick={(e) => onChoose(primaryKey(e) ? 'background' : e.shiftKey ? 'window' : undefined)}
       onAuxClick={(e) => e.button === 1 && onChoose('background')}
     >
       <span className="suggestion-icon">{icon}</span>
@@ -381,7 +381,7 @@ function SuggestionRow({
       {removable && (selected || hovered) && (
         <button
           className="suggestion-remove"
-          title="Remove from history (⇧Delete)"
+          title={`Remove from history (${isMac ? '⇧Delete' : 'Shift+Delete'})`}
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             e.stopPropagation()

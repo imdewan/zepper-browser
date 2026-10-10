@@ -32,7 +32,13 @@ export class AiError extends Error {
 }
 
 const IDLE_MS = 3 * 60_000
-const UNAVAILABLE: AiStatus = { ai: false, reason: 'Needs macOS 26 or later.', translation: false, embeddings: false }
+// Elsewhere there's nothing to explain: Apple Intelligence is macOS's, and its settings aren't shown.
+const UNAVAILABLE: AiStatus = {
+  ai: false,
+  reason: process.platform === 'darwin' ? 'Needs macOS 26 or later.' : '',
+  translation: false,
+  embeddings: false
+}
 /** The helper is built for macOS 26 (Foundation Models); on an earlier macOS it can't even start. */
 const HELPER_RUNS = process.platform === 'darwin' && Number(process.getSystemVersion().split('.')[0]) >= 26
 

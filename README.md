@@ -4,13 +4,14 @@
 
 # Zepper
 
-**A private browser for macOS that you can make your own.**
+**A private browser for macOS and Linux that you can make your own.**
 
 Spaces, a vertical sidebar and Brave-grade privacy, built with TypeScript and React on Electron.<br>
 Fork it, change anything, and see it in a second. No Chromium to compile.
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-2f6fd6?style=flat-square)](LICENSE)
-[![Platform: macOS](https://img.shields.io/badge/platform-macOS-1d1d1f?style=flat-square&logo=apple&logoColor=white)](#getting-started)
+[![Platform: macOS](https://img.shields.io/badge/platform-macOS-1d1d1f?style=flat-square&logo=apple&logoColor=white)](#download)
+[![Platform: Linux](https://img.shields.io/badge/platform-Linux-1d1d1f?style=flat-square&logo=linux&logoColor=white)](#linux)
 [![Electron](https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![CI](https://github.com/imdewan/zepper-browser/actions/workflows/ci.yml/badge.svg)](https://github.com/imdewan/zepper-browser/actions/workflows/ci.yml)
@@ -34,6 +35,21 @@ Fork it, change anything, and see it in a second. No Chromium to compile.
 2. Zepper isn't notarized by Apple yet, so macOS blocks it the first time you open it. Go to **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. You only need to do this once.
 
 A short setup on first launch brings over your history and passwords from the browser you use now.
+
+### Linux
+
+Zepper runs on Linux too, on x64 and arm64. Get it from the [latest release](https://github.com/imdewan/zepper-browser/releases/latest):
+
+| Your Linux                                                 | Download    | Install                                    |
+| ---------------------------------------------------------- | ----------- | ------------------------------------------ |
+| Ubuntu, Debian, Linux Mint, Pop!\_OS, elementary OS, Zorin | `.deb`      | `sudo apt install ./Zepper-*.deb`          |
+| Fedora                                                     | `.rpm`      | `sudo dnf install ./Zepper-*.rpm`          |
+| openSUSE                                                   | `.rpm`      | `sudo zypper install ./Zepper-*.rpm`       |
+| Arch, Manjaro, EndeavourOS and the rest                    | `.AppImage` | `chmod +x Zepper-*.AppImage`, then open it |
+
+The AppImage updates itself; the `.deb` and `.rpm` show an Update button that takes you to the new version. On Ubuntu 24.04 and later, use the `.deb`: Ubuntu stops Chromium's sandbox from starting in AppImages, and the `.deb` installs the rule that allows it.
+
+Some things are macOS's own, so they aren't on Linux: the Apple Intelligence features (summaries, translation, search by meaning), passkeys from iCloud Keychain or your phone, and importing passwords straight from another browser (export them as a CSV from it instead; history and open tabs come over directly). Zepper's own passkeys work everywhere.
 
 ## Why Zepper
 
@@ -138,21 +154,22 @@ Some ideas for your fork:
 
 ## Getting started
 
-**Requirements:** macOS, [Node.js](https://nodejs.org/) 22 or later, npm 11. The Apple Intelligence helper needs Xcode 26 to build (optional; macOS 26 or later to run).
+**Requirements:** macOS or Linux, [Node.js](https://nodejs.org/) 22 or later, npm 11. The Apple Intelligence helper needs Xcode 26 to build (optional; macOS 26 or later to run). On Linux there are no native helpers to build.
 
 ```bash
 npm install
 npm run dev
 ```
 
-| Command                | What it does                                                                        |
-| ---------------------- | ----------------------------------------------------------------------------------- |
-| `npm run dev`          | Runs Zepper with hot reload for the UI                                              |
-| `npm run check`        | Type-checks, lints and checks formatting                                            |
-| `npm run build`        | Bundles main, preload and UI into `out/`                                            |
-| `npm run dist`         | Builds the macOS app (`.dmg` and `.zip`, for Apple silicon and Intel) into `dist/`  |
-| `npm run build:native` | Builds the native helpers (`native/`) for Apple silicon and Intel into `build/bin/` |
-| `npm run brand:dev`    | Shows the development runtime as "Zepper" in the menu bar and Dock                  |
+| Command                | What it does                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| `npm run dev`          | Runs Zepper with hot reload for the UI                                               |
+| `npm run check`        | Type-checks, lints and checks formatting                                             |
+| `npm run build`        | Bundles main, preload and UI into `out/`                                             |
+| `npm run dist`         | Builds the macOS app (`.dmg` and `.zip`, for Apple silicon and Intel) into `dist/`   |
+| `npm run dist:linux`   | Builds the Linux packages (AppImage, `.deb` and `.rpm`, for x64 and arm64), on Linux |
+| `npm run build:native` | Builds the native helpers (`native/`) for Apple silicon and Intel into `build/bin/`  |
+| `npm run brand:dev`    | Shows the development runtime as "Zepper" in the menu bar and Dock                   |
 
 ### Protected video (Widevine)
 

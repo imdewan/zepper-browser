@@ -12,6 +12,7 @@ import {
   type Session,
   type WebContents
 } from 'electron'
+import { execFile } from 'node:child_process'
 import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -41,6 +42,9 @@ import { handleVaultRequest } from './password-settings'
 import { DEFAULT_PROFILE, Profiles } from './profiles'
 import { locationAccess } from './native'
 import { RELEASES_PAGE, Updater } from './updater'
+
+/** Zepper's desktop entry on Linux (package.json's desktopName, which the .deb, .rpm and AppImage install). */
+const LINUX_DESKTOP_FILE = 'zepper.desktop'
 
 const WEBAUTHN_CHANNEL = 'zepper:webauthn'
 const WEBAUTHN_CANCEL_CHANNEL = 'zepper:webauthn-cancel'
@@ -502,6 +506,11 @@ export class Hub {
   }
 
   makeDefaultBrowser(): void {
+    if (process.platform === 'linux') {
+      // The desktop's web browser (links, and web pages you open), through xdg-settings as Chrome does.
+      execFile('xdg-settings', ['set', 'default-web-browser', LINUX_DESKTOP_FILE], () => this.refreshDefaultBrowser())
+      return
+    }
     app.setAsDefaultProtocolClient('http')
     app.setAsDefaultProtocolClient('https')
     // macOS asks you to confirm; check again once you have.

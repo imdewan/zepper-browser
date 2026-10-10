@@ -4,7 +4,7 @@ import type { CaptureState, DropTarget, Tab } from '@shared/types'
 import { zepper } from '../bridge'
 import { Favicon } from '../Favicon'
 import { Equalizer, IconCamera, IconClose, IconMic, IconMinus, IconMuted, IconScreenShare, IconSpeaker } from '../icons'
-import { cx, isPinnedChanged } from '../util'
+import { cx, isPinnedChanged, primaryKey } from '../util'
 import { dragProps, useDrop, type DragItem, type DropPosition } from './dnd'
 
 /** Where a row sits, for drag and drop: its list, its position in it, and how deep in folders. */
@@ -24,12 +24,12 @@ export function dropBeside(place: RowPlace, position: DropPosition, item: DragIt
   return { zone: 'pinned', spaceId: place.spaceId, parentId: place.parentId, index }
 }
 
-/** Tracks whether ⌘ is held, which switches pinned-tab reset into "separate". */
+/** Tracks whether ⌘ (Ctrl on Linux) is held, which switches pinned-tab reset into "separate". */
 function useMetaKey(enabled: boolean): boolean {
   const [held, setHeld] = useState(false)
   useEffect(() => {
     if (!enabled) return
-    const onKey = (e: KeyboardEvent): void => setHeld(e.metaKey)
+    const onKey = (e: KeyboardEvent): void => setHeld(primaryKey(e))
     window.addEventListener('keydown', onKey)
     window.addEventListener('keyup', onKey)
     return () => {
@@ -131,7 +131,7 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
             onMouseLeave={() => setResetHover(false)}
             onClick={(e) => {
               stop(e)
-              zepper.send({ type: 'tab.resetPinned', tabId: tab.id, separate: e.metaKey })
+              zepper.send({ type: 'tab.resetPinned', tabId: tab.id, separate: primaryKey(e) })
             }}
           >
             <Favicon src={tab.pinned.favicon} className="pin-original" />

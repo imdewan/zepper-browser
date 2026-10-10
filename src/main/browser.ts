@@ -36,7 +36,7 @@ import {
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
@@ -896,13 +896,23 @@ export class Browser {
       minWidth: 640,
       minHeight: 495,
       show: false,
-      titleBarStyle: 'hidden',
-      // Let the first click on an inactive window hit the button under it.
-      acceptFirstMouse: true,
-      trafficLightPosition: TRAFFIC_LIGHTS,
-      vibrancy: 'sidebar',
-      visualEffectState: 'followWindow',
-      backgroundColor: '#00000000',
+      ...(process.platform === 'darwin'
+        ? {
+            titleBarStyle: 'hidden',
+            // Let the first click on an inactive window hit the button under it.
+            acceptFirstMouse: true,
+            trafficLightPosition: TRAFFIC_LIGHTS,
+            vibrancy: 'sidebar',
+            visualEffectState: 'followWindow',
+            backgroundColor: '#00000000'
+          }
+        : {
+            // Linux: no title bar; the sidebar's top row has the window's buttons (see WindowButtons), and
+            // the window is solid (there's no system material to see through).
+            frame: false,
+            icon: join(__dirname, '../../resources/icon.png'),
+            backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e21' : '#eaeaed'
+          }),
       webPreferences: uiPrefs
     })
 
@@ -961,6 +971,9 @@ export class Browser {
       this.broadcast()
     })
     this.win.on('blur', () => this.broadcast())
+    // The maximise button's look (Linux draws the window's buttons itself).
+    this.win.on('maximize', () => this.broadcast())
+    this.win.on('unmaximize', () => this.broadcast())
     this.win.on('closed', () => this.destroy())
     const onTheme = (): void => this.broadcast()
     nativeTheme.on('updated', onTheme)
@@ -1359,7 +1372,7 @@ export class Browser {
     const typeIcon = fileTypeIcon(extname(path).slice(1).toLowerCase(), 64)
     const icon = typeIcon
       ? nativeImage.createFromDataURL(typeIcon)
-      : nativeImage.createFromPath(join(app.getAppPath(), 'build', 'icon.png'))
+      : nativeImage.createFromPath(join(app.getAppPath(), 'resources', 'icon.png')).resize({ width: 64 })
     this.setOverlayMode('hidden')
     sender.startDrag({ file: path, icon })
   }
@@ -1739,6 +1752,13 @@ export class Browser {
       }
       case 'window.open':
         return void this.hub.openWindow(command.kind)
+      // Linux's window buttons (macOS has its own).
+      case 'window.minimize':
+        return this.win.minimize()
+      case 'window.maximize':
+        return this.win.isMaximized() ? this.win.unmaximize() : this.win.maximize()
+      case 'window.close':
+        return this.win.close()
       case 'site.setAdblock':
         return this.setSiteAdblock(command.domain, command.enabled)
       case 'media.seek': {
@@ -4766,7 +4786,7 @@ export class Browser {
    * menu bar (otherwise that strip comes down empty, in compact mode).
    */
   private showTrafficLights(visible: boolean): void {
-    if (!this.win || this.win.isDestroyed()) return
+    if (process.platform !== 'darwin' || !this.win || this.win.isDestroyed()) return
     if (this.win.isFullScreen()) {
       this.win.setWindowButtonVisibility(true)
       this.win.setWindowButtonPosition(null)
@@ -6208,6 +6228,7 @@ export class Browser {
       focused: this.win?.isFocused() ?? true,
       fullscreen: this.htmlFullscreen,
       fullScreenWindow: this.win && !this.win.isDestroyed() ? this.win.isFullScreen() : false,
+      maximizedWindow: this.win && !this.win.isDestroyed() ? this.win.isMaximized() : false,
       adblockEnabled: this.adblock.isEnabled(),
       settings: this.settings,
       kind: this.kind,
@@ -6365,8 +6386,23 @@ function systemAudioCapture(): boolean {
   return major > 14 || (major === 14 && minor >= 2)
 }
 
-/** macOS's memory pressure level: 1 normal, 2 warning, 4 critical (0 if it can't be read). */
+/**
+ * macOS's memory pressure level: 1 normal, 2 warning, 4 critical (0 if it can't be read). On Linux, the
+ * same scale from how much memory is still available (/proc/meminfo): critical under 5%.
+ */
 function memoryPressure(): Promise<number> {
+  if (process.platform === 'linux') {
+    return readFile('/proc/meminfo', 'utf8').then(
+      (text) => {
+        const kb = (key: string): number => Number(new RegExp(`^${key}:\\s+(\\d+)`, 'm').exec(text)?.[1] ?? 0)
+        const total = kb('MemTotal')
+        if (!total) return 0
+        const free = kb('MemAvailable') / total
+        return free < 0.05 ? 4 : free < 0.15 ? 2 : 1
+      },
+      () => 0
+    )
+  }
   return new Promise((resolve) =>
     execFile('sysctl', ['-n', 'kern.memorystatus_vm_pressure_level'], (error, stdout) => resolve(error ? 0 : Number(stdout.trim()) || 0))
   )
@@ -6386,7 +6422,7 @@ const ERROR_PAGES = {
     title: 'Your connection isn’t private',
     text: 'Zepper couldn’t confirm this site’s identity, so it didn’t load the page. Someone could be trying to intercept your connection, or the site is set up incorrectly.'
   },
-  crash: { title: 'This page crashed', text: 'Reload the page (⌘R) to try again.' }
+  crash: { title: 'This page crashed', text: `Reload the page (${process.platform === 'darwin' ? '⌘R' : 'Ctrl+R'}) to try again.` }
 }
 
 /** A URL in its canonical form (so typed and loaded addresses compare equal). */

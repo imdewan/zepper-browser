@@ -1,0 +1,124 @@
+name: Linux
+
+# Builds Zepper for Linux (an AppImage, a .deb and an .rpm, for x64 and arm64) and tries the packages
+# on the distros most people use: Ubuntu and Debian (.deb), Fedora and openSUSE (.rpm), and Arch (the
+# AppImage). Each installs Zepper, opens a link with it, takes a screenshot, quits and checks the
+# visit was saved (scripts/smoke-linux.sh). Run it by hand; given a release's tag, it builds that
+# release and, once every distro passes, adds the packages to it (a draft is fine).
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and add the packages to (a draft is fine), e.g. v0.1.8. Empty builds this branch and only tests it.
+        required: false
+        default: ''
+
+# Adding files to a (draft) release needs write access to the repository's contents.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          # Packaging uses castLabs' Linux runtimes (scripts/stage-electron.mjs), not node_modules'.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      # rpmbuild, for the .rpm.
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm
+      - run: npm run dist:linux
+      - run: ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/latest-linux*.yml
+          if-no-files-found: error
+
+  smoke:
+    name: ${{ matrix.name }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu 24.04 (.deb)
+            runner: ubuntu-24.04
+            package: '*-amd64.deb'
+          - name: Ubuntu 24.04 on Arm (.deb)
+            runner: ubuntu-24.04-arm
+            package: '*-arm64.deb'
+          - name: Debian 12 (.deb)
+            runner: ubuntu-24.04
+            container: debian:12
+            package: '*-amd64.deb'
+          - name: Fedora 42 (.rpm)
+            runner: ubuntu-24.04
+            container: fedora:42
+            package: '*-x86_64.rpm'
+          - name: openSUSE Tumbleweed (.rpm)
+            runner: ubuntu-24.04
+            container: opensuse/tumbleweed
+            package: '*-x86_64.rpm'
+          - name: Arch Linux (AppImage)
+            runner: ubuntu-24.04
+            container: archlinux:latest
+            package: '*-x86_64.AppImage'
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.container || '' }}
+      # Chromium's sandbox needs user namespaces, which Docker's default seccomp profile blocks.
+      options: --shm-size=2g --security-opt seccomp=unconfined
+    steps:
+      - name: Tools the checkout needs
+        if: matrix.container
+        run: |
+          case "${{ matrix.container }}" in
+            debian*) apt-get update -qq && apt-get install -y -qq git ca-certificates ;;
+            fedora*) dnf install -y -q git ;;
+            opensuse*) zypper --non-interactive install -y git tar gzip ;;
+            archlinux*) pacman -Sy --noconfirm --needed git ;;
+          esac
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          sparse-checkout: scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: packages
+      - name: Install Zepper, open a link, quit
+        run: bash scripts/smoke-linux.sh "$(ls packages/${{ matrix.package }} | head -1)" out
+      - name: Keep the screenshot and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ strategy.job-index }}
+          path: out
+          if-no-files-found: ignore
+
+  release:
+    name: Add to the release
+    needs: smoke
+    if: inputs.tag != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: packages
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" packages/* --clobber --repo "${{ github.repository }}"

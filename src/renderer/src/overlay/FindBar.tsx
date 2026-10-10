@@ -3,6 +3,7 @@ import { motion } from 'motion/react'
 import type { FindResult } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconChevronDown, IconClose, IconSearch } from '../icons'
+import { shortcut } from '../util'
 
 interface FindBarProps {
   result: FindResult
@@ -45,10 +46,10 @@ export function FindBar({ result, focusKey, onClose }: FindBarProps): React.JSX.
         }}
       />
       <span className="find-count">{text ? `${result.active} of ${result.matches}` : ''}</span>
-      <button className="find-button" title="Previous (⇧⌘G)" disabled={!result.matches} onClick={() => query(false, true)}>
+      <button className="find-button" title={`Previous (${shortcut('⇧⌘G')})`} disabled={!result.matches} onClick={() => query(false, true)}>
         <IconChevronDown size={15} style={{ transform: 'rotate(180deg)' }} />
       </button>
-      <button className="find-button" title="Next (⌘G)" disabled={!result.matches} onClick={() => query(true, true)}>
+      <button className="find-button" title={`Next (${shortcut('⌘G')})`} disabled={!result.matches} onClick={() => query(true, true)}>
         <IconChevronDown size={15} />
       </button>
       <button className="find-button" title="Close (Esc)" onClick={onClose}>

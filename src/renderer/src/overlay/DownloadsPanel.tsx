@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import type { Command, DownloadEntry } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose, IconDownload, IconFolder, IconPause, IconPlay, IconTrash } from '../icons'
-import { cx, hostOf, listNames } from '../util'
+import { SHOW_IN_FOLDER, cx, hostOf, listNames } from '../util'
 
 const units = ['B', 'KB', 'MB', 'GB']
 
@@ -149,7 +149,7 @@ export function DownloadsPanel({
             onClick={() => zepper.send({ type: 'downloads.openFolder' })}
           >
             <IconFolder size={14} />
-            Show in Finder
+            {SHOW_IN_FOLDER}
           </button>
           <button className="settings-close" title="Close (Esc)" onClick={onClose}>
             <IconClose size={14} />
@@ -213,7 +213,7 @@ export function DownloadsPanel({
                           </button>
                         )}
                         {done && (
-                          <button className="download-action" title="Show in Finder" onClick={() => send(d.id, 'reveal')}>
+                          <button className="download-action" title={SHOW_IN_FOLDER} onClick={() => send(d.id, 'reveal')}>
                             <IconFolder size={14} />
                           </button>
                         )}

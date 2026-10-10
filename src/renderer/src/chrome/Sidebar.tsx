@@ -24,9 +24,10 @@ import {
   IconUpdate
 } from '../icons'
 import { useSnapshot, useUiEvents } from '../useSnapshot'
-import { cx, hostOf, rectOf } from '../util'
+import { cx, hostOf, isLinux, rectOf, shortcut } from '../util'
 import { MediaCard } from './MediaCard'
 import { SpacesViewport } from './Spaces'
+import { WindowButtons } from './WindowButtons'
 
 interface SidebarProps {
   snapshot: Snapshot
@@ -54,6 +55,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
         extensionsRow={snapshot.settings.extensionsRow}
         update={snapshot.update}
         fullScreen={snapshot.fullScreenWindow}
+        maximized={snapshot.maximizedWindow}
         compact={snapshot.compact}
       />
       <UrlPill tab={activeTab} ai={snapshot.intelligence.ai} />
@@ -77,7 +79,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
  * Top row: traffic lights, extensions, then back, forward and reload. When an update is waiting, its
  * button takes the place of extensions, back and forward (⌘[ and ⌘] still work) so it fits in full.
  * In full screen the traffic lights come down with the menu bar instead, and a sidebar button takes
- * their place.
+ * their place. On Linux the window's buttons come last instead of the traffic lights first.
  */
 function TopRow({
   tab,
@@ -85,6 +87,7 @@ function TopRow({
   extensionsRow,
   update,
   fullScreen,
+  maximized,
   compact
 }: {
   tab: Tab | null
@@ -92,6 +95,7 @@ function TopRow({
   extensionsRow: boolean
   update: UpdateStatus
   fullScreen: boolean
+  maximized: boolean
   compact: boolean
 }): React.JSX.Element {
   const extensionsRef = useRef<HTMLButtonElement>(null)
@@ -103,7 +107,7 @@ function TopRow({
       {fullScreen ? (
         <button
           className="icon-button sidebar-toggle"
-          title={compact ? 'Keep the sidebar open (⌘S)' : 'Hide the sidebar (⌘S)'}
+          title={`${compact ? 'Keep the sidebar open' : 'Hide the sidebar'} (${shortcut('⌘S')})`}
           onClick={() => zepper.send({ type: 'ui.toggleCompact' })}
         >
           <IconSidebar size={16} />
@@ -153,12 +157,17 @@ function TopRow({
       )}
       {!updating && (
         <>
-          <button className="icon-button" title="Back (⌘[)" disabled={!tab?.canGoBack} onClick={() => zepper.send({ type: 'nav.back' })}>
+          <button
+            className="icon-button"
+            title={`Back (${shortcut('⌘[')})`}
+            disabled={!tab?.canGoBack}
+            onClick={() => zepper.send({ type: 'nav.back' })}
+          >
             <IconBack size={17} />
           </button>
           <button
             className="icon-button"
-            title="Forward (⌘])"
+            title={`Forward (${shortcut('⌘]')})`}
             disabled={!tab?.canGoForward}
             onClick={() => zepper.send({ type: 'nav.forward' })}
           >
@@ -166,9 +175,15 @@ function TopRow({
           </button>
         </>
       )}
-      <button className="icon-button" title="Reload (⌘R)" disabled={!tab} onClick={() => zepper.send({ type: 'nav.reload' })}>
+      <button
+        className="icon-button"
+        title={`Reload (${shortcut('⌘R')})`}
+        disabled={!tab}
+        onClick={() => zepper.send({ type: 'nav.reload' })}
+      >
         <IconReload size={16} />
       </button>
+      {isLinux && !fullScreen && <WindowButtons maximized={maximized} />}
     </div>
   )
 }
@@ -247,7 +262,7 @@ function UrlPill({ tab, ai }: { tab: Tab | null; ai: boolean }): React.JSX.Eleme
           {ai && /^https?:/.test(tab.url) && (
             <button
               className="url-pill-copy url-pill-ask"
-              title="Summarise or ask about this page (⇧⌘A)"
+              title={`Summarise or ask about this page (${shortcut('⇧⌘A')})`}
               onClick={(e) => {
                 e.stopPropagation()
                 if (pill.current) zepper.send({ type: 'ui.openAssistant', anchor: rectOf(pill.current) })
@@ -256,7 +271,7 @@ function UrlPill({ tab, ai }: { tab: Tab | null; ai: boolean }): React.JSX.Eleme
               <IconSparkle size={13} />
             </button>
           )}
-          <button className={cx('url-pill-copy', copied && 'copied')} title="Copy URL (⇧⌘C)" onClick={copy}>
+          <button className={cx('url-pill-copy', copied && 'copied')} title={`Copy URL (${shortcut('⇧⌘C')})`} onClick={copy}>
             {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
           </button>
         </>
@@ -290,7 +305,7 @@ function BottomBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
       <button
         ref={downloadsRef}
         className={cx('icon-button', 'downloads-button', running.length > 0 && 'active')}
-        title="Downloads (⌥⌘L)"
+        title={`Downloads (${shortcut('⌥⌘L')})`}
         onClick={openDownloads}
       >
         {running.length > 0 && (

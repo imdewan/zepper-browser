@@ -1,5 +1,6 @@
 import { Menu, app } from 'electron'
-import { join } from 'node:path'
+import { statSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { AdBlock } from './adblock'
 import { bangs } from './bangs'
@@ -65,6 +66,9 @@ if (!app.requestSingleInstanceLock()) {
     event.preventDefault()
     openFromOutside(pathToFileURL(path).href)
   })
+  // Linux hands them over on the command line instead (`zepper https://…`, or a file), the first
+  // time and to the Zepper already running (second-instance).
+  if (process.platform !== 'darwin') for (const url of linksIn(process.argv, process.cwd())) openFromOutside(url)
 
   void app.whenReady().then(async () => {
     const icon = join(__dirname, '../../resources/icon.png')
@@ -94,7 +98,8 @@ if (!app.requestSingleInstanceLock()) {
     void bangs.load()
   })
 
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv, workingDirectory) => {
+    if (process.platform !== 'darwin') for (const url of linksIn(argv, workingDirectory)) openFromOutside(url)
     const win = hub?.focusedNormal().window()
     if (!win) return
     if (win.isMinimized()) win.restore()
@@ -124,4 +129,18 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.on('window-all-closed', () => app.quit())
+}
+
+/** Web addresses and files on a command line (Linux opens links that way): the files as file:// URLs. */
+function linksIn(argv: string[], cwd: string): string[] {
+  return argv.slice(1).flatMap((arg) => {
+    if (arg.startsWith('-')) return []
+    if (/^(https?|file):/i.test(arg)) return [arg]
+    try {
+      const path = resolve(cwd, arg)
+      return statSync(path).isFile() ? [pathToFileURL(path).href] : []
+    } catch {
+      return []
+    }
+  })
 }

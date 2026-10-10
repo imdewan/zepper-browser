@@ -4,6 +4,7 @@ import type { AboutInfo, UpdateStatus } from '@shared/types'
 import logo from '../assets/logo.png'
 import { zepper } from '../bridge'
 import { IconCheck, IconClose, IconCopy, IconSparkle, IconUpdate } from '../icons'
+import { isMac } from '../util'
 
 const dayFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -108,7 +109,9 @@ export function AboutPanel({ info, update, onClose }: { info: AboutInfo; update:
     const text = [
       `Zepper ${info.version}`,
       ...rows.map(([k, v]) => `${k}: ${v}`),
-      `macOS ${navigator.userAgent.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g, '.') ?? ''}`
+      isMac
+        ? `macOS ${navigator.userAgent.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g, '.') ?? ''}`
+        : `Linux ${navigator.userAgent.match(/Linux ([^;)]+)/)?.[1] ?? ''}`.trim()
     ].join('\n')
     zepper.send({ type: 'clipboard.write', text })
     setCopied(true)

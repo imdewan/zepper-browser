@@ -9,6 +9,12 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
+// They're macOS's (Swift and Objective-C++); on Linux Zepper runs without them.
+if (process.platform !== 'darwin') {
+  console.log('build-native: nothing to build here (the native helpers are macOS-only)')
+  process.exit(0)
+}
+
 const root = join(import.meta.dirname, '..')
 const bin = join(root, 'build', 'bin')
 const archs = (process.env.ZEPPER_ARCHS || 'arm64,x64').split(',')

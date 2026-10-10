@@ -3,7 +3,7 @@ import type { Settings } from '@shared/settings'
 import type { ImportResult, ImportSource, LoginSummary, VaultReplies } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose, IconCopy, IconKey, IconPasskey, IconPlus, IconSearch } from '../icons'
-import { cx, listNames } from '../util'
+import { cx, isMac, listNames } from '../util'
 import { SiteListLink } from './SiteListPage'
 import { Toggle } from './Toggle'
 
@@ -51,7 +51,9 @@ export function PasswordsSettings({
         <div className="settings-row-text">
           <div className="settings-row-label">Offer to save and fill passwords</div>
           <div className="settings-row-hint">
-            Kept on this Mac, encrypted with a key in your Keychain. Showing or exporting them asks for Touch ID or your Mac’s password.
+            {isMac
+              ? 'Kept on this Mac, encrypted with a key in your Keychain. Showing or exporting them asks for Touch ID or your Mac’s password.'
+              : 'Kept on this computer, encrypted with a key in your keyring.'}
           </div>
         </div>
         <div className="settings-row-control">
@@ -114,8 +116,9 @@ export function PasswordsSettings({
       <div className="pw-list">
         {data?.unavailable && (
           <p className="pw-empty">
-            Zepper can’t open your saved passwords right now: macOS didn’t give it its key in your Keychain. They’re still saved. Quit and
-            reopen Zepper, and choose Allow when macOS asks.
+            {isMac
+              ? 'Zepper can’t open your saved passwords right now: macOS didn’t give it its key in your Keychain. They’re still saved. Quit and reopen Zepper, and choose Allow when macOS asks.'
+              : 'Zepper can’t open your saved passwords right now: your keyring didn’t give it its key (is it unlocked?). They’re still saved. Quit and reopen Zepper.'}
           </p>
         )}
         {data !== null && !data.unavailable && data.logins.length === 0 && !adding && (
@@ -422,9 +425,17 @@ function ImportPanel({ onDone, onClose }: { onDone: (notice: string) => void; on
         </button>
       </div>
       <p className="pw-hint">
-        <strong>Apple Passwords or Safari:</strong> in the Passwords app, choose File › Export All Passwords. <strong>Firefox:</strong>{' '}
-        Passwords › ⋯ › Export Passwords. <strong>1Password, Bitwarden, LastPass, Proton Pass:</strong> export as CSV. Delete the file
-        afterwards: it isn’t encrypted.
+        {isMac ? (
+          <>
+            <strong>Apple Passwords or Safari:</strong> in the Passwords app, choose File › Export All Passwords.
+          </>
+        ) : (
+          <>
+            <strong>Chrome, Brave or Edge:</strong> Password Manager › Settings › Export passwords.
+          </>
+        )}{' '}
+        <strong>Firefox:</strong> Passwords › ⋯ › Export Passwords. <strong>1Password, Bitwarden, LastPass, Proton Pass:</strong> export as
+        CSV. Delete the file afterwards: it isn’t encrypted.
       </p>
       {error && <div className="pw-error">{error}</div>}
     </div>

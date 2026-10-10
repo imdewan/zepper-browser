@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Snapshot } from '@shared/types'
 import { zepper } from '../bridge'
 import { Equalizer, IconCheck, IconPlus } from '../icons'
-import { cx, isMac } from '../util'
+import { cx, shortcut } from '../util'
 
 /** Drop-down from the space header's chevron: every space, the current one checked. Arrows and Return work too. */
 export function SpacesPicker({ snapshot, onClose }: { snapshot: Snapshot; onClose: () => void }): React.JSX.Element {
@@ -56,7 +56,7 @@ export function SpacesPicker({ snapshot, onClose }: { snapshot: Snapshot; onClos
                 </span>
               )}
               <span className="spaces-picker-meta">
-                {i < 9 ? <kbd>{isMac ? `⌃${i + 1}` : `Ctrl+${i + 1}`}</kbd> : null}
+                {i < 9 ? <kbd>{shortcut(`⌃${i + 1}`)}</kbd> : null}
                 {count > 0 && <span className="spaces-picker-count">{count}</span>}
               </span>
               <span className="spaces-picker-check">{active && <IconCheck size={14} />}</span>

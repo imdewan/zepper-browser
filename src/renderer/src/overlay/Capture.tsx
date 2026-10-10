@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import type { Rect } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconClose } from '../icons'
-import { cx, rectOf } from '../util'
+import { SHOW_IN_FOLDER, cx, rectOf } from '../util'
 
 export interface CaptureSession {
   page: Rect
@@ -194,7 +194,7 @@ export function CaptureResult({ result, onDismiss }: { result: CaptureResultInfo
         </div>
         <div className="capture-result-actions">
           {result.saved ? (
-            <button onClick={() => zepper.send({ type: 'capture.reveal' })}>Show in Finder</button>
+            <button onClick={() => zepper.send({ type: 'capture.reveal' })}>{SHOW_IN_FOLDER}</button>
           ) : (
             <button onClick={() => zepper.send({ type: 'capture.save' })}>Save</button>
           )}

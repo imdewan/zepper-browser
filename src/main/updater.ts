@@ -15,6 +15,10 @@ import type { UpdateStatus } from '@shared/types'
  * The feed is electron-builder's latest-mac.yml, published as FEED_FILE on the latest release (its sha512 checks the
  * download). Installing swaps the app bundle once Zepper has quit, using a small shell script, so
  * it works without Squirrel (which needs a Developer ID signature to trust an update).
+ *
+ * On Linux the AppImage updates itself the same way (from latest-linux.yml, or latest-linux-arm64.yml):
+ * the new AppImage takes the old one's place once Zepper has quit. A .deb or .rpm belongs to the
+ * system's package manager, so those get the Download button instead.
  */
 
 const REPOSITORY = 'imdewan/zepper-browser'
@@ -25,6 +29,11 @@ export const RELEASES_PAGE = `https://github.com/${REPOSITORY}/releases/latest`
  * shows the .dmg first: "Zepper-update…" sorts after "Zepper-0.1.0-arm64.dmg" and the .zip.
  */
 export const FEED_FILE = 'Zepper-update-mac.yml'
+/** electron-builder's feeds for the AppImages. */
+const LINUX_FEED_FILE = process.arch === 'arm64' ? 'latest-linux-arm64.yml' : 'latest-linux.yml'
+const LINUX = process.platform === 'linux'
+/** The AppImage Zepper is running from (it sets $APPIMAGE), which an update replaces. */
+const APPIMAGE = LINUX ? process.env['APPIMAGE'] : undefined
 const FIRST_CHECK_MS = 10_000
 const CHECK_EVERY_MS = 4 * 60 * 60 * 1000
 
@@ -63,6 +72,20 @@ if [ "$relaunch" = 1 ]; then
 fi
 `
 
+/** Linux: puts the new AppImage in the old one's place once Zepper has quit, then (optionally) starts it. */
+const LINUX_INSTALL_SCRIPT = `#!/bin/sh
+pid="$1"; new="$2"; app="$3"; relaunch="$4"; stage="$5"
+n=0
+while kill -0 "$pid" 2>/dev/null; do
+  n=$((n + 1))
+  [ "$n" -gt 600 ] && exit 1
+  sleep 0.1
+done
+chmod 755 "$new" && mv -f "$new" "$app"
+rm -rf "$stage"
+[ "$relaunch" = 1 ] && nohup "$app" >/dev/null 2>&1 &
+`
+
 /** 1 if a is newer than b, -1 if older, 0 if the same ("0.2.0" vs "0.1.10"). */
 export function compareVersions(a: string, b: string): number {
   const parts = (v: string): number[] =>
@@ -77,8 +100,8 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
-/** The zip for this Mac from electron-builder's latest-mac.yml. */
-export function parseFeed(text: string): Release | null {
+/** The zip for this Mac from electron-builder's latest-mac.yml (or on Linux, the AppImage from latest-linux.yml). */
+export function parseFeed(text: string, kind: '.zip' | '.AppImage' = LINUX ? '.AppImage' : '.zip'): Release | null {
   const value = (source: string, key: string): string =>
     new RegExp(`^\\s*-?\\s*${key}:\\s*(.+?)\\s*$`, 'm').exec(source)?.[1]?.replace(/^['"]|['"]$/g, '') ?? ''
   const version = value(text, 'version')
@@ -87,7 +110,7 @@ export function parseFeed(text: string): Release | null {
     .slice(1)
     .map((entry) => `url:${entry}`)
     .map((entry) => ({ file: value(entry, 'url'), sha512: value(entry, 'sha512'), size: Number(value(entry, 'size')) || 0 }))
-    .filter((f) => f.file.endsWith('.zip') && f.sha512)
+    .filter((f) => f.file.endsWith(kind) && f.sha512)
   const file = files.find((f) => f.file.includes(`-${process.arch}.`)) ?? files[0]
   return version && file ? { version, ...file } : null
 }
@@ -127,7 +150,7 @@ export class Updater {
     this.busy = true
     if (manual) this.set({ state: 'checking' })
     try {
-      const response = await net.fetch(`${this.feed}/${FEED_FILE}`, { cache: 'no-store' })
+      const response = await net.fetch(`${this.feed}/${LINUX ? LINUX_FEED_FILE : FEED_FILE}`, { cache: 'no-store' })
       if (!response.ok) throw new Error(`The update feed answered ${response.status}`)
       const release = parseFeed(await response.text())
       if (!release) throw new Error('The update feed couldn’t be read')
@@ -150,9 +173,18 @@ export class Updater {
     return true
   }
 
-  /** The app bundle to replace, if Zepper can replace it. */
+  /** The app bundle (or on Linux, the AppImage) to replace, if Zepper can replace it. */
   private target(): string | null {
     if (!app.isPackaged) return null
+    if (LINUX) {
+      if (!APPIMAGE) return null
+      try {
+        accessSync(dirname(APPIMAGE), constants.W_OK)
+        return APPIMAGE
+      } catch {
+        return null
+      }
+    }
     const bundle = resolve(dirname(process.execPath), '..', '..')
     if (!bundle.endsWith('.app') || bundle.includes('/AppTranslocation/') || bundle.startsWith('/Volumes/')) return null
     try {
@@ -190,6 +222,14 @@ export class Updater {
     }
     await new Promise<void>((done, fail) => out.end((error?: Error | null) => (error ? fail(error) : done())))
     if (hash.digest('base64') !== release.sha512) throw new Error('The download didn’t match the release')
+
+    if (LINUX) {
+      // The AppImage is the app: it's ready as it is (its sha512 matched the release's).
+      chmodSync(zip, 0o755)
+      this.staged = { version: release.version, app: zip }
+      await writeFile(join(this.dir, 'staged.json'), JSON.stringify(this.staged))
+      return this.set({ state: 'ready', version: release.version })
+    }
 
     // ditto keeps the bundle's symlinks and signature intact.
     const unpacked = join(this.dir, release.version)
@@ -235,7 +275,7 @@ export class Updater {
     const script = join(this.dir, 'install.sh')
     try {
       // Written synchronously: will-quit doesn't wait for promises.
-      writeFileSync(script, INSTALL_SCRIPT)
+      writeFileSync(script, LINUX ? LINUX_INSTALL_SCRIPT : INSTALL_SCRIPT)
       chmodSync(script, 0o755)
       const child = spawn('/bin/sh', [script, String(process.pid), this.staged.app, target, this.relaunch ? '1' : '0', this.dir], {
         detached: true,

@@ -3,7 +3,7 @@ import { AnimatePresence, animate, motion, useMotionValue } from 'motion/react'
 import type { Folder, Snapshot, Space, Split, Tab } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconArrowDown, IconChevronDown, IconChevronUpDown, IconDots, IconPlus, IconSparkle } from '../icons'
-import { cx, rectOf } from '../util'
+import { cx, rectOf, shortcut } from '../util'
 import { SplitRow } from './SplitRow'
 import { useDragging, useDrop } from './dnd'
 import { Essentials } from './Essentials'
@@ -404,7 +404,7 @@ function SpaceView({
               title={
                 tidy.kind === 'ai'
                   ? 'Group related tabs into folders with Apple Intelligence'
-                  : `Group tabs from the same site into folders. ${tidy.reason}`
+                  : `Group tabs from the same site into folders. ${tidy.reason}`.trim()
               }
               onClick={() => zepper.send({ type: 'space.tidy', spaceId: space.id })}
             >
@@ -414,7 +414,7 @@ function SpaceView({
           )}
           <button
             className={cx('clear-button', canClear && 'can-clear')}
-            title="Close all unpinned tabs (⌘⇧K)"
+            title={`Close all unpinned tabs (${shortcut('⇧⌘K')})`}
             onClick={() => zepper.send({ type: 'space.clearTabs', spaceId: space.id })}
           >
             Clear

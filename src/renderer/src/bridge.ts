@@ -8,6 +8,9 @@ import type { Command, HistoryEntry, Snapshot, Space, Suggestion, Tab, UiEvent, 
  */
 export const zepper: ZepperApi = window.zepper ?? createMock()
 
+// For styles that differ by platform ([data-platform='linux']: Zepper's own window buttons, a solid window).
+document.documentElement.dataset.platform = zepper.platform
+
 function favicon(host: string): string {
   return `https://www.google.com/s2/favicons?domain=${host}&sz=64`
 }
@@ -133,6 +136,7 @@ function createMock(): ZepperApi {
     focused: true,
     fullscreen: false,
     fullScreenWindow: false,
+    maximizedWindow: false,
     adblockEnabled: true,
     settings: DEFAULT_SETTINGS,
     kind: 'main',

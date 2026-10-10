@@ -7,7 +7,7 @@ import type { ImportKind, ImportSource, Snapshot } from '@shared/types'
 import logo from '../assets/logo.png'
 import { zepper } from '../bridge'
 import { IconCheck } from '../icons'
-import { cx, isMac } from '../util'
+import { THIS_COMPUTER, cx, isMac, shortcut } from '../util'
 import { Toggle } from './Toggle'
 
 /**
@@ -16,8 +16,10 @@ import { Toggle } from './Toggle'
  * the default browser. Every step can be skipped; Settings › General shows it again.
  */
 
-const STEPS = ['welcome', 'import', 'look', 'privacy', 'intelligence', 'ready'] as const
-type Step = (typeof STEPS)[number]
+const ALL_STEPS = ['welcome', 'import', 'look', 'privacy', 'intelligence', 'ready'] as const
+type Step = (typeof ALL_STEPS)[number]
+/** Apple Intelligence is macOS's: elsewhere its step is left out. */
+const STEPS: readonly Step[] = ALL_STEPS.filter((step) => isMac || step !== 'intelligence')
 
 /** Steps slide in the direction you're going; `custom` reaches the leaving step too. */
 const SLIDE = {
@@ -143,7 +145,8 @@ function Welcome(): React.JSX.Element {
     <div className="ob-welcome">
       <img className="ob-logo" src={logo} alt="" draggable={false} />
       <Heading title="Welcome to Zepper">
-        Your new browser for the Mac: spaces for each part of your life, a sidebar built for tabs, and privacy that’s on from the start.
+        Your new browser{isMac ? ' for the Mac' : ''}: spaces for each part of your life, a sidebar built for tabs, and privacy that’s on
+        from the start.
       </Heading>
       <p className="ob-note">This takes about a minute. You can change everything later in Settings.</p>
     </div>
@@ -243,7 +246,7 @@ function ImportStep(): React.JSX.Element {
     <div>
       <div className="ob-heading-row">
         <Heading title="Bring your things">
-          Your open tabs, history and passwords from the browsers you use now. Everything stays on this Mac.
+          Your open tabs, history and passwords from the browsers you use now. Everything stays on {THIS_COMPUTER}.
         </Heading>
         {runnable.length > 1 && (
           <button className="ob-secondary small" disabled={busy !== null} onClick={() => void runAll()}>
@@ -253,7 +256,7 @@ function ImportStep(): React.JSX.Element {
       </div>
       <div className="ob-sources">
         {sources === null && <p className="ob-note">Looking for browsers…</p>}
-        {sources?.length === 0 && <p className="ob-note">No other browsers found on this Mac.</p>}
+        {sources?.length === 0 && <p className="ob-note">No other browsers found on {THIS_COMPUTER}.</p>}
         {sources?.map((source) => {
           const pick = picks[source.id]
           const result = results[source.id]
@@ -310,7 +313,7 @@ function ImportStep(): React.JSX.Element {
         you open them.{' '}
         {sources?.some((s) => s.blocked) &&
           'Allow… opens Privacy & Security: turn on Zepper there and reopen it (already on? Remove Zepper with − and add it again: macOS may be remembering an older Zepper). '}
-        Passwords in Apple Passwords or Safari?{' '}
+        {isMac ? 'Passwords in Apple Passwords or Safari?' : 'Passwords: export them from your browser as a CSV file, then'}{' '}
         <button className="ob-link" disabled={busy !== null} onClick={() => void fromFile()}>
           Import a passwords file
         </button>
@@ -429,7 +432,7 @@ const INTELLIGENCE: { icon: LucideIcon; title: string; detail: string }[] = [
   {
     icon: Sparkles,
     title: 'Summarise or ask the page',
-    detail: `A summary, then answers about what you’re reading (${isMac ? '⇧⌘A' : 'Ctrl+Shift+A'})`
+    detail: `A summary, then answers about what you’re reading (${shortcut('⇧⌘A')})`
   },
   { icon: Languages, title: 'Translate pages', detail: 'In place, keeping links and formatting' },
   { icon: ScanSearch, title: 'Search history by meaning', detail: '“that article about async Rust” finds it' },
@@ -487,7 +490,7 @@ function ReadyStep({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
         {TIPS.map(([keys, label]) => (
           <div key={keys} className="ob-row">
             <span>{label}</span>
-            <kbd>{isMac ? keys : keys.replace(/⌘/g, 'Ctrl+')}</kbd>
+            <kbd>{shortcut(keys)}</kbd>
           </div>
         ))}
       </div>
