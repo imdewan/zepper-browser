@@ -14,15 +14,15 @@ sudo=$([ "$(id -u)" = 0 ] && echo "" || echo sudo)
 case "$ID" in
   ubuntu | debian)
     $sudo apt-get update -qq
-    $sudo apt-get install -y -qq xvfb xdotool imagemagick dbus-x11 procps "$package"
+    $sudo apt-get install -y -qq xvfb xdotool imagemagick dbus procps "$package"
     zepper=/opt/Zepper/zepper
     ;;
   fedora)
-    $sudo dnf install -y -q xorg-x11-server-Xvfb xdotool ImageMagick dbus-x11 procps-ng util-linux shadow-utils "$package"
+    $sudo dnf install -y -q xorg-x11-server-Xvfb xdotool ImageMagick dbus-daemon procps-ng util-linux shadow-utils "$package"
     zepper=/opt/Zepper/zepper
     ;;
   opensuse-* | sles)
-    $sudo zypper --non-interactive install -y xvfb-run xdotool ImageMagick dbus-1-x11 procps util-linux shadow
+    $sudo zypper --non-interactive install -y xvfb-run xdotool ImageMagick dbus-1 procps util-linux shadow
     $sudo zypper --non-interactive install -y --allow-unsigned-rpm "$package"
     zepper=/opt/Zepper/zepper
     ;;
@@ -57,7 +57,7 @@ Xvfb :99 -screen 0 1440x900x24 -ac -nolisten tcp > "$out/xvfb.log" 2>&1 &
 sleep 2
 env=(env DISPLAY=:99 ZEPPER_PROFILE="$profile" APPIMAGE_EXTRACT_AND_RUN=1)
 # Opening a link starts Zepper with it, as clicking a link in another app does.
-"${run[@]}" "${env[@]}" dbus-launch "$zepper" https://example.com/ > "$out/zepper.log" 2>&1 &
+"${run[@]}" "${env[@]}" dbus-run-session -- "$zepper" https://example.com/ > "$out/zepper.log" 2>&1 &
 # Its window, and the process that owns it (Zepper's main process).
 pid=$(DISPLAY=:99 timeout 60 xdotool search --sync --name '^Zepper$' getwindowpid | head -1)
 echo "Zepper's window is up (process $pid)"
