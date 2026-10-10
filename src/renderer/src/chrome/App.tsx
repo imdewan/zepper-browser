@@ -14,8 +14,6 @@ import { Sidebar } from './Sidebar'
 export const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
 
-const TITLEBAR_STRIP = 34
-
 /** CSS variables describing the window layout, shared by both renderers. */
 export function layoutVars(snapshot: Snapshot, sidebarWidth: number, accent: string | null): React.CSSProperties {
   const s = snapshot.settings
@@ -28,8 +26,8 @@ export function layoutVars(snapshot: Snapshot, sidebarWidth: number, accent: str
     '--sidebar-w': `${sidebarWidth}px`,
     '--content-left': `${right ? s.contentGap : side}px`,
     '--content-right': `${right ? side : s.contentGap}px`,
-    // macOS's traffic lights need a strip above the page when the sidebar is on the right.
-    '--content-top': `${right && showSidebar && isMac ? Math.max(s.contentGap, TITLEBAR_STRIP) : s.contentGap}px`,
+    // The traffic lights are in the sidebar's top row on either side, so the page goes to the top.
+    '--content-top': `${s.contentGap}px`,
     ...(accent ? { '--accent': accent } : {})
   } as React.CSSProperties
 }

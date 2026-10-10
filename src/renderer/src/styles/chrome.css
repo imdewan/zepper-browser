@@ -58,10 +58,6 @@
   padding: 0 8px 6px 6px;
 }
 
-[data-side='right'] .traffic-light-space {
-  width: 4px;
-}
-
 .window[data-side='right'] .resize-handle {
   right: auto;
   left: 0;

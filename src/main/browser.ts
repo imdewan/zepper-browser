@@ -100,8 +100,6 @@ import { nextZoom } from './zoom'
 import { desktopPicture, fileTypeIcon, requestLocationAccess } from './native'
 import { CAPTURE_TARGETS_SCRIPT, captureArea, captureFullPage, pngWithDensity, type CaptureTargets } from './capture'
 
-/** Height reserved for the traffic lights when the sidebar is on the right. */
-const TITLEBAR_STRIP = 34
 /** Developer Mode's bar, along the top of the page: its full address and developer tools. */
 const DEV_BAR_HEIGHT = 40
 /** Where the traffic lights sit in the sidebar's top row. */
@@ -588,6 +586,8 @@ export class Browser {
   private showingPrompt: number | null = null
   private lastFindText = ''
   private peeking = false
+  /** Whether the traffic lights are showing (placeTrafficLights moves them with the sidebar). */
+  private lightsShown = false
   /** The corner region's size: just what the overlay shows there (it would swallow clicks on the page). */
   private cornerSize = { ...CORNER_REGION }
   /** The mode the overlay itself last asked for (it knows what it's showing). */
@@ -1870,8 +1870,7 @@ export class Browser {
       case 'ui.peekLeft':
         return this.holdPeekWhilePointerOnCard()
       case 'ui.peekLights':
-        // Only for a left-hand peek: with the sidebar on the right, the lights would sit on the page.
-        if (!this.compact || !this.peeking || this.settings.sidebarPosition === 'right') return
+        if (!this.compact || !this.peeking) return
         return this.showTrafficLights(command.visible)
       case 'ui.dismissOverlay':
         return this.emit({ type: 'overlay.dismiss' }, 'overlay')
@@ -4790,22 +4789,38 @@ export class Browser {
 
   /**
    * Shows or hides the traffic lights and puts them in the sidebar's top row: the docked
-   * sidebar, or the peek card (inset from the window edge). macOS forgets custom positions
-   * after visibility and full-screen changes, so the position is applied every time. In full
-   * screen they're always there, where macOS puts them in the strip that slides down with the
-   * menu bar (otherwise that strip comes down empty, in compact mode).
+   * sidebar, or the peek card (inset from the window edge), on whichever side it is. macOS
+   * forgets custom positions after visibility and full-screen changes, so the position is
+   * applied every time. In full screen they're always there, where macOS puts them in the strip
+   * that slides down with the menu bar (otherwise that strip comes down empty, in compact mode).
    */
   private showTrafficLights(visible: boolean): void {
     if (process.platform !== 'darwin' || !this.win || this.win.isDestroyed()) return
     if (this.win.isFullScreen()) {
+      this.lightsShown = false
       this.win.setWindowButtonVisibility(true)
       this.win.setWindowButtonPosition(null)
       return
     }
+    this.lightsShown = visible
     this.win.setWindowButtonVisibility(visible)
-    if (!visible) return
+    this.placeTrafficLights()
+  }
+
+  /**
+   * Where the sidebar's top row starts: 17pt in from the left edge of the window, or with the sidebar
+   * on the right, from its own left edge (where its padding is 2pt less), or the peek card's.
+   */
+  private placeTrafficLights(): void {
+    if (process.platform !== 'darwin' || !this.lightsShown || this.win.isDestroyed() || this.win.isFullScreen()) return
     const inset = this.peeking ? PEEK_INSET : 0
-    this.win.setWindowButtonPosition({ x: TRAFFIC_LIGHTS.x + inset, y: TRAFFIC_LIGHTS.y + inset })
+    let x = TRAFFIC_LIGHTS.x + inset
+    if (this.settings.sidebarPosition === 'right') {
+      const [width] = this.win.getContentSize()
+      const left = this.peeking ? width - (this.sidebarWidth + PEEK_HOVER_EXTRA) + PEEK_INSET : width - this.sidebarWidth
+      x = left + TRAFFIC_LIGHTS.x - 2
+    }
+    this.win.setWindowButtonPosition({ x, y: TRAFFIC_LIGHTS.y + inset })
   }
 
   /** Where the pointer is in the window's content. */
@@ -6029,8 +6044,8 @@ export class Browser {
     const edge = this.settings.compactRevealOnHover ? Math.max(gap, MIN_REVEAL_EDGE) : gap
     const sidebar = this.compact ? edge : this.sidebarWidth
     const right = this.settings.sidebarPosition === 'right'
-    // With the sidebar on the right, macOS's traffic lights need a strip above the page.
-    const top = right && !this.compact && process.platform === 'darwin' ? Math.max(gap, TITLEBAR_STRIP) : gap
+    // The traffic lights are in the sidebar's top row, on either side: the page goes to the top.
+    const top = gap
     return {
       x: right ? gap : sidebar,
       y: top,
@@ -6041,6 +6056,8 @@ export class Browser {
 
   private layout(): void {
     if (!this.win || this.win.isDestroyed()) return
+    // With the sidebar on the right they're placed from the window's right edge: keep up with it.
+    this.placeTrafficLights()
     if (!this.layoutAnimation) {
       const panes = this.panes()
       this.panesKey = JSON.stringify(panes)

@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Changed
+
+- With the sidebar on the right, on a Mac, the traffic lights sit at the start of the sidebar's top row, as they do on the left, and the page goes up to the top of the window instead of leaving an empty strip above it for them. In compact mode they come in with the floating sidebar's top row.
+
 ## [0.1.8] - 2026-10-10
 
 ### Added
