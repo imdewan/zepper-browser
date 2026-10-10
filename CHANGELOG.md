@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- Sites couldn't ask for your camera, microphone, location or notifications: the page seemed to freeze when it asked, because Zepper's prompt never appeared and an invisible layer over the window took every click. The prompt shows again, and if a prompt or popover ever fails to appear, the window gets its clicks back within two seconds (a prompt that never showed is answered no, without remembering it, so the site can ask again).
+
 ### Changed
 
 - With the sidebar on the right, on a Mac, the traffic lights sit at the start of the sidebar's top row, as they do on the left, and the page goes up to the top of the window instead of leaving an empty strip above it for them. In compact mode they come in with the floating sidebar's top row.

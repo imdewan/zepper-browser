@@ -592,6 +592,8 @@ export class Browser {
   private cornerSize = { ...CORNER_REGION }
   /** The mode the overlay itself last asked for (it knows what it's showing). */
   private overlayReported: OverlayMode = 'hidden'
+  /** Checking that a popover just opened made it onto the overlay (checkPopoverShown). */
+  private popoverCheck: NodeJS.Timeout | null = null
   private peekCheck: NodeJS.Timeout | null = null
   /** Following the pointer while it's over the peek card where the card can't see it. */
   private peekWatch: NodeJS.Timeout | null = null
@@ -1659,7 +1661,8 @@ export class Browser {
       case 'ui.openPopover':
         this.setOverlayMode('full')
         this.overlay.webContents.focus()
-        return this.emit({ type: 'popover.open', popover: command.popover }, 'overlay')
+        this.emit({ type: 'popover.open', popover: command.popover }, 'overlay')
+        return this.checkPopoverShown()
       case 'ui.copyUrl':
         return this.copyUrl(command.markdown ?? false)
       case 'developer.toggle':
@@ -5476,8 +5479,32 @@ export class Browser {
     this.showingPrompt = prompt.id
     const bounds = this.contentBounds()
     const anchor = { x: bounds.x + 4, y: bounds.y, width: 0, height: 0 }
-    const { keys: _keys, tabId: _tabId, webContentsId: _webContentsId, callback: _callback, ...view } = prompt
-    this.handle({ type: 'ui.openPopover', popover: { kind: 'permission', anchor, prompt: view } })
+    // Only what the prompt shows: the rest (its profile's permissions, the callback) can't be sent to the
+    // overlay, and the whole message would be dropped.
+    const { id, origin, host, label } = prompt
+    this.handle({ type: 'ui.openPopover', popover: { kind: 'permission', anchor, prompt: { id, origin, host, label } } })
+  }
+
+  /**
+   * A popover that never reached the overlay would leave it covering the window with nothing on it,
+   * and every click on the page would go nowhere. If the overlay hasn't said it's showing something
+   * in a moment, it goes back to what it does show; a permission prompt that never appeared is
+   * answered no (not remembered, so the site can ask again).
+   */
+  private checkPopoverShown(): void {
+    if (this.popoverCheck) clearTimeout(this.popoverCheck)
+    this.popoverCheck = setTimeout(() => {
+      this.popoverCheck = null
+      if (this.win.isDestroyed() || this.overlayMode !== 'full' || this.overlayReported === 'full') return
+      console.warn('[overlay] a popover never showed; the page has its clicks back')
+      const prompt = this.prompts.find((p) => p.id === this.showingPrompt)
+      if (prompt) {
+        this.prompts = this.prompts.filter((p) => p !== prompt)
+        this.showingPrompt = null
+        prompt.callback(false)
+      }
+      this.setOverlayMode(this.overlayReported)
+    }, 2000)
   }
 
   private respondToPrompt(id: number, allow: boolean): void {
