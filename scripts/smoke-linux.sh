@@ -56,8 +56,11 @@ profile="$home/zepper-profile"
 Xvfb :99 -screen 0 1440x900x24 -ac -nolisten tcp > "$out/xvfb.log" 2>&1 &
 sleep 2
 env=(env DISPLAY=:99 ZEPPER_PROFILE="$profile" APPIMAGE_EXTRACT_AND_RUN=1)
+# A D-Bus session where the distro has dbus-run-session (Zepper runs without one too).
+dbus=()
+command -v dbus-run-session > /dev/null && dbus=(dbus-run-session --)
 # Opening a link starts Zepper with it, as clicking a link in another app does.
-"${run[@]}" "${env[@]}" dbus-run-session -- "$zepper" https://example.com/ > "$out/zepper.log" 2>&1 &
+"${run[@]}" "${env[@]}" "${dbus[@]}" "$zepper" https://example.com/ > "$out/zepper.log" 2>&1 &
 # Its window, and the process that owns it (Zepper's main process).
 pid=$(DISPLAY=:99 timeout 60 xdotool search --sync --name '^Zepper$' getwindowpid | head -1)
 echo "Zepper's window is up (process $pid)"
