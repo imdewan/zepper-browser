@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-10
+
 ### Fixed
 
 - Sites couldn't ask for your camera, microphone, location or notifications: the page seemed to freeze when it asked, because Zepper's prompt never appeared and an invisible layer over the window took every click. The prompt shows again, and if a prompt or popover ever fails to appear, the window gets its clicks back within two seconds (a prompt that never showed is answered no, without remembering it, so the site can ask again).
@@ -196,7 +198,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/imdewan/zepper-browser/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/imdewan/zepper-browser/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/imdewan/zepper-browser/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/imdewan/zepper-browser/compare/v0.1.5...v0.1.6

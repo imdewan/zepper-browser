@@ -1,7 +1,7 @@
 {
   "name": "zepper-browser",
   "productName": "Zepper",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "description": "A private macOS browser with Spaces, a vertical sidebar and built-in privacy protections. Built on Electron, so you can make it your own without compiling Chromium.",
   "license": "GPL-3.0-only",
