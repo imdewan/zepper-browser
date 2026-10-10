@@ -196,6 +196,7 @@
         }
       ],
       "executableName": "zepper",
+      "maintainer": "Dewan Shakil <mydsaproduction@gmail.com>",
       "category": "Network;WebBrowser",
       "synopsis": "A private, sidebar-first web browser",
       "description": "Zepper is a free, open-source web browser built on Chromium, with spaces, split view, a command bar and a sidebar for your tabs. Ad and tracker blocking is on from the start.",
