@@ -137,6 +137,7 @@ function createMock(): ZepperApi {
     fullscreen: false,
     fullScreenWindow: false,
     maximizedWindow: false,
+    systemTitleBar: false,
     adblockEnabled: true,
     settings: DEFAULT_SETTINGS,
     kind: 'main',

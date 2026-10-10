@@ -81,6 +81,8 @@ export function App(): React.JSX.Element | null {
         data-focused={snapshot.focused}
         data-compact={!showSidebar}
         data-animating={animating}
+        // Linux without the desktop's title bar: Zepper rounds the window's corners itself.
+        data-rounded={isLinux && !snapshot.systemTitleBar && !snapshot.maximizedWindow && !snapshot.fullScreenWindow}
         {...uiAttributes(snapshot.settings)}
         style={layoutVars(snapshot, sidebarWidth, accent)}
       >

@@ -62,7 +62,7 @@ command -v dbus-run-session > /dev/null && dbus=(dbus-run-session --)
 # Opening a link starts Zepper with it, as clicking a link in another app does.
 "${run[@]}" "${env[@]}" "${dbus[@]}" "$zepper" https://example.com/ > "$out/zepper.log" 2>&1 &
 # Its window, and the process that owns it (Zepper's main process).
-pid=$(DISPLAY=:99 timeout 60 xdotool search --sync --name '^Zepper$' getwindowpid | head -1)
+pid=$(DISPLAY=:99 timeout 60 xdotool search --sync --classname '^zepper$' getwindowpid | head -1)
 echo "Zepper's window is up (process $pid)"
 sleep 25
 echo "Zepper's processes:"

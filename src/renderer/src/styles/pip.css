@@ -233,6 +233,11 @@
   padding: 0 5px 0 76px;
 }
 
+/* Linux: the desktop's title bar is above it, with the window's buttons. */
+[data-platform='linux'] .call-row {
+  padding-left: 12px;
+}
+
 .call-site {
   flex: 1;
   min-width: 0;

@@ -572,6 +572,8 @@ export class Browser {
   private overlayMode: OverlayMode = 'hidden'
   private paletteOpen = false
   private htmlFullscreen = false
+  /** Linux, with the desktop's title bar (Settings › Appearance, systemTitleBar; set when the window opens). */
+  private systemFrame = false
   private broadcastTimer: NodeJS.Timeout | null = null
   private blockedTimer: NodeJS.Timeout | null = null
   private restoreTabId: string | null = null
@@ -891,6 +893,7 @@ export class Browser {
     const preload = join(__dirname, '../preload/index.js')
     const uiPrefs = { preload, contextIsolation: true, sandbox: true, partition: 'zepper-ui' }
 
+    this.systemFrame = process.platform !== 'darwin' && this.settings.systemTitleBar
     this.win = new BrowserWindow({
       ...this.initialBounds(),
       minWidth: 640,
@@ -907,11 +910,14 @@ export class Browser {
             backgroundColor: '#00000000'
           }
         : {
-            // Linux: no title bar; the sidebar's top row has the window's buttons (see WindowButtons), and
-            // the window is solid (there's no system material to see through).
-            frame: false,
-            icon: join(__dirname, '../../resources/icon.png'),
-            backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e21' : '#eaeaed'
+            // Linux: the desktop's title bar and borders, with the menu bar out of sight (Alt shows it,
+            // as in Firefox); or none, and the sidebar's top row has the window's buttons (WindowButtons).
+            // Solid either way: there's no system material to see through.
+            ...(this.systemFrame
+              ? { autoHideMenuBar: true, backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e21' : '#eaeaed' }
+              : // See-through outside the corners the sidebar rounds (.window[data-rounded]).
+                { frame: false, transparent: true, backgroundColor: '#00000000' }),
+            icon: join(__dirname, '../../resources/icon.png')
           }),
       webPreferences: uiPrefs
     })
@@ -971,6 +977,10 @@ export class Browser {
       this.broadcast()
     })
     this.win.on('blur', () => this.broadcast())
+    // Linux's title bar shows the page you're on (updateWindowTitle), not the sidebar's own title.
+    this.win.on('page-title-updated', (event) => {
+      if (this.systemFrame) event.preventDefault()
+    })
     // The maximise button's look (Linux draws the window's buttons itself).
     this.win.on('maximize', () => this.broadcast())
     this.win.on('unmaximize', () => this.broadcast())
@@ -6229,6 +6239,7 @@ export class Browser {
       fullscreen: this.htmlFullscreen,
       fullScreenWindow: this.win && !this.win.isDestroyed() ? this.win.isFullScreen() : false,
       maximizedWindow: this.win && !this.win.isDestroyed() ? this.win.isMaximized() : false,
+      systemTitleBar: this.systemFrame,
       adblockEnabled: this.adblock.isEnabled(),
       settings: this.settings,
       kind: this.kind,
@@ -6257,6 +6268,15 @@ export class Browser {
     this.broadcast()
   }
 
+  /** Linux's title bar: the page you're on, then Zepper, as other browsers' title bars read. */
+  private updateWindowTitle(): void {
+    if (!this.systemFrame) return
+    const tab = this.tab(this.activeTabId)
+    const page = tab ? tab.title || safeHost(tab.url) || 'New Tab' : ''
+    const title = `${page ? `${page} — ` : ''}Zepper${this.kind === 'private' ? ' (Private)' : ''}`
+    if (this.win.getTitle() !== title) this.win.setTitle(title)
+  }
+
   private broadcast(): void {
     if (this.broadcastTimer) return
     this.broadcastTimer = setTimeout(() => {
@@ -6265,6 +6285,7 @@ export class Browser {
       // A page that became (or stopped being) a site you're building, DevTools opening: lay out again.
       if (!this.layoutAnimation && JSON.stringify(this.panes()) !== this.panesKey) this.layout()
       const snapshot = this.snapshot()
+      this.updateWindowTitle()
       this.win.webContents.send(IPC.snapshot, snapshot)
       this.overlay.webContents.send(IPC.snapshot, snapshot)
       this.pip?.controlsWebContents()?.send(IPC.snapshot, snapshot)

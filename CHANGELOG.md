@@ -7,7 +7,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 ### Added
 
 - **Linux**, on x64 and arm64: an AppImage (which updates itself), a `.deb` for Ubuntu, Debian and Mint, and an `.rpm` for Fedora and openSUSE, each tested on its distro.
-  - Zepper draws the window's buttons at the end of the sidebar's top row, and the window is solid.
+  - Windows have your desktop's own title bar and borders, showing the page you're on. Turn off **Settings › Appearance › Use the system title bar** for none: Zepper's window buttons sit at the end of the sidebar's top row instead, and the window's corners are rounded.
   - Shortcuts use Ctrl, and the few that would clash on Linux take Chrome's Linux keys: Ctrl+H for history, Ctrl+J for downloads, Ctrl+Shift+I for DevTools, Ctrl+Page Down and Up for the next and previous tab, Ctrl+Alt+1–9 for spaces. F5, Alt+← and Alt+→ work too.
   - Saved passwords are encrypted with a key in your desktop's keyring (GNOME Keyring or KWallet).
   - Links from other apps open in Zepper once it's your default browser, and history and open tabs import from Chrome, Brave, Edge, Vivaldi, Opera, Chromium and Firefox.

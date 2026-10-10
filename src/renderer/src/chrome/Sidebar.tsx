@@ -56,6 +56,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
         update={snapshot.update}
         fullScreen={snapshot.fullScreenWindow}
         maximized={snapshot.maximizedWindow}
+        windowButtons={isLinux && !snapshot.systemTitleBar}
         compact={snapshot.compact}
       />
       <UrlPill tab={activeTab} ai={snapshot.intelligence.ai} />
@@ -79,7 +80,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
  * Top row: traffic lights, extensions, then back, forward and reload. When an update is waiting, its
  * button takes the place of extensions, back and forward (⌘[ and ⌘] still work) so it fits in full.
  * In full screen the traffic lights come down with the menu bar instead, and a sidebar button takes
- * their place. On Linux the window's buttons come last instead of the traffic lights first.
+ * their place. On Linux without the desktop's title bar, the window's buttons come last instead.
  */
 function TopRow({
   tab,
@@ -88,6 +89,7 @@ function TopRow({
   update,
   fullScreen,
   maximized,
+  windowButtons,
   compact
 }: {
   tab: Tab | null
@@ -96,6 +98,8 @@ function TopRow({
   update: UpdateStatus
   fullScreen: boolean
   maximized: boolean
+  /** Linux without the desktop's title bar: the window's buttons are here. */
+  windowButtons: boolean
   compact: boolean
 }): React.JSX.Element {
   const extensionsRef = useRef<HTMLButtonElement>(null)
@@ -183,7 +187,7 @@ function TopRow({
       >
         <IconReload size={16} />
       </button>
-      {isLinux && !fullScreen && <WindowButtons maximized={maximized} />}
+      {windowButtons && !fullScreen && <WindowButtons maximized={maximized} />}
     </div>
   )
 }

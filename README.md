@@ -47,7 +47,7 @@ Zepper runs on Linux too, on x64 and arm64. Get it from the [latest release](htt
 | openSUSE                                                   | `.rpm`      | `sudo zypper install ./Zepper-*.rpm`       |
 | Arch, Manjaro, EndeavourOS and the rest                    | `.AppImage` | `chmod +x Zepper-*.AppImage`, then open it |
 
-The AppImage updates itself; the `.deb` and `.rpm` show an Update button that takes you to the new version. On Ubuntu 24.04 and later, use the `.deb`: Ubuntu stops Chromium's sandbox from starting in AppImages, and the `.deb` installs the rule that allows it.
+Zepper's windows have your desktop's own title bar (or turn it off in Settings › Appearance for Zepper's buttons in the sidebar and rounded corners). The AppImage updates itself; the `.deb` and `.rpm` show an Update button that takes you to the new version. On Ubuntu 24.04 and later, use the `.deb`: Ubuntu stops Chromium's sandbox from starting in AppImages, and the `.deb` installs the rule that allows it.
 
 Some things are macOS's own, so they aren't on Linux: the Apple Intelligence features (summaries, translation, search by meaning), passkeys from iCloud Keychain or your phone, and importing passwords straight from another browser (export them as a CSV from it instead; history and open tabs come over directly). Zepper's own passkeys work everywhere.
 

@@ -67,6 +67,11 @@ export interface Settings {
    * system material show under the space's gradient, and beyond that the gradient fades too.
    */
   transparency: number
+  /**
+   * Linux: the desktop's own title bar and borders around the window (and its rounded corners), as
+   * Linux apps have. Off: no title bar, and Zepper's window buttons in the sidebar. New windows.
+   */
+  systemTitleBar: boolean
   // Tabs
   newTabPosition: 'top' | 'bottom'
   /** Memory Saver: tabs you haven't looked at for a while give back their memory (they reload when opened). */
@@ -185,6 +190,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reduceMotion: false,
   appIcon: 'auto',
   transparency: 0.5,
+  systemTitleBar: true,
   newTabPosition: 'top',
   memorySaver: true,
   memorySaverMode: 'balanced',

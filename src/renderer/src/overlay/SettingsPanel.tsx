@@ -425,6 +425,14 @@ export function SettingsPanel({
                       />
                     </Row>
                   )}
+                  {isLinux && (
+                    <Row
+                      label="Use the system title bar"
+                      hint="Your desktop’s own title bar and borders around the window, with its corners. Off: Zepper’s window buttons sit in the sidebar instead, and pages get more room. For windows you open next."
+                    >
+                      <Toggle checked={settings.systemTitleBar} onChange={(systemTitleBar) => set({ systemTitleBar })} />
+                    </Row>
+                  )}
                   <Row label="Sidebar position">
                     <Segmented
                       value={settings.sidebarPosition}

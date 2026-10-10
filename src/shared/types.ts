@@ -180,6 +180,8 @@ export interface Snapshot {
   fullScreenWindow: boolean
   /** Maximised (for the maximise button Zepper draws on Linux). */
   maximizedWindow: boolean
+  /** Linux: the window has the desktop's title bar (otherwise Zepper draws the window's buttons). */
+  systemTitleBar: boolean
   adblockEnabled: boolean
   settings: Settings
   /** Window type: the main window, a temporary window, or a private window. */

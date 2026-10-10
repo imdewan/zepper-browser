@@ -242,6 +242,14 @@
 
 /* ---- Linux: the window's own buttons (macOS has its traffic lights) ------------------------ */
 
+/* Without the desktop's title bar the window is see-through outside these corners, rounded round the
+   page's own (its radius plus the gap), with a hairline edge so it stands out on any wallpaper. */
+.window[data-rounded='true'] {
+  border-radius: calc(var(--radius) + var(--gap));
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent);
+}
+
 [data-platform='linux'] .traffic-light-space {
   width: 4px;
 }

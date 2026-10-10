@@ -46,8 +46,10 @@ export class CallWindow {
       minWidth: MIN_WIDTH,
       minHeight: MIN_PAGE_HEIGHT + BAR_HEIGHT,
       show: false,
-      titleBarStyle: 'hidden',
-      trafficLightPosition: TRAFFIC_LIGHTS,
+      // macOS: its traffic lights in the call bar. Linux: the desktop's title bar (with its close button).
+      ...(process.platform === 'darwin'
+        ? { titleBarStyle: 'hidden' as const, trafficLightPosition: TRAFFIC_LIGHTS }
+        : { autoHideMenuBar: true }),
       // The first click on it (it never activates Zepper) still hits Back to tab, or the call's buttons.
       acceptFirstMouse: true,
       // A floating panel: stays above full-screen apps and on every desktop, and clicking it doesn't activate Zepper.
