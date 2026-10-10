@@ -128,9 +128,20 @@ Zepper uses castLabs' Electron build. Widevine is opt-in: while it's off, `compo
 
 `npm run dist` builds the app with electron-builder. Its `afterPack` hook (`scripts/after-pack.cjs`) flips Electron's fuses (no running as Node, no Node debugging flags, app code only from the integrity-checked asar, cookies encrypted on disk) and then VMP-signs, in that order, because the signature covers the framework binary the fuses change. Last, it re-seals the app with an ad-hoc signature, since VMP signing adds a file inside the framework; Apple code signing, when there's a Developer ID, replaces it. electron-builder packages a copy of the Electron runtime staged by `scripts/stage-electron.mjs`, because `npm run brand:dev` renames the development copy. Hardened-runtime entitlements (`build/entitlements.mac.plist`) allow JIT, the Widevine library, and the camera, microphone and location for sites you allow. The app registers for `http`/`https` links and web page files, so it can be the default browser.
 
-Each release should include `Zepper-update-mac.yml` (which `npm run dist` copies from `latest-mac.yml`) and the `.zip` alongside the `.dmg`: they're the update feed.
+Each release should include `Zepper-update-mac.yml` (which `npm run dist` copies from `latest-mac.yml`) and the `.zip` alongside the `.dmg`: they're the update feed. For Linux, the Linux workflow adds the packages and `latest-linux.yml` and `latest-linux-arm64.yml` (see Linux).
 
 `npm run dist:browser` (with `ZEPPER_PROVISIONING_PROFILE` pointing at the Developer ID profile Apple issues with the browser entitlement) adds the app identity and `com.apple.developer.web-browser.public-key-credential` to the main app's entitlements only. Electron's helper apps have no profile, and macOS stops any process claiming a restricted entitlement without one.
+
+## Linux
+
+The same code runs on Linux; the differences are kept to a few places.
+
+- **Window:** `Browser.start()` gives Linux windows the desktop's frame when `systemTitleBar` is on (with the menu bar auto-hidden, and the page's title as the window's), or none, with `WindowButtons.tsx` at the end of the sidebar's top row and a see-through window outside the corners `.window[data-rounded]` rounds. The renderer knows the platform from `document.documentElement.dataset.platform` (set in `bridge.ts`) and `isLinux`/`isMac` in `util.ts`; the window is solid there (no vibrancy). `defaultSettings()` puts the sidebar on the right on Linux.
+- **Shortcuts:** `src/shared/shortcuts.ts` has the Linux keys for the shortcuts that would clash (`LINUX_SHORTCUTS`). The menu takes its accelerators from it (`linuxAccelerator`), and every label goes through `shortcut()` in `util.ts`, which writes "⇧⌘T" as "Ctrl+Shift+T".
+- **macOS-only parts** check `process.platform`: the native helpers (`build-native.mjs` builds nothing on Linux, and `native.ts` returns null), Apple Intelligence (`ai.ts`), macOS's permission checks, the Dock, and traffic lights. Passwords use `safeStorage`'s async calls, which reach the Secret Service (GNOME Keyring, KWallet) on Linux.
+- **Links from other apps** arrive on the command line (`linksIn()` in `index.ts`), at launch and through `second-instance`.
+- **Packaging:** `npm run dist:linux` stages castLabs' Linux runtimes (`stage-electron.mjs linux`) and builds the AppImage (with electron-builder's static runtime, `toolsets.appimage`), `.deb` and `.rpm` for x64 and arm64. The `.deb` and `.rpm` install an AppArmor profile, which Ubuntu 24.04 and later need for Chromium's sandbox. The Linux workflow (`.github/workflows/linux.yml`) builds them and tries each on Ubuntu, Debian, Fedora, openSUSE and Arch (`scripts/smoke-linux.sh`), then adds them to a release.
+- **Updates:** the AppImage replaces itself (`updater.ts`, from `latest-linux.yml` or `latest-linux-arm64.yml`); a `.deb` or `.rpm` gets the Download button.
 
 ## License
 

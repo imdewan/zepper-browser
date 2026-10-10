@@ -151,6 +151,17 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
 - **History page** (⌘Y): search, delete entries, and clear the last hour, today or everything. History can also be cleared on quit.
 - **History import** from Chrome, Brave, Edge, Arc, Vivaldi, Opera, Helium, Chromium, Firefox and Safari (in the welcome and setup). Pages you'd already visited keep the higher visit count, so importing twice changes nothing.
 
+## On Linux
+
+- The same Zepper, on x64 and arm64: an AppImage (which updates itself), a `.deb` for Ubuntu, Debian and Mint, and an `.rpm` for Fedora and openSUSE.
+- The sidebar starts on the right, so the window's buttons (minimise, maximise, close) are at the end of its top row, in the window's top-right corner, and the window's corners are rounded. **Settings → Appearance → Use the system title bar** gives windows your desktop's own title bar and borders instead, showing the page you're on (Alt shows the menu bar, as in Firefox), with a sidebar button beside Extensions.
+- Shortcuts use Ctrl where a Mac uses ⌘, and the few that would clash on Linux take Chrome's Linux keys: Ctrl+H for history, Ctrl+J for downloads, Ctrl+Shift+I and F12 for DevTools, Ctrl+Shift+J for the Console, Ctrl+Page Down and Ctrl+Page Up for the next and previous tab, Ctrl+Alt+Page Down and Up for spaces, Ctrl+Alt+1–9 for a space, Ctrl+Alt+= and Ctrl+Alt+− for split panes. F5, Ctrl+F5, Alt+← and Alt+→ work too. Every label in the app shows the Linux keys.
+- Saved passwords are encrypted with a key in your desktop's keyring (GNOME Keyring or KWallet). Showing them doesn't ask first, as in Chrome on Linux.
+- As your default browser (Settings → General, through `xdg-settings`), links and files from other apps open in Zepper, in the window that's open.
+- History and open tabs import from Chrome, Brave, Edge, Vivaldi, Opera, Chromium and Firefox (and the Snap and Flatpak Firefox); passwords from a CSV export.
+- Memory Saver reads how much memory is left from `/proc/meminfo`.
+- macOS's own features aren't there: Apple Intelligence, passkeys through macOS (iCloud Keychain, a phone, security keys), Touch ID, the app icon styles and sharing the computer's sound with a screen.
+
 ## Gestures
 
 - Two-finger swipe on a page to go back or forward, as in Chrome: an arrow slides in from the page's edge with your fingers, a ring filling as you go, and fills in the space's colour once letting go will navigate

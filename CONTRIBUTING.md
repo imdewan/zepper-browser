@@ -10,7 +10,7 @@ Thanks for helping make Zepper better. Bug reports, ideas, docs fixes and code a
 
 ## Setting up
 
-You need macOS, Node.js 22 or later and npm 11.
+You need macOS or Linux, Node.js 22 or later and npm 11.
 
 ```bash
 git clone https://github.com/<you>/zepper-browser.git
