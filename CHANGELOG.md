@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-10-11
+
 ### Fixed
 
 - Tabs kept the title "This page crashed" (and showed it after a restart) although their pages were fine: a crash or error page's title replaced the tab's own. Tabs keep their page's title now (a page that couldn't load shows its address), tabs saved that way get their titles back from your history, and a page that goes away in a tab you aren't looking at just unloads the tab, which loads again when you open it, as in Chrome. A page Zepper closes itself is never taken for a crash.
@@ -207,7 +209,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/imdewan/zepper-browser/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/imdewan/zepper-browser/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/imdewan/zepper-browser/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/imdewan/zepper-browser/compare/v0.1.6...v0.1.7
