@@ -1969,17 +1969,21 @@ button.site-button.insecure:hover {
   padding: 9px 10px 10px;
   border-radius: 12px;
   background: var(--element);
+  /* The buttons stack when the card is too narrow for them side by side (below). */
+  container-type: inline-size;
 }
 
+/* Icons and the dismiss button line up with the first line of the text, however many it wraps to. */
 .stale-tabs-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
 .stale-tabs-icons {
   display: flex;
   flex: none;
+  padding-top: 1px;
 }
 
 .stale-tabs-icons > * + * {
@@ -1992,12 +1996,14 @@ button.site-button.insecure:hover {
   font-size: 12px;
   line-height: 1.35;
   color: var(--text-2);
+  text-wrap: pretty;
 }
 
 .stale-tabs-dismiss {
   flex: none;
   width: 18px;
   height: 18px;
+  margin: -1px -3px 0 0;
   border-radius: 5px;
   display: grid;
   place-items: center;
@@ -2016,20 +2022,45 @@ button.site-button.insecure:hover {
 }
 
 .stale-tabs-actions button {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  height: 24px;
+  height: 26px;
   padding: 0 9px;
   border-radius: 7px;
   font-size: 11.5px;
   font-weight: 500;
+  white-space: nowrap;
   color: var(--text);
   background: var(--element-hover);
 }
 
 .stale-tabs-actions button:hover {
   background: var(--press);
+}
+
+/* Too narrow for both side by side (they need about 220px): one above the other, full width. */
+@container (max-width: 230px) {
+  .stale-tabs-actions {
+    flex-direction: column;
+    gap: 5px;
+  }
+}
+
+/* Narrower still: the icons and the dismiss button share the top row, and the text has the width under them. */
+@container (max-width: 200px) {
+  .stale-tabs-head {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    row-gap: 6px;
+  }
+  .stale-tabs-text {
+    order: 3;
+    flex-basis: 100%;
+  }
 }
 
 /* ---- Camera, microphone and screen in use ---------------------------------------------- */
