@@ -4,6 +4,15 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- Tabs kept the title "This page crashed" (and showed it after a restart) although their pages were fine: a crash or error page's title replaced the tab's own. Tabs keep their page's title now (a page that couldn't load shows its address), tabs saved that way get their titles back from your history, and a page that goes away in a tab you aren't looking at just unloads the tab, which loads again when you open it, as in Chrome. A page Zepper closes itself is never taken for a crash.
+- The card for tabs you haven't opened in a while fits a narrow sidebar: its buttons stay on one line, and stack when there isn't room for both.
+
+### Changed
+
+- About Zepper is smaller and tidier.
+
 ## [0.1.9] - 2026-10-10
 
 ### Fixed

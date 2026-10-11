@@ -761,6 +761,13 @@ export class Browser {
         if (history && Array.isArray(history.entries) && Number.isInteger(history.index)) this.savedHistory.set(id, history)
       }
       this.tabs = restored.map(({ history: _history, ...t }) => makeTab({ ...t, language: null, translation: null }))
+      // Tabs saved with an error page's title ("This page crashed", from before error pages kept the
+      // tab's own): the page's title from history, or none, so it's fetched (fillTabMeta).
+      for (const tab of this.tabs) {
+        if (!ERROR_TITLES.has(tab.title)) continue
+        const profile = this.spaces.find((space) => space.id === tab.spaceId)?.profile ?? DEFAULT_PROFILE
+        tab.title = hub.services.profiles.get(profile).history.get(tab.url)?.title || ''
+      }
       // Essentials used to be shared by every space; now each space has its own, starting with a copy.
       const shared = this.tabs.filter((t) => t.kind === 'essential' && !t.spaceId)
       if (shared.length > 0) {
@@ -4165,6 +4172,8 @@ export class Browser {
       this.broadcast()
     })
     on('page-title-updated', (_event, title) => {
+      // An error page's ("This page crashed"): the tab keeps its page's title, or its address.
+      if (this.errorPages.has(wc.getURL())) return
       this.noteBackgroundUpdate(tabId, wc)
       update({ title })
       if (this.tab(tabId)?.media) void this.refreshMedia(tabId, wc)
@@ -4245,18 +4254,27 @@ export class Browser {
       }
       const page = errorPage(url, description, code <= -200 && code > -300 ? 'certificate' : 'network')
       this.errorPages.set(page, url)
+      update({ title: safeHost(url) || url })
       if (this.errorPages.size > 100) this.errorPages.delete(this.errorPages.keys().next().value!)
       wc.loadURL(page).catch(() => {})
     })
     on('render-process-gone', (_event, details) => {
-      if (details.reason === 'clean-exit' || this.windowClosed) return
+      // Zepper closing the page itself (unloading the tab, closing the window, quitting) isn't a crash.
+      if (details.reason === 'clean-exit' || this.windowClosed || this.hub.quitting || this.closedHere.has(wc)) return
       const tab = this.tab(tabId)
       if (!tab || !tab.loaded) return
-      // The tab stays, with a page explaining what happened; reloading brings the page back.
-      const page = errorPage(tab.url, details.reason === 'oom' ? 'Out of memory' : `Reason: ${details.reason}`, 'crash')
-      this.errorPages.set(page, tab.url)
       update({ loading: false, audible: false, media: null })
       this.clearCapture(tabId)
+      // Out of sight, the tab unloads (as Memory Saver's do) and loads again when you open it, as Chrome
+      // reloads a background tab whose page went away.
+      if (!this.attached.has(tabId)) {
+        this.destroyView(tab)
+        tab.discarded = true
+        return this.broadcast()
+      }
+      // The tab you're on stays, with a page explaining what happened; reloading brings the page back.
+      const page = errorPage(tab.url, details.reason === 'oom' ? 'Out of memory' : `Reason: ${details.reason}`, 'crash')
+      this.errorPages.set(page, tab.url)
       wc.loadURL(page).catch(() => {})
     })
     on('unresponsive', () => void this.onUnresponsive(tabId, wc))
@@ -6489,6 +6507,8 @@ const ERROR_PAGES = {
   },
   crash: { title: 'This page crashed', text: `Reload the page (${process.platform === 'darwin' ? '⌘R' : 'Ctrl+R'}) to try again.` }
 }
+/** The error pages' titles, which tabs used to take on and keep. */
+const ERROR_TITLES = new Set(Object.values(ERROR_PAGES).map((page) => page.title))
 
 /** A URL in its canonical form (so typed and loaded addresses compare equal). */
 function normalizedUrl(url: string): string {

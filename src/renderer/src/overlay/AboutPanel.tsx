@@ -168,7 +168,7 @@ export function AboutPanel({ info, update, onClose }: { info: AboutInfo; update:
         </div>
         <footer className="about-footer">
           <div>© 2026 Dewan Shakil</div>
-          <div>Chromium and Widevine are © Google; filter lists by their authors.</div>
+          <div>Chromium and Widevine are ©&nbsp;Google; filter lists by their authors.</div>
         </footer>
       </motion.div>
     </motion.div>

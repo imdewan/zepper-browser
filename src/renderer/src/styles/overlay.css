@@ -2423,9 +2423,9 @@
 .about {
   --accent: var(--system-accent);
   position: relative;
-  width: min(400px, calc(100vw - 48px));
-  padding: 0 22px 18px;
-  border-radius: 20px;
+  width: min(340px, calc(100vw - 48px));
+  padding: 0 18px 14px;
+  border-radius: 18px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2441,8 +2441,8 @@
 .about-hero {
   --glow: color-mix(in srgb, var(--accent), transparent 72%);
   align-self: stretch;
-  margin: 0 -22px;
-  padding: 34px 28px 20px;
+  margin: 0 -18px;
+  padding: 24px 22px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2451,11 +2451,11 @@
 
 .about-close {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 10px;
+  right: 10px;
   z-index: 1;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -2470,29 +2470,30 @@
 }
 
 .about-logo {
-  width: 76px;
-  height: 76px;
+  width: 56px;
+  height: 56px;
   object-fit: contain;
   filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--accent), transparent 50%));
 }
 
 .about-name {
-  margin: 12px 0 0;
-  font-size: 22px;
+  margin: 8px 0 0;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.015em;
 }
 
 .about-tagline {
-  margin: 4px 0 0;
-  max-width: 280px;
-  font-size: 12.5px;
-  line-height: 1.45;
+  margin: 3px 0 0;
+  max-width: 270px;
+  text-wrap: balance;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--text-2);
 }
 
 .about-version {
-  margin-top: 14px;
+  margin-top: 10px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-3);
@@ -2505,7 +2506,7 @@
   justify-content: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .about-status .panel-button {
@@ -2568,17 +2569,17 @@
 .about-rows {
   width: 100%;
   margin: 0;
-  padding: 2px 14px;
-  border-radius: 12px;
+  padding: 0 12px;
+  border-radius: 11px;
   background: var(--element);
 }
 
 .about-row {
   display: flex;
   align-items: baseline;
-  gap: 16px;
-  padding: 8px 0;
-  font-size: 12.5px;
+  gap: 14px;
+  padding: 6px 0;
+  font-size: 12px;
   border-bottom: 1px solid var(--separator);
 }
 
@@ -2606,20 +2607,22 @@
 .about-actions {
   display: flex;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .about-actions .panel-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
+  height: 28px;
+  font-size: 12px;
 }
 
 .about-footer {
-  margin-top: 16px;
-  font-size: 11px;
-  line-height: 1.55;
+  margin-top: 12px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  text-wrap: balance;
   color: var(--text-3);
 }
 
