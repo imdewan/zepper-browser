@@ -10,7 +10,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 - Extensions can take a picture of the page you're on (ColorZilla's colour picker, screenshot tools, password managers' QR scanners) and tell its language (Google Translate).
 - Extensions that work on the page you use them on (Chrome's activeTab: GoFullPage, Google Translate) can reach it once you click them, as in Chrome: that tab, until it goes to another site. They still can't reach other pages, or send your cookies to other sites.
 - Extension pages can keep files in their own storage, as in Chrome (GoFullPage saves its captures there).
-- An extension starts once when it's installed: one welcome page, not two.
+- An extension is set up for Zepper before it first loads, so it isn't loaded a second time straight after you install it (which could make it think it had just been installed again).
 - A link in an extension's popup opens in a new tab, as in Chrome, instead of a window that closed again straight away.
 - Restart to Update (or quitting) could leave Zepper stuck, still open and not closing its window, until you force quit it. Quitting now always finishes within a few seconds: a page that doesn't close in time is closed regardless, and if anything is still stuck after 10 seconds Zepper saves your tabs and goes, then the update installs and Zepper opens again.
 - A tab's sound indicator could stay on after its sound had stopped (since 0.1.11). It works as in Chrome and Firefox now: it stays on for 2 seconds after the sound stops, so a pause for breath or a quiet moment doesn't turn it off and on, and goes right away when you pause the page's player.
