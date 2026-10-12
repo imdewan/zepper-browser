@@ -1,5 +1,6 @@
-import { session, type BrowserWindow, type Extension, type Session, type WebContents } from 'electron'
+import { app, session, type BrowserWindow, type Extension, type Session, type WebContents } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { ElectronChromeExtensions, setSessionPartitionResolver } from 'electron-chrome-extensions'
 import { installChromeWebStore, uninstallExtension } from 'electron-chrome-web-store'
@@ -45,22 +46,32 @@ export class Extensions {
   attach(ses: Session): void {
     if (this.contexts.has(ses)) return
     const host = this.host
-    this.contexts.set(
-      ses,
-      new ElectronChromeExtensions({
-        license: 'GPL-3.0',
-        session: ses,
-        createTab: async (details) => [host.createTab(details.url ?? 'about:blank', details.active !== false), host.window()],
-        selectTab: (webContents) => host.selectTab(webContents),
-        removeTab: (webContents) => host.removeTab(webContents),
-        createWindow: async (details) => {
-          const urls = details.url ? ([] as string[]).concat(details.url) : []
-          for (const url of urls) host.createTab(url, true)
-          return host.window()
-        },
-        removeWindow: () => {}
+    const context = new ElectronChromeExtensions({
+      license: 'GPL-3.0',
+      session: ses,
+      createTab: async (details) => [host.createTab(details.url ?? 'about:blank', details.active !== false), host.window()],
+      selectTab: (webContents) => host.selectTab(webContents),
+      removeTab: (webContents) => host.removeTab(webContents),
+      createWindow: async (details) => {
+        const urls = details.url ? ([] as string[]).concat(details.url) : []
+        for (const url of urls) host.createTab(url, true)
+        return host.window()
+      },
+      removeWindow: () => {}
+    })
+    // A link in an extension's popup opens in a new tab, as in Chrome, and the popup closes (one opened in
+    // the background leaves it open). Otherwise it would get a bare window of its own.
+    context.on('browser-action-popup-created', (popup: { browserWindow?: BrowserWindow; destroy(): void }) => {
+      popup.browserWindow?.webContents.setWindowOpenHandler(({ url, disposition }) => {
+        const background = disposition === 'background-tab'
+        if (/^(https?|chrome-extension):/.test(url)) host.createTab(url, !background)
+        if (!background) popup.destroy()
+        return { action: 'deny' }
       })
-    )
+    })
+    this.contexts.set(ses, context)
+    useExtensionApiPreload(ses)
+    addTabsApis(context)
     ses.extensions.on('extension-loaded', (_event, extension) => {
       // Content scripts first get chrome.storage.sync (see patchContentScripts); that needs a reload, once.
       if (patchContentScripts(extension.path)) return this.reload(extension)
@@ -167,6 +178,125 @@ export class Extensions {
     const page = manifest?.options_ui?.page ?? manifest?.options_page
     return extension && page ? `chrome-extension://${id}/${page.replace(/^\//, '')}` : null
   }
+}
+
+/**
+ * electron-chrome-extensions adds the extension APIs Electron lacks (windows, permissions, action…) to
+ * `chrome` in every extension page and service worker, then freezes it. In Chrome, `browser` is the
+ * same object as `chrome`, and new properties can be added to it: extensions that use `browser`
+ * (1Password, uBlock Origin Lite) found those APIs missing and stopped, and ones that add to `chrome`
+ * (SponsorBlock) couldn't start. Its preload is used with that fixed (the APIs themselves stay fixed
+ * in place, as some extensions, Dark Reader, rely on); if a newer version reads differently, as it is.
+ */
+const PRELOAD_FREEZE = 'delete globalThis.electron;\n      Object.freeze(chrome);'
+const PRELOAD_ALIAS = `delete globalThis.electron;
+      for (const key of Object.getOwnPropertyNames(chrome)) {
+        try {
+          Object.defineProperty(chrome, key, { writable: false, configurable: false });
+        } catch {}
+      }
+      if (globalThis.browser && globalThis.browser !== chrome) {
+        try {
+          Object.defineProperty(globalThis, "browser", { value: chrome, writable: true, configurable: true, enumerable: true });
+        } catch {}
+        if (globalThis.browser !== chrome) {
+          for (const key of Object.keys(chrome)) {
+            try {
+              Object.defineProperty(globalThis.browser, key, { value: chrome[key], writable: true, configurable: true, enumerable: true });
+            } catch {}
+          }
+        }
+      }`
+
+/** chrome.tabs methods Zepper adds (see addTabsApis): they go to main like the library's own. */
+const PRELOAD_TABS = 'create: invokeExtension2("tabs.create"),'
+const PRELOAD_TABS_ADDED = `create: invokeExtension2("tabs.create"),
+              captureVisibleTab: invokeExtension2("tabs.captureVisibleTab"),
+              detectLanguage: invokeExtension2("tabs.detectLanguage"),`
+
+let patchedPreload: string | null | undefined
+
+function extensionApiPreload(): string | null {
+  if (patchedPreload !== undefined) return patchedPreload
+  patchedPreload = null
+  try {
+    const original = createRequire(__filename).resolve('electron-chrome-extensions/preload')
+    const source = readFileSync(original, 'utf8')
+    if (!source.includes(PRELOAD_FREEZE) || !source.includes(PRELOAD_TABS)) {
+      console.warn('[extensions] the extension API preload changed; using it as it is')
+      return null
+    }
+    const path = join(app.getPath('userData'), 'extension-api.preload.js')
+    writeFileSync(path, source.replace(PRELOAD_FREEZE, PRELOAD_ALIAS).replace(PRELOAD_TABS, PRELOAD_TABS_ADDED))
+    patchedPreload = path
+  } catch (error) {
+    console.warn('[extensions] could not prepare the extension API preload', error)
+  }
+  return patchedPreload
+}
+
+/** Swaps electron-chrome-extensions' preload (same ids) for the fixed copy. */
+function useExtensionApiPreload(ses: Session): void {
+  const path = extensionApiPreload()
+  if (!path) return
+  for (const [id, type] of [
+    ['crx-mv2-preload', 'frame'],
+    ['crx-mv3-preload', 'service-worker']
+  ] as const) {
+    ses.unregisterPreloadScript(id)
+    ses.registerPreloadScript({ id, type, filePath: path })
+  }
+}
+
+/** The parts of electron-chrome-extensions' internals the added APIs use. */
+interface ExtensionsInternals {
+  ctx: {
+    router: { apiHandler(): (name: string, callback: (event: unknown, ...args: unknown[]) => unknown) => void }
+    store: {
+      lastFocusedWindowId?: number
+      getWindowById(id: number): BrowserWindow | undefined
+      getActiveTabFromWindow(win: BrowserWindow): WebContents | undefined
+      getTabById(id: number): WebContents | undefined
+    }
+  }
+}
+
+/** chrome.windows.WINDOW_ID_CURRENT */
+const WINDOW_ID_CURRENT = -2
+
+/**
+ * Two chrome.tabs methods the library leaves out that popular extensions need: captureVisibleTab
+ * (screenshots and colour pickers: GoFullPage, ColorZilla, password managers' QR scanners) and
+ * detectLanguage (Google Translate).
+ */
+function addTabsApis(context: ElectronChromeExtensions): void {
+  const { router, store } = (context as unknown as ExtensionsInternals).ctx
+  const handle = router.apiHandler()
+  handle('tabs.captureVisibleTab', async (_event, windowOrOptions?: unknown, maybeOptions?: unknown) => {
+    // (windowId?, options?), or just (options).
+    const [windowId, options] =
+      windowOrOptions && typeof windowOrOptions === 'object' ? [undefined, windowOrOptions] : [windowOrOptions, maybeOptions]
+    const id = typeof windowId === 'number' && windowId !== WINDOW_ID_CURRENT ? windowId : store.lastFocusedWindowId
+    const win = id === undefined ? undefined : store.getWindowById(id)
+    const tab = win && store.getActiveTabFromWindow(win)
+    if (!tab || tab.isDestroyed()) throw new Error('No active tab to capture.')
+    const image = await tab.capturePage()
+    const { format, quality } = (options ?? {}) as { format?: string; quality?: number }
+    return format === 'png'
+      ? `data:image/png;base64,${image.toPNG().toString('base64')}`
+      : `data:image/jpeg;base64,${image.toJPEG(typeof quality === 'number' ? Math.max(0, Math.min(100, quality)) : 92).toString('base64')}`
+  })
+  handle('tabs.detectLanguage', async (_event, tabId?: unknown) => {
+    const tab =
+      typeof tabId === 'number'
+        ? store.getTabById(tabId)
+        : store.lastFocusedWindowId !== undefined
+          ? store.getActiveTabFromWindow(store.getWindowById(store.lastFocusedWindowId)!)
+          : undefined
+    if (!tab || tab.isDestroyed()) return 'und'
+    const lang = await tab.executeJavaScript('document.documentElement.lang', false).catch(() => '')
+    return typeof lang === 'string' && lang ? lang.split(/[-_]/)[0].toLowerCase() : 'und'
+  })
 }
 
 function describe(extension: Extension, enabled: boolean): ExtensionInfo {

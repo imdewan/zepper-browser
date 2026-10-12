@@ -6,6 +6,9 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
+- Extensions that reach Chrome's extension APIs as `browser`, or add to `chrome`, work: 1Password, uBlock Origin Lite, SponsorBlock and MetaMask stopped as soon as they started, and React Developer Tools' and Return YouTube Dislike's buttons couldn't tell which page you were on.
+- Extensions can take a picture of the page you're on (ColorZilla's colour picker, screenshot tools, password managers' QR scanners) and tell its language (Google Translate).
+- A link in an extension's popup opens in a new tab, as in Chrome, instead of a window that closed again straight away.
 - Restart to Update (or quitting) could leave Zepper stuck, still open and not closing its window, until you force quit it. Quitting now always finishes within a few seconds: a page that doesn't close in time is closed regardless, and if anything is still stuck after 10 seconds Zepper saves your tabs and goes, then the update installs and Zepper opens again.
 - A tab's sound indicator could stay on after its sound had stopped (since 0.1.11). It works as in Chrome and Firefox now: it stays on for 2 seconds after the sound stops, so a pause for breath or a quiet moment doesn't turn it off and on, and goes right away when you pause the page's player.
 
