@@ -440,8 +440,10 @@ export class Hub {
     ses.webRequest.onBeforeSendHeaders((details, callback) => {
       const headers: Record<string, string> = clientHintHeaders(details.requestHeaders, this.userAgent)
       if (settings.get().globalPrivacyControl) Object.assign(headers, { 'Sec-GPC': '1', DNT: '1' })
-      // Third parties don't get your cookies (their Set-Cookie is dropped in AdBlock).
-      if (adblock.crossSiteCookiesBlocked(details)) {
+      // Third parties don't get your cookies (their Set-Cookie is dropped in AdBlock), and nor do sites an
+      // extension may only reach once you use it on them (see Extensions.sendsCookies).
+      const extensions = this.services.extensions
+      if (adblock.crossSiteCookiesBlocked(details) || (extensions && !extensions.sendsCookies(details.initiatorOrigin, details.url))) {
         for (const key of Object.keys(headers)) if (key.toLowerCase() === 'cookie') delete headers[key]
       }
       callback({ requestHeaders: headers })

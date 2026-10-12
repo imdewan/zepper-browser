@@ -27,6 +27,10 @@ export interface ExtensionHost {
  */
 export class Extensions {
   private readonly contexts = new Map<Session, ElectronChromeExtensions>()
+  /** Extensions that may reach a page only once you use them on it (activeTab): the sites they reach regardless. */
+  private readonly limited = new Map<string, string[]>()
+  /** …and the tabs you've used each on, with the site the tab was on then. */
+  private readonly granted = new Map<string, Map<WebContents, string>>()
   private settings: SettingsStore | null = null
   private started = false
 
@@ -71,14 +75,117 @@ export class Extensions {
     })
     this.contexts.set(ses, context)
     useExtensionApiPreload(ses)
-    addTabsApis(context)
+    // An extension's files are adjusted before it loads (see prepareFiles), so it loads once, as it is
+    // meant to run here: loading it again would tell it it had just been installed.
+    const { extensions } = ses
+    const load = extensions.loadExtension.bind(extensions)
+    extensions.loadExtension = (path, options) => {
+      prepareFiles(path)
+      return load(path, options)
+    }
+    this.addApis(context)
     ses.extensions.on('extension-loaded', (_event, extension) => {
-      // Content scripts first get chrome.storage.sync (see patchContentScripts); that needs a reload, once.
-      if (patchContentScripts(extension.path)) return this.reload(extension)
+      // Loaded some other way, before its files were adjusted: once more, with them.
+      if (prepareFiles(extension.path)) return this.reload(extension)
+      this.noteSiteAccess(extension)
       // Installed from this session's Web Store: every other session gets it too.
       this.spread(extension)
     })
     if (this.started) void this.prepare(ses)
+  }
+
+  /**
+   * Chrome's activeTab: using an extension on a page (its toolbar button, or its item in the page's
+   * menu) lets it reach that page until the tab goes to another site. Electron can't give an extension
+   * a site while it runs, so these extensions are given every site when they load (see patchSiteAccess)
+   * and Zepper holds them to the pages you've used them on: running scripts and taking pictures there
+   * (checked here and in the API preload), and sending your cookies only to their own sites.
+   */
+  private noteSiteAccess(extension: Extension): void {
+    const patterns = readSiteAccess(extension.path)
+    if (patterns) this.limited.set(extension.id, patterns)
+    else this.limited.delete(extension.id)
+  }
+
+  private grant(extensionId: string, tab: WebContents | undefined): void {
+    if (!tab || tab.isDestroyed() || !this.limited.has(extensionId)) return
+    let tabs = this.granted.get(extensionId)
+    if (!tabs) this.granted.set(extensionId, (tabs = new Map()))
+    if (!tabs.has(tab)) tab.once('destroyed', () => tabs.delete(tab))
+    tabs.set(tab, originOf(tab.getURL()))
+  }
+
+  /** Whether an extension may reach the page a tab shows (any extension Zepper doesn't hold back may). */
+  private reaches(extensionId: string, tab: WebContents | undefined): boolean {
+    const patterns = this.limited.get(extensionId)
+    if (!patterns) return true
+    if (!tab || tab.isDestroyed()) return false
+    const url = tab.getURL()
+    // Its own pages, and the sites it asked for.
+    if (url.startsWith(`chrome-extension://${extensionId}/`) || patterns.some((pattern) => matchesPattern(pattern, url))) return true
+    const origin = this.granted.get(extensionId)?.get(tab)
+    return origin !== undefined && origin === originOf(url)
+  }
+
+  /** A request from an extension carries your cookies only to sites it may reach (see noteSiteAccess). */
+  sendsCookies(initiator: string | undefined, url: string): boolean {
+    const id = /^chrome-extension:\/\/([a-p]{32})/.exec(initiator ?? '')?.[1]
+    const patterns = id ? this.limited.get(id) : undefined
+    if (!id || !patterns) return true
+    if (patterns.some((pattern) => matchesPattern(pattern, url))) return true
+    const origin = originOf(url)
+    for (const [tab, granted] of this.granted.get(id) ?? []) if (granted === origin && originOf(tab.getURL()) === origin) return true
+    return false
+  }
+
+  /** chrome.tabs methods the library leaves out, and the check behind the activeTab preload. */
+  private addApis(context: ElectronChromeExtensions): void {
+    const internals = context as unknown as ExtensionsInternals
+    const { router, store } = internals.ctx
+    const { api } = internals
+    // Using an extension on a page lets it reach the page.
+    const activateClick = api.browserAction.activateClick.bind(api.browserAction)
+    api.browserAction.activateClick = (details) => {
+      this.grant(details.extensionId, details.tabId >= 0 ? store.getTabById(details.tabId) : store.getActiveTabOfCurrentWindow())
+      return activateClick(details)
+    }
+    const menuClicked = api.contextMenus.onClicked.bind(api.contextMenus)
+    api.contextMenus.onClicked = (extensionId, menuItemId, tab, params) => {
+      this.grant(extensionId, tab)
+      return menuClicked(extensionId, menuItemId, tab, params)
+    }
+    const handle = router.apiHandler()
+    handle('zepper.siteAccess', (event, query?: unknown) => {
+      const id = (event as RouterEvent).extension?.id
+      const patterns = id ? this.limited.get(id) : undefined
+      if (!id || !patterns) return true
+      const { tabId, matches } = (query ?? {}) as { tabId?: unknown; matches?: unknown }
+      if (Array.isArray(matches)) return matches.every((match) => patterns.includes(String(match)))
+      return this.reaches(id, typeof tabId === 'number' ? store.getTabById(tabId) : undefined)
+    })
+    handle('tabs.captureVisibleTab', async (event, windowOrOptions?: unknown, maybeOptions?: unknown) => {
+      // (windowId?, options?), or just (options).
+      const [windowId, options] =
+        windowOrOptions && typeof windowOrOptions === 'object' ? [undefined, windowOrOptions] : [windowOrOptions, maybeOptions]
+      const id = typeof windowId === 'number' && windowId !== WINDOW_ID_CURRENT ? windowId : store.lastFocusedWindowId
+      const win = id === undefined ? undefined : store.getWindowById(id)
+      const tab = win && store.getActiveTabFromWindow(win)
+      if (!tab || tab.isDestroyed()) throw new Error('No active tab to capture.')
+      const extensionId = (event as RouterEvent).extension?.id
+      if (extensionId && !this.reaches(extensionId, tab)) throw new Error("Either the '<all_urls>' or 'activeTab' permission is required.")
+      const image = await tab.capturePage()
+      const { format, quality } = (options ?? {}) as { format?: string; quality?: number }
+      return format === 'png'
+        ? `data:image/png;base64,${image.toPNG().toString('base64')}`
+        : `data:image/jpeg;base64,${image.toJPEG(typeof quality === 'number' ? Math.max(0, Math.min(100, quality)) : 92).toString('base64')}`
+    })
+    handle('tabs.detectLanguage', async (_event, tabId?: unknown) => {
+      const win = store.lastFocusedWindowId === undefined ? undefined : store.getWindowById(store.lastFocusedWindowId)
+      const tab = typeof tabId === 'number' ? store.getTabById(tabId) : win && store.getActiveTabFromWindow(win)
+      if (!tab || tab.isDestroyed()) return 'und'
+      const lang = await tab.executeJavaScript('document.documentElement.lang', false).catch(() => '')
+      return typeof lang === 'string' && lang ? lang.split(/[-_]/)[0].toLowerCase() : 'und'
+    })
   }
 
   /** The extension APIs for a page's session (none in private windows). */
@@ -190,6 +297,37 @@ export class Extensions {
  */
 const PRELOAD_FREEZE = 'delete globalThis.electron;\n      Object.freeze(chrome);'
 const PRELOAD_ALIAS = `delete globalThis.electron;
+      if (chrome.scripting) {
+        const scripting = chrome.scripting;
+        const siteAccess = invokeExtension2("zepper.siteAccess");
+        const denied = "Cannot access contents of the page. Extension manifest must request permission to access the respective host.";
+        const gate = (name, queryOf) => {
+          const original = scripting[name];
+          if (typeof original !== "function") return original;
+          return async function (details, callback) {
+            if (!(await siteAccess(queryOf(details)))) {
+              if (typeof callback === "function") return callback(undefined);
+              throw new Error(denied);
+            }
+            return original.apply(scripting, arguments);
+          };
+        };
+        const onTab = (details) => ({ tabId: details && details.target ? details.target.tabId : undefined });
+        const onMatches = (details) => ({ matches: [].concat(details || []).flatMap((d) => (d && d.matches) || []) });
+        Object.defineProperty(chrome, "scripting", {
+          value: {
+            ...scripting,
+            executeScript: gate("executeScript", onTab),
+            insertCSS: gate("insertCSS", onTab),
+            removeCSS: gate("removeCSS", onTab),
+            registerContentScripts: gate("registerContentScripts", onMatches),
+            updateContentScripts: gate("updateContentScripts", onMatches)
+          },
+          enumerable: true,
+          configurable: true,
+          writable: true
+        });
+      }
       for (const key of Object.getOwnPropertyNames(chrome)) {
         try {
           Object.defineProperty(chrome, key, { writable: false, configurable: false });
@@ -208,7 +346,7 @@ const PRELOAD_ALIAS = `delete globalThis.electron;
         }
       }`
 
-/** chrome.tabs methods Zepper adds (see addTabsApis): they go to main like the library's own. */
+/** chrome.tabs methods Zepper adds (see addApis): they go to main like the library's own. */
 const PRELOAD_TABS = 'create: invokeExtension2("tabs.create"),'
 const PRELOAD_TABS_ADDED = `create: invokeExtension2("tabs.create"),
               captureVisibleTab: invokeExtension2("tabs.captureVisibleTab"),
@@ -248,7 +386,7 @@ function useExtensionApiPreload(ses: Session): void {
   }
 }
 
-/** The parts of electron-chrome-extensions' internals the added APIs use. */
+/** The parts of electron-chrome-extensions' internals Zepper adds to. */
 interface ExtensionsInternals {
   ctx: {
     router: { apiHandler(): (name: string, callback: (event: unknown, ...args: unknown[]) => unknown) => void }
@@ -256,47 +394,112 @@ interface ExtensionsInternals {
       lastFocusedWindowId?: number
       getWindowById(id: number): BrowserWindow | undefined
       getActiveTabFromWindow(win: BrowserWindow): WebContents | undefined
+      getActiveTabOfCurrentWindow(): WebContents | undefined
       getTabById(id: number): WebContents | undefined
     }
   }
+  api: {
+    browserAction: { activateClick(details: { extensionId: string; tabId: number }): void }
+    contextMenus: { onClicked(extensionId: string, menuItemId: string, tab: WebContents | undefined, params: unknown): void }
+  }
+}
+
+interface RouterEvent {
+  extension?: Extension
 }
 
 /** chrome.windows.WINDOW_ID_CURRENT */
 const WINDOW_ID_CURRENT = -2
 
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin
+  } catch {
+    return ''
+  }
+}
+
+/** Whether a URL is in a Chrome match pattern ("<all_urls>", "https://*.example.com/*"). */
+export function matchesPattern(pattern: string, url: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  const scheme = parsed.protocol.slice(0, -1)
+  if (pattern === '<all_urls>') return ['http', 'https', 'file', 'ws', 'wss', 'ftp'].includes(scheme)
+  const match = /^(\*|[a-z][a-z0-9+.-]*):\/\/(\*|\*\.[^/*]+|[^/*]*)(\/.*)$/.exec(pattern)
+  if (!match) return false
+  const [, patternScheme, patternHost, patternPath] = match
+  if (patternScheme === '*' ? !['http', 'https', 'ws', 'wss'].includes(scheme) : patternScheme !== scheme) return false
+  const host = parsed.hostname
+  if (patternHost !== '*') {
+    if (patternHost.startsWith('*.')) {
+      const base = patternHost.slice(2)
+      if (host !== base && !host.endsWith(`.${base}`)) return false
+    } else if (host !== patternHost) return false
+  }
+  const path = parsed.pathname + parsed.search
+  const glob = new RegExp(`^${patternPath.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`)
+  return glob.test(path)
+}
+
+/** The sites an extension reaches without being used on a page (see Extensions.noteSiteAccess). */
+const SITE_ACCESS_FILE = 'zepper-site-access.json'
+
+type Manifest = {
+  manifest_version?: number
+  permissions?: string[]
+  host_permissions?: string[]
+  content_scripts?: { matches?: string[]; js?: string[] }[]
+}
+
+const isHostPattern = (entry: string): boolean => entry === '<all_urls>' || entry.includes('://')
+
 /**
- * Two chrome.tabs methods the library leaves out that popular extensions need: captureVisibleTab
- * (screenshots and colour pickers: GoFullPage, ColorZilla, password managers' QR scanners) and
- * detectLanguage (Google Translate).
+ * An extension that asks for activeTab (to reach the page you use it on) and doesn't already reach
+ * every site is given every site, keeping a note of the ones it asked for: Zepper then holds it to
+ * those and the pages you use it on. Reports whether its files changed.
  */
-function addTabsApis(context: ElectronChromeExtensions): void {
-  const { router, store } = (context as unknown as ExtensionsInternals).ctx
-  const handle = router.apiHandler()
-  handle('tabs.captureVisibleTab', async (_event, windowOrOptions?: unknown, maybeOptions?: unknown) => {
-    // (windowId?, options?), or just (options).
-    const [windowId, options] =
-      windowOrOptions && typeof windowOrOptions === 'object' ? [undefined, windowOrOptions] : [windowOrOptions, maybeOptions]
-    const id = typeof windowId === 'number' && windowId !== WINDOW_ID_CURRENT ? windowId : store.lastFocusedWindowId
-    const win = id === undefined ? undefined : store.getWindowById(id)
-    const tab = win && store.getActiveTabFromWindow(win)
-    if (!tab || tab.isDestroyed()) throw new Error('No active tab to capture.')
-    const image = await tab.capturePage()
-    const { format, quality } = (options ?? {}) as { format?: string; quality?: number }
-    return format === 'png'
-      ? `data:image/png;base64,${image.toPNG().toString('base64')}`
-      : `data:image/jpeg;base64,${image.toJPEG(typeof quality === 'number' ? Math.max(0, Math.min(100, quality)) : 92).toString('base64')}`
-  })
-  handle('tabs.detectLanguage', async (_event, tabId?: unknown) => {
-    const tab =
-      typeof tabId === 'number'
-        ? store.getTabById(tabId)
-        : store.lastFocusedWindowId !== undefined
-          ? store.getActiveTabFromWindow(store.getWindowById(store.lastFocusedWindowId)!)
-          : undefined
-    if (!tab || tab.isDestroyed()) return 'und'
-    const lang = await tab.executeJavaScript('document.documentElement.lang', false).catch(() => '')
-    return typeof lang === 'string' && lang ? lang.split(/[-_]/)[0].toLowerCase() : 'und'
-  })
+function patchSiteAccess(extensionPath: string): boolean {
+  try {
+    if (existsSync(join(extensionPath, SITE_ACCESS_FILE))) return false
+    const manifestPath = join(extensionPath, 'manifest.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
+    const permissions = manifest.permissions ?? []
+    if (!permissions.includes('activeTab')) return false
+    const mv3 = manifest.manifest_version === 3
+    const hosts = mv3 ? (manifest.host_permissions ?? []) : permissions.filter(isHostPattern)
+    // Already on every website.
+    if (['https://zepper.invalid/', 'http://zepper.invalid/'].every((url) => hosts.some((host) => matchesPattern(host, url)))) return false
+    // (Its content scripts' sites don't count: in Chrome they don't let it run scripts there on demand.)
+    writeFileSync(join(extensionPath, SITE_ACCESS_FILE), JSON.stringify({ hosts }, null, 2))
+    if (mv3) manifest.host_permissions = [...hosts, '<all_urls>']
+    else manifest.permissions = [...permissions, '<all_urls>']
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
+    return true
+  } catch (error) {
+    console.warn('[extensions] could not set up site access', extensionPath, error)
+    return false
+  }
+}
+
+/** The sites noted by patchSiteAccess, or null for an extension Zepper doesn't hold back. */
+function readSiteAccess(extensionPath: string): string[] | null {
+  try {
+    const { hosts } = JSON.parse(readFileSync(join(extensionPath, SITE_ACCESS_FILE), 'utf8')) as { hosts?: unknown }
+    return Array.isArray(hosts) ? hosts.map(String) : []
+  } catch {
+    return null
+  }
+}
+
+/** Everything Zepper adjusts in an extension's files before loading it; whether anything changed. */
+function prepareFiles(extensionPath: string): boolean {
+  const scripts = patchContentScripts(extensionPath)
+  const access = patchSiteAccess(extensionPath)
+  return scripts || access
 }
 
 function describe(extension: Extension, enabled: boolean): ExtensionInfo {

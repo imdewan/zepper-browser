@@ -1,4 +1,4 @@
-import { Menu, app } from 'electron'
+import { Menu, app, protocol } from 'electron'
 import { statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -23,6 +23,15 @@ process.on('unhandledRejection', (reason) => {
   if (reason instanceof Error && reason.message === 'No component available') return
   console.error('Unhandled promise rejection:', reason)
 })
+
+// Extension pages may keep files in the origin's private file system, as in Chrome (GoFullPage saves
+// its captures there): Electron allows that for standard schemes registered here.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'chrome-extension',
+    privileges: { standard: true, secure: true, allowServiceWorkers: true, supportFetchAPI: true, corsEnabled: true, stream: true }
+  }
+])
 
 // A second, isolated instance with its own profile (for automated checks, and trying an update).
 if (process.env['ZEPPER_PROFILE']) {
