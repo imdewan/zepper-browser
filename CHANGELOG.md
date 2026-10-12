@@ -6,6 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
+- Searching from the command bar in one space showed open tabs (and recent tabs) from your other spaces too. It shows only the space's own tabs now, alongside its own history, as the rest of its results already were.
 - A tab's sound indicator stays on while something is playing, through its quiet moments (a pause for breath in a podcast, a silent scene), instead of going off and on at every gap. It goes as soon as you pause, and the now-playing card's play/pause button no longer flickers either.
 
 ## [0.1.10] - 2026-10-11

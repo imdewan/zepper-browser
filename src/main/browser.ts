@@ -1378,8 +1378,10 @@ export class Browser {
   }
 
   suggestions(text: string): Suggestion[] {
-    // Private windows don't draw on (or show) browsing history.
-    return suggest(text, this.tabs, this.profileData().history, this.kind === 'private', this.settings.paletteRecents)
+    // A space's results are its own: its tabs, and the history of its sign-ins (spaces that share
+    // sign-ins share history). Private windows don't draw on (or show) browsing history.
+    const tabs = this.tabs.filter((t) => t.spaceId === this.activeSpaceId)
+    return suggest(text, tabs, this.profileData().history, this.kind === 'private', this.settings.paletteRecents)
   }
 
   /** The search engine's suggestions, if they're on (Settings › Search). */
