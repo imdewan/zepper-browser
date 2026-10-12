@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-10-12
+
 ### Fixed
 
 - Searching from the command bar in one space showed open tabs (and recent tabs) from your other spaces too. It shows only the space's own tabs now, alongside its own history, as the rest of its results already were.
@@ -214,7 +216,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/imdewan/zepper-browser/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/imdewan/zepper-browser/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/imdewan/zepper-browser/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/imdewan/zepper-browser/compare/v0.1.7...v0.1.8
