@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- A tab's sound indicator could stay on after its sound had stopped (since 0.1.11). It works as in Chrome and Firefox now: it stays on for 2 seconds after the sound stops, so a pause for breath or a quiet moment doesn't turn it off and on, and goes right away when you pause the page's player.
+
 ## [0.1.11] - 2026-10-12
 
 ### Fixed

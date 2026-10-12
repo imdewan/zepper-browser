@@ -225,18 +225,13 @@ const MEDIA_REFRESH_MS = 3000
 const MAX_CLOSED = 50
 /** How long a tab has to keep making sound before it counts as playing media (a notification ping is over by then). */
 const MEDIA_SETTLE_MS = 2500
-/** How long a tab's sound indicator outlasts its sound when nothing's playing any more (a gap between tracks). */
-const SILENCE_HOLD_MS = 1200
-/** While a tab is quiet but its player plays on (a pause for breath), how often to look again… */
-const SILENCE_RECHECK_MS = 2000
-/** …and for how long at most: a player that stays silent this long no longer counts as playing. */
-const SILENCE_MAX_MS = 30_000
-
-/** Whether a frame still has something playing, sound or not this moment. Not a call's streams. */
-const STILL_PLAYING_SCRIPT = `(() =>
-  (navigator.mediaSession && navigator.mediaSession.playbackState === 'playing') ||
-  Array.from(document.querySelectorAll('video, audio')).some((el) => !el.srcObject && !el.paused && !el.ended && !el.muted && el.volume > 0)
-)()`
+/**
+ * How long a tab's sound indicator stays on after its sound stops, so a pause for breath or a quiet
+ * moment doesn't turn it off and on: Chrome's 2 seconds (Firefox holds it for 3).
+ */
+const AUDIBLE_HOLD_MS = 2000
+/** Sound that stops this soon after the page pauses its player stopped because of the pause. */
+const PAUSED_SOUND_MS = 1000
 
 /**
  * Whether a frame is playing real media, and its Media Session details: the page publishes what's
@@ -4231,50 +4226,32 @@ export class Browser {
         if (!wc.isDestroyed() && wc.getURL() === url) this.dataFor(wc).history.record(url, wc.getTitle())
       }, 2000)
     })
-    // The sound indicator is for something playing, not just for sound: a podcast's pause for breath or a
-    // quiet moment in a video leaves it on. It goes when the player pauses or ends, or, with no player
-    // behind the sound (a ping), a moment after the sound stops.
-    let silentSince = 0
-    let silence: NodeJS.Timeout | null = null
+    // As in Chrome and Firefox, the sound indicator stays on for a moment after the sound stops, so a
+    // pause for breath or a quiet moment in a video doesn't turn it off and on. Pausing the page's player
+    // turns it off right away.
+    let hold: NodeJS.Timeout | null = null
     let pausedAt = 0
-    const checkSilence = async (): Promise<void> => {
-      if (silence) clearTimeout(silence)
-      silence = null
-      const since = silentSince
-      if (!since || wc.isDestroyed()) return
-      const playing = Date.now() - since < SILENCE_MAX_MS && (await this.stillPlaying(wc))
-      // Its sound came back meanwhile.
-      if (silentSince !== since) return
-      if (playing) {
-        silence = setTimeout(() => void checkSilence(), SILENCE_RECHECK_MS)
-        return
-      }
-      // Just paused: off now. Otherwise after a short hold, in case the sound comes back.
-      const wait = Date.now() - pausedAt < SILENCE_HOLD_MS ? 0 : since + SILENCE_HOLD_MS - Date.now()
-      if (wait > 0) {
-        silence = setTimeout(() => void checkSilence(), wait)
-        return
-      }
-      silentSince = 0
-      update({ audible: false, audibleAt: Date.now() })
+    const quiet = (): void => {
+      if (hold) clearTimeout(hold)
+      hold = null
+      if (this.tab(tabId)?.audible) update({ audible: false, audibleAt: Date.now() })
     }
     on('media-paused', () => {
       pausedAt = Date.now()
-      if (silentSince) void checkSilence()
+      if (hold) quiet()
     })
     on('audio-state-changed', (event) => {
       if (!event.audible) {
-        if (!this.tab(tabId)?.audible || silentSince) return
-        silentSince = Date.now()
-        void checkSilence()
+        if (!this.tab(tabId)?.audible) return
+        if (Date.now() - pausedAt < PAUSED_SOUND_MS) return quiet()
+        hold ??= setTimeout(quiet, AUDIBLE_HOLD_MS)
         return
       }
-      const gap = silentSince !== 0
-      silentSince = 0
-      if (silence) clearTimeout(silence)
-      silence = null
-      // Sound again after a gap: the same playing, which never stopped.
-      if (gap && this.tab(tabId)?.audible) return
+      const held = hold !== null
+      if (hold) clearTimeout(hold)
+      hold = null
+      // Sound again within the hold: the same playing, which never stopped.
+      if (held && this.tab(tabId)?.audible) return
       update({ audible: true, audibleAt: Date.now() })
       // Only media gets the now-playing card and the offer to pause the rest: not a sound that's over in
       // a moment (a notification ping), nor one with no player behind it (a ringtone, call audio).
@@ -4564,14 +4541,6 @@ export class Browser {
   /** A choice you made in Zepper's own UI for a page (a prompt, the share picker) counts as a click there. */
   private activatedFromUi(webContentsId: number): void {
     this.lastInput.set(webContentsId, Date.now())
-  }
-
-  /** Whether any of a tab's frames (an embedded player too) still has something playing. */
-  private async stillPlaying(wc: WebContents): Promise<boolean> {
-    const found = await Promise.all(
-      wc.mainFrame.framesInSubtree.map((frame) => frame.executeJavaScript(STILL_PLAYING_SCRIPT, false).catch(() => false) as Promise<boolean>)
-    ).catch(() => [] as boolean[])
-    return found.some(Boolean)
   }
 
   /**
