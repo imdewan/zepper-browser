@@ -57,7 +57,9 @@ pid="$1"; new="$2"; app="$3"; relaunch="$4"; stage="$5"
 n=0
 while kill -0 "$pid" 2>/dev/null; do
   n=$((n + 1))
-  [ "$n" -gt 600 ] && exit 1
+  # Zepper has saved everything by now: if it's still stuck closing after 30 seconds, it's ended (as a force quit would).
+  [ "$n" -eq 300 ] && kill -9 "$pid" 2>/dev/null
+  [ "$n" -gt 400 ] && exit 1
   sleep 0.1
 done
 old="$app.previous"
@@ -78,7 +80,9 @@ pid="$1"; new="$2"; app="$3"; relaunch="$4"; stage="$5"
 n=0
 while kill -0 "$pid" 2>/dev/null; do
   n=$((n + 1))
-  [ "$n" -gt 600 ] && exit 1
+  # Zepper has saved everything by now: if it's still stuck closing after 30 seconds, it's ended (as a force quit would).
+  [ "$n" -eq 300 ] && kill -9 "$pid" 2>/dev/null
+  [ "$n" -gt 400 ] && exit 1
   sleep 0.1
 done
 chmod 755 "$new" && mv -f "$new" "$app"
@@ -269,7 +273,7 @@ export class Updater {
   }
 
   /** On quit: hands the staged update to the install script, which waits for Zepper to exit. */
-  private install(): void {
+  install(): void {
     const target = this.target()
     if (!this.staged || !target || !existsSync(this.staged.app)) return
     const script = join(this.dir, 'install.sh')

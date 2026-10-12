@@ -324,6 +324,8 @@ const RECENTLY_AUDIBLE_MS = 60_000
 const RECENTLY_SEEN_MS = 10 * 60_000
 /** How long a closing page gets to run its closing code before it's closed regardless (hung pages). */
 const CLOSE_PAGE_TIMEOUT_MS = 1500
+/** …and all of a window's pages together, at most this long. */
+const CLOSE_PAGES_DEADLINE_MS = 4000
 /** A page counts as settled (done loading, not just finishing its title) this long after it stops loading. */
 const SETTLED_AFTER_MS = 5000
 /** macOS's memory pressure level when it's critical (kern.memorystatus_vm_pressure_level: 1, 2 or 4). */
@@ -2713,10 +2715,17 @@ export class Browser {
   /** The window is closing or Zepper is quitting: every page closes itself first (see closeGently). */
   async closePagesGently(): Promise<void> {
     if (this.pagesClosed) return
-    for (const id of this.views.keys()) this.rememberHistory(id)
-    this.persistNow()
-    await Promise.all([...this.views.values()].map((view) => this.closeGently(view.webContents, true)))
-    this.pagesClosed = true
+    // However that goes, the window (or Zepper) closes afterwards, and doesn't wait more than a few seconds.
+    try {
+      for (const id of this.views.keys()) this.rememberHistory(id)
+      this.persistNow()
+      const closing = Promise.all([...this.views.values()].map((view) => this.closeGently(view.webContents, true)))
+      await Promise.race([closing, new Promise((resolve) => setTimeout(resolve, CLOSE_PAGES_DEADLINE_MS))])
+    } catch (error) {
+      console.warn('[close] pages did not close gently', error)
+    } finally {
+      this.pagesClosed = true
+    }
   }
 
   /** The Mac is short of memory: the tab you used least recently (out of sight a while) unloads now. */

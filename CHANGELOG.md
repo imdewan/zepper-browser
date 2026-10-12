@@ -6,6 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
+- Restart to Update (or quitting) could leave Zepper stuck, still open and not closing its window, until you force quit it. Quitting now always finishes within a few seconds: a page that doesn't close in time is closed regardless, and if anything is still stuck after 10 seconds Zepper saves your tabs and goes, then the update installs and Zepper opens again.
 - A tab's sound indicator could stay on after its sound had stopped (since 0.1.11). It works as in Chrome and Firefox now: it stays on for 2 seconds after the sound stops, so a pause for breath or a quiet moment doesn't turn it off and on, and goes right away when you pause the page's player.
 
 ## [0.1.11] - 2026-10-12

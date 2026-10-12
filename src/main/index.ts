@@ -46,6 +46,9 @@ app.userAgentFallback = app.userAgentFallback
   .replace(/ Electron\/\S+/, '')
   .replace(/Chrome\/(\d+)\.\d+\.\d+\.\d+/, 'Chrome/$1.0.0.0')
 
+/** Quitting is over within this long, whatever's still closing. */
+const QUIT_DEADLINE_MS = 10_000
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -118,6 +121,17 @@ if (!app.requestSingleInstanceLock()) {
       if (closingPages) return
       closingPages = true
       hub.persist()
+      // Whatever hasn't closed by then (a page or window that never finishes), Zepper goes, installing a
+      // downloaded update first as quitting does, so a restart to update can't leave it hanging.
+      const quitting = hub
+      setTimeout(() => {
+        try {
+          quitting.persist()
+        } finally {
+          quitting.updater.install()
+          app.exit(0)
+        }
+      }, QUIT_DEADLINE_MS)
       void hub.closePagesGently().finally(() => {
         pagesClosed = true
         app.quit()
