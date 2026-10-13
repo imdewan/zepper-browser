@@ -6,6 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
+- A tab could show nothing and refuse to close: when Memory Saver unloaded a page that took a while to close, Zepper kept the tab as it was, the page went away anyway, and the tab was left with an empty view that broke opening and closing it (and could keep Zepper from quitting, which is likely what hung Restart to Update). Such a tab is now simply unloaded: it loads again when you open it, and closes as usual.
 - Extensions that reach Chrome's extension APIs as `browser`, or add to `chrome`, work: 1Password, uBlock Origin Lite, SponsorBlock and MetaMask stopped as soon as they started, and React Developer Tools' and Return YouTube Dislike's buttons couldn't tell which page you were on.
 - Extensions can take a picture of the page you're on (ColorZilla's colour picker, screenshot tools, password managers' QR scanners) and tell its language (Google Translate).
 - Extensions that work on the page you use them on (Chrome's activeTab: GoFullPage, Google Translate) can reach it once you click them, as in Chrome: that tab, until it goes to another site. They still can't reach other pages, or send your cookies to other sites.

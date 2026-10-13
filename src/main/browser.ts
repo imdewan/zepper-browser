@@ -528,6 +528,21 @@ const MEDIA_RESUME_SCRIPT = `(() => {
   return 'playing'
 })()`
 
+/** A view whose page is gone: Electron leaves it without one. */
+function isDeadView(view: WebContentsView | undefined): boolean {
+  const page = view?.webContents as WebContents | undefined
+  return !!view && (!page || page.isDestroyed())
+}
+
+/** Takes a view out of the window (one whose page is gone included). */
+function removeView(win: BrowserWindow, view: WebContentsView): void {
+  try {
+    win.contentView.removeChildView(view)
+  } catch {
+    // Already out.
+  }
+}
+
 /** New spaces get their own profile: separate cookies, storage and cache, history, passwords, downloads and site permissions. */
 function makeSpace(name: string, icon: string, theme: SpaceTheme = DEFAULT_THEME, profile: string = randomUUID()): Space {
   return { id: randomUUID(), name, icon, theme, collapsedPins: false, lastTabId: null, profile, pinnedItems: [] }
@@ -2380,7 +2395,7 @@ export class Browser {
     tab.discarded = false
     this.insertNormalTab(tab)
     if (history) this.savedHistory.set(tab.id, history)
-    if (view && !view.webContents.isDestroyed()) {
+    if (view && !isDeadView(view)) {
       const wc = view.webContents
       if (wc.session === this.sessionFor(tab)) {
         this.views.set(tab.id, view)
@@ -2688,8 +2703,9 @@ export class Browser {
    * window, quitting) and otherwise stays (false); a page that doesn't answer is closed regardless
    * when leaving.
    */
-  private closeGently(wc: WebContents, leaveIfAsked: boolean): Promise<boolean> {
-    if (wc.isDestroyed()) return Promise.resolve(true)
+  private closeGently(wc: WebContents | undefined, leaveIfAsked: boolean): Promise<boolean> {
+    // (A view whose page is gone has none.)
+    if (!wc || wc.isDestroyed()) return Promise.resolve(true)
     return new Promise((resolve) => {
       let done = false
       const finish = (closed: boolean): void => {
@@ -3964,7 +3980,7 @@ export class Browser {
 
   private ensureView(tab: Tab, adopt?: WebContents): WebContentsView {
     const existing = this.views.get(tab.id)
-    if (existing) return existing
+    if (existing && !this.forgetDeadView(tab.id)) return existing
     tab.discarded = false
     const view = adopt
       ? new WebContentsView({ webContents: adopt })
@@ -4071,22 +4087,41 @@ export class Browser {
     return this.activeWebContents()?.session ?? this.ses
   }
 
+  /**
+   * A tab whose page went away without Zepper closing the tab keeps a view with no page in it, which
+   * showed nothing and couldn't be closed. The view goes; the tab stays, unloaded, to load again when
+   * you open it. Whether there was such a view.
+   */
+  private forgetDeadView(tabId: string): boolean {
+    const view = this.views.get(tabId)
+    if (!view || !isDeadView(view)) return false
+    if (!this.win.isDestroyed()) removeView(this.win, view)
+    this.views.delete(tabId)
+    this.attached.delete(tabId)
+    for (const [wcId, id] of this.tabByWebContents) if (id === tabId) this.tabByWebContents.delete(wcId)
+    this.unwire.delete(tabId)
+    const tab = this.tab(tabId)
+    if (tab) Object.assign(tab, { loaded: false, loading: false, audible: false, discarded: true })
+    return true
+  }
+
   private destroyView(tab: Tab): void {
     if (this.pip?.activeTabId === tab.id) this.pip.exit()
     this.closeDevTools(tab.id)
     const view = this.views.get(tab.id)
-    if (view && !view.webContents.isDestroyed()) this.rememberHistory(tab.id)
+    const dead = isDeadView(view)
+    if (view && !dead) this.rememberHistory(tab.id)
     tab.loaded = false
     tab.loading = false
     tab.audible = false
     if (!view) return
-    if (!this.win.isDestroyed()) this.win.contentView.removeChildView(view)
+    if (!this.win.isDestroyed()) removeView(this.win, view)
     this.attached.delete(tab.id)
     this.views.delete(tab.id)
     for (const [wcId, id] of this.tabByWebContents) if (id === tab.id) this.tabByWebContents.delete(wcId)
-    this.closedHere.add(view.webContents)
     this.unwire.delete(tab.id)
-    if (view.webContents.isDestroyed()) return
+    if (dead) return
+    this.closedHere.add(view.webContents)
     // Out of sight, the page closes the way a tab you close does: running its closing code first, where
     // some sites save what they need (Discord its sign-in; without it you're signed out next time).
     view.webContents.setAudioMuted(true)
@@ -4170,7 +4205,17 @@ export class Browser {
       this.stopTranslating(tabId)
       if (this.tab(tabId)?.language || this.tab(tabId)?.translation) update({ language: null, translation: null })
     })
-    once('destroyed', () => this.dropDialogs(tabId))
+    once('destroyed', () => {
+      this.dropDialogs(tabId)
+      // Gone without Zepper closing the tab (a page that closed after Memory Saver let it stay, say):
+      // the tab stays, unloaded, and loads again (now, if you're looking at it).
+      setImmediate(() => {
+        const showing = this.attached.has(tabId)
+        if (!this.forgetDeadView(tabId) || this.windowClosed || this.hub.quitting) return
+        if (showing) this.activateTab(tabId, { keepRecency: true })
+        this.broadcast()
+      })
+    })
     // The link under the pointer (or none): its address in the page's corner.
     on('update-target-url', (_event, url) => this.onTargetUrl(tabId, url))
     on('did-start-loading', () => update({ loading: true }))
@@ -6215,7 +6260,7 @@ export class Browser {
     for (const id of [...this.attached]) {
       if (wanted.has(id)) continue
       const view = this.views.get(id)
-      if (view) this.win.contentView.removeChildView(view)
+      if (view) removeView(this.win, view)
       this.attached.delete(id)
     }
     if (this.pip?.activeTabId && wanted.has(this.pip.activeTabId)) this.pip.exit()
