@@ -147,6 +147,8 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
   - Chrome Web Store installs and an extensions panel with pinning.
   - Settings → Extensions to turn extensions on or off, open their options, or remove them.
   - An optional extensions row.
+  - Extensions that work on the page you use them on (Chrome's activeTab) reach it once you click them, as in Chrome: that tab, until it goes to another site; not your other pages, and they don't send your cookies to other sites.
+  - Tested with popular extensions: password managers (1Password, Bitwarden, LastPass), MetaMask, uBlock Origin Lite, Privacy Badger, Dark Reader, Grammarly, Vimium, GoFullPage, ColorZilla, Google Translate, SponsorBlock, Return YouTube Dislike, Video Speed Controller, Wappalyzer and React Developer Tools. Tampermonkey (it needs Chrome's user scripts API) and Adobe Acrobat don't work yet.
 - **Downloads window:** progress, pause/resume, open, Show in Finder, Move to Trash, and the site each download came from. A toast says what's downloading as it starts. You choose the save location, or have Zepper ask each time.
 - **History page** (⌘Y): search, delete entries, and clear the last hour, today or everything. History can also be cleared on quit.
 - **History import** from Chrome, Brave, Edge, Arc, Vivaldi, Opera, Helium, Chromium, Firefox and Safari (in the welcome and setup). Pages you'd already visited keep the higher visit count, so importing twice changes nothing.
