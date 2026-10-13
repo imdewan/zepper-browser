@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-10-13
+
 ### Fixed
 
 - A tab could show nothing and refuse to close: when Memory Saver unloaded a page that took a while to close, Zepper kept the tab as it was, the page went away anyway, and the tab was left with an empty view that broke opening and closing it (and could keep Zepper from quitting, which is likely what hung Restart to Update). Such a tab is now simply unloaded: it loads again when you open it, and closes as usual.
@@ -228,7 +230,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/imdewan/zepper-browser/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/imdewan/zepper-browser/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/imdewan/zepper-browser/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/imdewan/zepper-browser/compare/v0.1.8...v0.1.9
