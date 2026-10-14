@@ -31,7 +31,8 @@ function nowPlaying(snapshot: Snapshot): Tab | undefined {
  */
 export function MediaCard({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
   const tab = nowPlaying(snapshot)
-  const playing = snapshot.tabs.filter((t) => t.audible && !t.muted)
+  // Tabs playing media (a notification's ping in another tab isn't something to pause).
+  const playing = snapshot.tabs.filter((t) => t.audible && !t.muted && t.media)
   const newest = [...playing].sort(byRecent)[0]
 
   return (

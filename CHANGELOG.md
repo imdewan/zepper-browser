@@ -6,6 +6,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
+- A notification's sound in another tab (Gmail, Slack, Discord) could show up as music: "2 playing · Pause others" over the now-playing card while something played, or a now-playing card of its own (since 0.1.12, the sound indicator holding on for 2 seconds made a ping look long). Only media counts now, by how long a tab has really made sound.
 - Clicking Zepper in the Dock while a call's floating window (Google Meet, Teams) was open didn't bring back the browser window if it was minimised. It does now, as in Chrome: the window you were using comes back.
 
 ## [0.1.12] - 2026-10-13

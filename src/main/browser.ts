@@ -2132,7 +2132,7 @@ export class Browser {
   }
 
   private pauseOthers(keepTabId: string): void {
-    for (const tab of this.tabs) if (tab.audible && !tab.muted && tab.id !== keepTabId) this.pauseTab(tab.id)
+    for (const tab of this.tabs) if (tab.audible && tab.media && !tab.muted && tab.id !== keepTabId) this.pauseTab(tab.id)
   }
 
   /**
@@ -2142,7 +2142,7 @@ export class Browser {
   private offerToPauseOthers(tabId: string): void {
     const behavior = this.settings.otherMedia
     if (this.tab(tabId)?.muted) return
-    const others = this.tabs.filter((t) => t.audible && t.id !== tabId && !t.muted)
+    const others = this.tabs.filter((t) => t.audible && t.media && t.id !== tabId && !t.muted)
     if (behavior === 'nothing' || others.length === 0) return
     const names = others
       .map((t) => t.media?.title || t.title)
@@ -4288,10 +4288,28 @@ export class Browser {
     // turns it off right away.
     let hold: NodeJS.Timeout | null = null
     let pausedAt = 0
+    // How long the tab has really made sound since it started (its quiet moments not counted): the
+    // held indicator says nothing about that, and a ping is over in a moment where music goes on.
+    let soundSince = 0
+    let soundBefore = 0
+    let mediaCheck: NodeJS.Timeout | null = null
+    const heard = (): number => soundBefore + (soundSince ? Date.now() - soundSince : 0)
     const quiet = (): void => {
       if (hold) clearTimeout(hold)
       hold = null
+      soundBefore = 0
       if (this.tab(tabId)?.audible) update({ audible: false, audibleAt: Date.now() })
+    }
+    // Only media gets the now-playing card and the offer to pause the rest: not a sound that's over in
+    // a moment (a notification ping), nor one with no player behind it (a ringtone, call audio).
+    const checkMedia = (): void => {
+      mediaCheck = null
+      const tab = this.tab(tabId)
+      // A call (camera, microphone or screen in use) isn't media either.
+      if (wc.isDestroyed() || !tab?.audible || tab.capture || tab.media) return
+      // Not enough sound yet (a pause): looked at again when it comes back.
+      if (heard() < MEDIA_SETTLE_MS) return
+      void this.refreshMedia(tabId, wc, true).then((media) => media && this.offerToPauseOthers(tabId))
     }
     on('media-paused', () => {
       pausedAt = Date.now()
@@ -4299,24 +4317,23 @@ export class Browser {
     })
     on('audio-state-changed', (event) => {
       if (!event.audible) {
+        if (soundSince) soundBefore += Date.now() - soundSince
+        soundSince = 0
         if (!this.tab(tabId)?.audible) return
         if (Date.now() - pausedAt < PAUSED_SOUND_MS) return quiet()
         hold ??= setTimeout(quiet, AUDIBLE_HOLD_MS)
         return
       }
+      soundSince = Date.now()
       const held = hold !== null
       if (hold) clearTimeout(hold)
       hold = null
       // Sound again within the hold: the same playing, which never stopped.
-      if (held && this.tab(tabId)?.audible) return
-      update({ audible: true, audibleAt: Date.now() })
-      // Only media gets the now-playing card and the offer to pause the rest: not a sound that's over in
-      // a moment (a notification ping), nor one with no player behind it (a ringtone, call audio).
-      setTimeout(() => {
-        // A call (camera, microphone or screen in use) isn't media either.
-        if (wc.isDestroyed() || !this.tab(tabId)?.audible || this.tab(tabId)?.capture) return
-        void this.refreshMedia(tabId, wc, true).then((media) => media && this.offerToPauseOthers(tabId))
-      }, MEDIA_SETTLE_MS)
+      if (!held || !this.tab(tabId)?.audible) {
+        soundBefore = 0
+        update({ audible: true, audibleAt: Date.now() })
+      }
+      mediaCheck ??= setTimeout(checkMedia, Math.max(0, MEDIA_SETTLE_MS - heard()))
     })
     on('enter-html-full-screen', () => {
       this.htmlFullscreen = true
