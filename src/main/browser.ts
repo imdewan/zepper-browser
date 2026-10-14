@@ -999,7 +999,10 @@ export class Browser {
       })
     })
     if (this.savedWindow?.maximized) this.win.maximize()
-    this.win.on('focus', () => this.broadcast())
+    this.win.on('focus', () => {
+      this.hub.noteFocused(this)
+      this.broadcast()
+    })
     // macOS puts the traffic lights back at their default spot after full screen.
     this.win.on('enter-full-screen', () => {
       this.showTrafficLights(true)

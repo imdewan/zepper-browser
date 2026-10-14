@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- Clicking Zepper in the Dock while a call's floating window (Google Meet, Teams) was open didn't bring back the browser window, if it was minimised or on another desktop. It does now, as in Chrome: the window you were using comes back.
+
 ## [0.1.12] - 2026-10-13
 
 ### Fixed

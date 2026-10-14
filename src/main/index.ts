@@ -110,6 +110,9 @@ if (!app.requestSingleInstanceLock()) {
     void bangs.load()
   })
 
+  // Clicking Zepper in the Dock: the window you were using comes back (see Hub.showLastWindow).
+  app.on('activate', () => hub?.showLastWindow())
+
   app.on('second-instance', (_event, argv, workingDirectory) => {
     if (process.platform !== 'darwin') for (const url of linksIn(argv, workingDirectory)) openFromOutside(url)
     const win = hub?.focusedNormal().window()

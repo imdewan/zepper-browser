@@ -83,6 +83,8 @@ export class Hub {
   quitWithoutAsking = false
   /** Zepper is quitting: windows closing now come back next time (rather than being forgotten). */
   quitting = false
+  /** The browser window you used last (clicking Zepper in the Dock brings it back). */
+  private lastFocused: Browser | null = null
   private secureDns: string | null = null
   /** Zepper's own updates. */
   readonly updater = new Updater(
@@ -371,6 +373,24 @@ export class Hub {
     const win = BrowserWindow.getFocusedWindow()
     for (const browser of this.browsers) if (browser.window() === win) return browser
     return this.main ?? [...this.browsers][0]
+  }
+
+  noteFocused(browser: Browser): void {
+    this.lastFocused = browser
+  }
+
+  /**
+   * Clicking Zepper in the Dock brings back the window you were using, restored if it was minimised and
+   * on its own desktop (or in full screen), as in Chrome. macOS does that by itself only when Zepper has
+   * no window showing, so a call window or picture-in-picture floating over everything kept it away.
+   */
+  showLastWindow(): void {
+    const last = this.lastFocused && this.browsers.has(this.lastFocused) ? this.lastFocused : null
+    const browser = last ?? this.main ?? [...this.browsers][0]
+    const win = browser?.window()
+    // (Launching fires this too, before the first window is ready to show: it shows itself then.)
+    if (!browser || !win || win.isDestroyed() || (!win.isVisible() && !win.isMinimized())) return
+    browser.focusWindow()
   }
 
   /** The focused window that isn't private (extensions and "open in new tab" from other apps). */
