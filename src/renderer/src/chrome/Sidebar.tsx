@@ -7,6 +7,7 @@ import {
   IconBack,
   IconCheck,
   IconCopy,
+  IconDots,
   IconDownload,
   IconForward,
   IconGlobe,
@@ -19,8 +20,6 @@ import {
   IconSearch,
   IconSettings,
   IconSidebar,
-  IconSparkle,
-  IconTranslate,
   IconUpdate
 } from '../icons'
 import { useSnapshot, useUiEvents } from '../useSnapshot'
@@ -60,7 +59,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
         sidebarButton={snapshot.fullScreenWindow || (isLinux && snapshot.systemTitleBar)}
         compact={snapshot.compact}
       />
-      <UrlPill tab={activeTab} ai={snapshot.intelligence.ai} />
+      <UrlPill tab={activeTab} />
       {snapshot.settings.extensionsRow && snapshot.kind !== 'private' && <ExtensionsRow />}
       <div className="sidebar-body">
         <SpacesViewport
@@ -197,16 +196,7 @@ function TopRow({
   )
 }
 
-/** "Japanese" for "ja". */
-function languageName(code: string | null): string {
-  try {
-    return (code && new Intl.DisplayNames([navigator.language], { type: 'language' }).of(code)) || 'another language'
-  } catch {
-    return 'another language'
-  }
-}
-
-function UrlPill({ tab, ai }: { tab: Tab | null; ai: boolean }): React.JSX.Element {
+function UrlPill({ tab }: { tab: Tab | null }): React.JSX.Element {
   const secure = tab?.url.startsWith('https://')
   // Plain HTTP: an open padlock (with "Not secure" in its tooltip and the site panel), not a word that crowds the address.
   const insecure = tab?.url.startsWith('http://')
@@ -256,32 +246,18 @@ function UrlPill({ tab, ai }: { tab: Tab | null; ai: boolean }): React.JSX.Eleme
           <span ref={hostRef} className={cx('url-pill-host', overflowing && 'overflowing')}>
             {hostOf(tab.url)}
           </span>
-          {(tab.language || tab.translation) && (
-            <button
-              className={cx('url-pill-translate', tab.translation && 'on', tab.translation === 'working' && 'working')}
-              title={tab.translation ? 'Show the original page' : `Translate this page (${languageName(tab.language)})`}
-              onClick={(e) => {
-                e.stopPropagation()
-                zepper.send({ type: 'page.translate', tabId: tab.id })
-              }}
-            >
-              <IconTranslate size={13} />
-            </button>
-          )}
-          {ai && /^https?:/.test(tab.url) && (
-            <button
-              className="url-pill-copy url-pill-ask"
-              title={`Summarise or ask about this page (${shortcut('⇧⌘A')})`}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (pill.current) zepper.send({ type: 'ui.openAssistant', anchor: rectOf(pill.current) })
-              }}
-            >
-              <IconSparkle size={13} />
-            </button>
-          )}
           <button className={cx('url-pill-copy', copied && 'copied')} title={`Copy URL (${shortcut('⇧⌘C')})`} onClick={copy}>
             {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
+          </button>
+          <button
+            className="url-pill-copy url-pill-more"
+            title="Reader Mode, capture, translate and more"
+            onClick={(e) => {
+              e.stopPropagation()
+              zepper.send({ type: 'page.menu', anchor: rectOf(e.currentTarget) })
+            }}
+          >
+            <IconDots size={13} />
           </button>
         </>
       ) : (

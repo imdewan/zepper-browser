@@ -160,6 +160,7 @@ export class Hub {
       if (message && typeof message === 'object') this.owner(event.sender)?.onPasswordsMessage(event.sender, event.senderFrame, message)
     })
     ipcMain.on('zepper:drm-needed', (event, host: string) => this.owner(event.sender)?.onWidevineNeeded(event.sender, String(host)))
+    ipcMain.on('zepper:reader-prefs', (event, json: string) => this.owner(event.sender)?.onReaderPrefs(event.sender, String(json)))
     // Page dialogs (alert/confirm/prompt); the page is blocked until event.returnValue is set.
     ipcMain.on('zepper:dialog', (event, kind: string, message: string, value: string) => {
       const browser = this.owner(event.sender)

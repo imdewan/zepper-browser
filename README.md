@@ -111,6 +111,7 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 
 - **Summarise or ask the page:** a summary as soon as you open the panel (⇧⌘A), then answers to your questions about the page.
 - **Translate pages** in place, keeping links and formatting.
+- **Reader Mode** (⌥⌘R): just the article, in a clean page with your text size and colours.
 - **Search history by meaning:** describe what you remember ("that article about async Rust") and find it.
 - **Tidy Tabs** sorts a messy space into named folders.
 - **Tabs you haven't opened lately** get a gentle nudge to close or file them.
@@ -245,10 +246,10 @@ Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIB
 
 Zepper's sidebar-first design is inspired by [Zen Browser](https://zen-browser.app/). Go give it a try too.
 
-Zepper stands on the shoulders of [Electron](https://www.electronjs.org/) and [Chromium](https://www.chromium.org/), [castLabs' Electron for Content Security](https://github.com/castlabs/electron-releases), [Ghostery's adblocker](https://github.com/ghostery/adblocker) with [uBlock Origin](https://github.com/uBlockOrigin/uAssets) and [EasyList](https://easylist.to/) filter lists, [electron-chrome-extensions](https://github.com/samuelmaddock/electron-browser-shell), [tldts](https://github.com/remusao/tldts), [React](https://react.dev/), [Motion](https://motion.dev/) and [DuckDuckGo's bangs](https://duckduckgo.com/bangs).
+Zepper stands on the shoulders of [Electron](https://www.electronjs.org/) and [Chromium](https://www.chromium.org/), [castLabs' Electron for Content Security](https://github.com/castlabs/electron-releases), [Ghostery's adblocker](https://github.com/ghostery/adblocker) with [uBlock Origin](https://github.com/uBlockOrigin/uAssets) and [EasyList](https://easylist.to/) filter lists, [electron-chrome-extensions](https://github.com/samuelmaddock/electron-browser-shell), [Mozilla's Readability](https://github.com/mozilla/readability) (Reader Mode), [tldts](https://github.com/remusao/tldts), [React](https://react.dev/), [Motion](https://motion.dev/) and [DuckDuckGo's bangs](https://duckduckgo.com/bangs).
 
 ## License
 
 Zepper is free software, licensed under the [GNU General Public License v3.0 only](LICENSE). You can use, study, change and share it; if you distribute a modified version, it has to stay under the same license, with its source available.
 
-Copyright © 2026 Dewan Shakil. Third-party components keep their own licenses: Electron and Chromium (MIT and BSD-style), electron-chrome-extensions (GPL-3.0), Ghostery's adblocker (MPL-2.0), and the filter lists, which are downloaded at runtime under their own terms. Google Widevine is downloaded from Google only if you turn it on, under Google's terms.
+Copyright © 2026 Dewan Shakil. Third-party components keep their own licenses: Electron and Chromium (MIT and BSD-style), electron-chrome-extensions (GPL-3.0), Mozilla's Readability (Apache-2.0), Ghostery's adblocker (MPL-2.0), and the filter lists, which are downloaded at runtime under their own terms. Google Widevine is downloaded from Google only if you turn it on, under Google's terms.

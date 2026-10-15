@@ -4,9 +4,15 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- **Reader Mode** (⌥⌘R): a page's article on its own, found the way Firefox's Reader View finds it, in a clean page with text size and light, sepia or dark colours (kept for the next article). Done, or Back, returns to the page.
+- **⋯ in the address pill**, as in Arc: everything you can do with the page you're on in one menu: copy the link (or as Markdown) and share it, Reader Mode, translate, summarise or ask, capture and Portrait Mode, find and zoom, Developer Mode, DevTools and the page's source, print, save and export as PDF, and site settings.
+
 ### Changed
 
-- The site panel (the lock icon) no longer has a Developer Mode switch: it's there with ⌥⇧⌘D and in the tab's menu.
+- The address pill keeps just the copy button and ⋯ (translate and summarise moved into ⋯).
+- The site panel (the lock icon) no longer has a Developer Mode switch: it's in ⋯, the tab's menu, and ⌥⇧⌘D.
 
 ### Fixed
 

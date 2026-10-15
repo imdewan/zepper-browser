@@ -635,7 +635,14 @@ function hideSwitchToChrome(): void {
   })
 }
 
+/** Reader Mode's page tells Zepper its text size and colours, for the next one (main checks it's Zepper's). */
+const READER_PREFS_EVENT = 'zepper-reader-prefs'
+const READER_PREFS_CHANNEL = 'zepper:reader-prefs'
+
 function applyCompat(): void {
+  if (location.protocol === 'data:' && window === window.top) {
+    document.addEventListener(READER_PREFS_EVENT, (event) => ipcRenderer.send(READER_PREFS_CHANNEL, String((event as CustomEvent).detail)))
+  }
   // Web pages, and the blank and srcdoc frames they make (which share their origin, and are where
   // fingerprinters look for an unpatched browser).
   if (!/^https?:/.test(location.href) && !(window !== window.top && /^about:(blank|srcdoc)$/.test(location.href))) return

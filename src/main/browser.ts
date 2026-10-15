@@ -48,6 +48,7 @@ import {
   type Protection,
   type Settings
 } from '@shared/settings'
+import { linuxAccelerator } from '@shared/shortcuts'
 import { DEFAULT_THEME, themeAccent } from '@shared/theme'
 import {
   IPC,
@@ -89,6 +90,7 @@ import { parse as parseDomain } from 'tldts-experimental'
 import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
 import { DEFAULT_PROFILE, type ProfileData } from './profiles'
 import { developerHost, isDeveloping, toggleDeveloperHost } from './developer'
+import { fillReader, readArticle, readerPage, type Article } from './reader'
 import { isFolder, type ImportedItem, type ImportedSession } from './session-import'
 import { fetchPageMeta } from './page-meta'
 import { searchSuggestions, suggest } from './suggest'
@@ -213,6 +215,7 @@ function makeTab(fields: Partial<Tab> & Pick<Tab, 'kind' | 'url'>): Tab {
     audibleAt: 0,
     language: null,
     translation: null,
+    reader: false,
     capture: null,
     emoji: null,
     ...fields
@@ -731,6 +734,8 @@ export class Browser {
   private readonly popupTimes = new Map<number, number[]>()
   /** Error pages shown for failed loads, and the address each stands in for. */
   private readonly errorPages = new Map<string, string>()
+  /** Reader Mode pages Zepper made, by address: the page they stand in for, and its article. */
+  private readonly readerPages = new Map<string, { url: string; article: Article }>()
   private tidying = false
   private tidySeq = 0
   /** The last Tidy, so Undo can put things back. */
@@ -1758,6 +1763,10 @@ export class Browser {
         return this.captureCommand(command)
       case 'page.translate':
         return void this.translatePage(command.tabId)
+      case 'page.menu':
+        return this.pageMenu(command.anchor)
+      case 'page.reader':
+        return void this.toggleReader(command.tabId ?? this.activeTabId)
       case 'app.openTranslationSettings':
         return void shell.openExternal('x-apple.systempreferences:com.apple.Localization-Settings.extension')
       case 'app.openMediaPrivacySettings': {
@@ -4266,7 +4275,10 @@ export class Browser {
         }
         return update({ url: failed, blockedCount: 0, media: null, ...navState() })
       }
-      update({ url, blockedCount: 0, media: null, ...navState() })
+      const reading = this.readerPages.get(url)
+      // Reader Mode stands in for the page it shows: the tab keeps that page's address.
+      if (reading) return update({ url: reading.url, reader: true, blockedCount: 0, media: null, ...navState() })
+      update({ url, reader: false, blockedCount: 0, media: null, ...navState() })
       this.applySiteZoom(wc, url)
       if (this.kind !== 'private') this.dataFor(wc).history.record(url, wc.getTitle())
     })
@@ -4388,6 +4400,8 @@ export class Browser {
     // ⌘-scroll zooms like the menu does; pinch-to-zoom magnifies (Electron turns it off by default).
     on('zoom-changed', (_event, direction) => this.zoomPage(wc, direction === 'in' ? 1 : -1))
     on('did-finish-load', () => {
+      const reading = this.readerPages.get(wc.getURL())
+      if (reading) void fillReader(wc, reading.article)
       void wc.setVisualZoomLevelLimits(1, 3).catch(() => {})
       this.notePage(wc)
       void this.detectLanguage(tabId, wc)
@@ -5813,6 +5827,121 @@ export class Browser {
     } else {
       menu.popup({ window: this.win })
     }
+  }
+
+  /**
+   * Reader Mode: the page's article (found as Firefox's Reader View finds it) on a page of its own, in
+   * the tab, like going to a new page: Back, or Done, returns to it. The tab keeps the page's address.
+   */
+  async toggleReader(tabId: string | null): Promise<void> {
+    const tab = this.tab(tabId)
+    const wc = tab && this.views.get(tab.id)?.webContents
+    if (!tab || !wc || wc.isDestroyed()) return
+    const reading = this.readerPages.get(wc.getURL())
+    if (reading) {
+      const history = wc.navigationHistory
+      const before = history.getEntryAtIndex(history.getActiveIndex() - 1)
+      if (before?.url === reading.url) history.goBack()
+      else void wc.loadURL(reading.url).catch(() => {})
+      return
+    }
+    if (!/^https?:/.test(tab.url)) return
+    const article = await readArticle(wc)
+    if (!article) return this.toast({ id: 'reader', message: 'Reader Mode isn’t available for this page', timeout: 3000 })
+    const page = readerPage(randomUUID(), article, { size: this.settings.readerTextSize, theme: this.settings.readerTheme }, safeHost(tab.url).replace(/^www\./, ''))
+    this.readerPages.set(page, { url: tab.url, article })
+    if (this.readerPages.size > 30) this.readerPages.delete(this.readerPages.keys().next().value!)
+    void wc.loadURL(page).catch(() => {})
+  }
+
+  /** A Reader Mode page's text size or colours changed: the next one starts the same. */
+  onReaderPrefs(sender: WebContents, json: string): void {
+    if (!this.readerPages.has(sender.getURL())) return
+    try {
+      const { size, theme } = JSON.parse(json) as { size?: unknown; theme?: unknown }
+      const patch: Partial<Settings> = {}
+      if (typeof size === 'number' && size >= 14 && size <= 30) patch.readerTextSize = Math.round(size)
+      if (theme === 'light' || theme === 'sepia' || theme === 'dark') patch.readerTheme = theme
+      if (Object.keys(patch).length > 0) this.settingsStore.update(patch)
+    } catch {
+      // Not from Zepper's page.
+    }
+  }
+
+  /** The ⋯ menu in the address bar: everything you can do with the page you're on, as in Arc. */
+  private pageMenu(anchor: Rect): void {
+    const tab = this.tab(this.activeTabId)
+    const wc = tab && this.views.get(tab.id)?.webContents
+    if (!tab) return
+    const live = !!wc && !wc.isDestroyed()
+    const web = /^https?:/.test(tab.url)
+    const reading = live && this.readerPages.has(wc.getURL())
+    const linux = process.platform === 'linux'
+    // The shortcut each item has in Zepper's menus (shown here, not registered again).
+    const key = (mac: string, accelerator: string): Pick<MenuItemConstructorOptions, 'accelerator' | 'registerAccelerator'> => ({
+      accelerator: (linux && linuxAccelerator(mac)) || accelerator,
+      registerAccelerator: false
+    })
+    const items: MenuItemConstructorOptions[] = [
+      { label: 'Copy Link', ...key('⇧⌘C', 'CmdOrCtrl+Shift+C'), click: () => this.handle({ type: 'ui.copyUrl' }) },
+      { label: 'Copy Link as Markdown', ...key('⌥⇧⌘C', 'CmdOrCtrl+Alt+Shift+C'), click: () => this.handle({ type: 'ui.copyUrl', markdown: true }) }
+    ]
+    if (process.platform === 'darwin' && web) items.push({ role: 'shareMenu', sharingItem: { urls: [tab.url] } })
+    items.push(
+      { type: 'separator' },
+      {
+        label: reading ? 'Exit Reader Mode' : 'Reader Mode',
+        ...key('⌥⌘R', 'CmdOrCtrl+Alt+R'),
+        enabled: live && (web || reading),
+        click: () => void this.toggleReader(tab.id)
+      }
+    )
+    if (tab.language || tab.translation) {
+      const language = tab.language ? new Intl.DisplayNames(['en'], { type: 'language' }).of(tab.language) : null
+      items.push({
+        label: tab.translation ? 'Show Original' : `Translate from ${language ?? 'This Language'}`,
+        click: () => void this.translatePage(tab.id)
+      })
+    }
+    if (this.ai.ai && web) items.push({ label: 'Summarise or Ask This Page', ...key('⇧⌘A', 'CmdOrCtrl+Shift+A'), click: () => this.openAssistant(anchor) })
+    items.push(
+      { type: 'separator' },
+      { label: 'Capture…', ...key('⇧⌘2', 'CmdOrCtrl+Shift+2'), enabled: live, click: () => void this.startCapture() },
+      { label: 'Portrait Mode…', enabled: live, click: () => void this.openPortrait(tab.id, anchor) },
+      { type: 'separator' },
+      { label: 'Find…', ...key('⌘F', 'CmdOrCtrl+F'), enabled: live, click: () => this.openFind() },
+      {
+        label: live ? `Zoom (${Math.round(wc.getZoomFactor() * 100)}%)` : 'Zoom',
+        enabled: live,
+        submenu: [
+          { label: 'Zoom In', ...key('⌘+', 'CmdOrCtrl+Plus'), click: () => this.zoomActive(1) },
+          { label: 'Zoom Out', ...key('⌘-', 'CmdOrCtrl+-'), click: () => this.zoomActive(-1) },
+          { label: 'Actual Size', ...key('⌘0', 'CmdOrCtrl+0'), click: () => this.zoomActive(0) }
+        ]
+      },
+      { type: 'separator' }
+    )
+    const host = developerHost(tab.url)
+    if (host) {
+      items.push({
+        label: `Developer Mode for ${host}`,
+        type: 'checkbox',
+        checked: this.isDeveloping(tab),
+        ...key('⌥⇧⌘D', 'CmdOrCtrl+Alt+Shift+D'),
+        click: () => this.toggleDeveloper(tab.id)
+      })
+    }
+    items.push(
+      { label: 'Developer Tools', ...key('⌥⌘I', 'CmdOrCtrl+Alt+I'), enabled: live, click: () => this.toggleDevTools() },
+      { label: 'View Page Source', ...key('⌥⌘U', 'CmdOrCtrl+Alt+U'), enabled: live && web, click: () => this.viewSource() },
+      { type: 'separator' },
+      { label: 'Print…', ...key('⌘P', 'CmdOrCtrl+P'), enabled: live, click: () => this.printActive() },
+      { label: 'Save Page As…', ...key('⇧⌘S', 'CmdOrCtrl+Shift+S'), enabled: live, click: () => void this.savePageAs() },
+      { label: 'Export as PDF…', enabled: live, click: () => void this.exportPdf() },
+      { type: 'separator' },
+      { label: 'Site Settings…', enabled: web, click: () => void this.openSiteInfo(anchor) }
+    )
+    this.popup(items, anchor)
   }
 
   private tabContextMenu(id: string): void {

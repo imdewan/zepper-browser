@@ -180,6 +180,7 @@ export function buildMenu(hub: Hub): Menu {
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: run((browser) => browser.zoomActive(-1)) },
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: run((browser) => browser.zoomActive(0)) },
         { type: 'separator' },
+        { label: 'Reader Mode', accelerator: 'CmdOrCtrl+Alt+R', click: run((browser) => browser.handle({ type: 'page.reader' })) },
         { label: 'View Page Source', accelerator: 'CmdOrCtrl+Alt+U', click: run((browser) => browser.viewSource()) },
         { label: 'Summarise or Ask This Page', accelerator: 'CmdOrCtrl+Shift+A', click: run((browser) => browser.openAssistant()) },
         {

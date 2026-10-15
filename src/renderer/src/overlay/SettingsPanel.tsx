@@ -131,6 +131,7 @@ const SHORTCUTS: [string, string][] = [
   ['Print / save page as', '⌘P / ⇧⌘S'],
   ['Open file', '⌘O'],
   ['View page source', '⌥⌘U'],
+  ['Reader Mode', '⌥⌘R'],
   ['Find in page', '⌘F'],
   ['History / downloads', '⌘Y / ⌥⌘L'],
   ['Back / forward', '⌘[ / ⌘]'],

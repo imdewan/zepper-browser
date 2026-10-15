@@ -31,6 +31,9 @@ export type SecureDns = 'off' | 'automatic' | 'cloudflare' | 'quad9' | 'google'
 /** Protections that can be turned off for one site from the lock icon. */
 export type MemorySaverMode = 'moderate' | 'balanced' | 'maximum'
 
+/** Reader Mode's page colours. */
+export type ReaderTheme = 'light' | 'sepia' | 'dark'
+
 export type Protection = 'ads' | 'cookieBanners' | 'fingerprinting' | 'crossSiteCookies' | 'httpsUpgrade' | 'cleanLinks'
 
 export const PROTECTIONS: { key: Protection; label: string; setting: keyof Settings }[] = [
@@ -112,6 +115,9 @@ export interface Settings {
   bangs: boolean
   /** An empty command bar lists recently visited sites. */
   paletteRecents: boolean
+  /** Reader Mode's text size (px) and colours, as you last left them. */
+  readerTextSize: number
+  readerTheme: ReaderTheme
   // Windows and downloads
   /** ⌘N opens on the current space or an empty window. */
   newWindowSpace: 'current' | 'empty'
@@ -213,6 +219,8 @@ export const DEFAULT_SETTINGS: Settings = {
   searchSuggestions: true,
   bangs: true,
   paletteRecents: true,
+  readerTextSize: 20,
+  readerTheme: 'light',
   newWindowSpace: 'current',
   secureDns: 'automatic',
   onboarded: false,

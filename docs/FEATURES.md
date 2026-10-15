@@ -12,13 +12,14 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 - Vertical sidebar on the left or right, resizable (190–500px), with a window gradient that shows through, plus transparency and corner radius controls
 - Top row: traffic lights, extensions, back, forward, reload. Buttons shrink to fit narrow sidebars instead of disappearing. In full screen a sidebar button takes the traffic lights' place
-- Address pill with the site's lock (certificate, permissions, cookies, per-site ad blocking) and a copy button on hover
+- Address pill with the site's lock (certificate, permissions, cookies, per-site ad blocking), and on hover a copy button and **⋯**, a menu of everything you can do with the page, as in Arc: copy the link (or as Markdown) and share it, Reader Mode, translate, summarise or ask, capture and Portrait Mode, find and zoom, Developer Mode, DevTools and the page's source, print, save and export as PDF, and site settings
 - Bottom bar: settings, space switcher (with a "+" for new spaces), downloads with a progress ring
 - Compact mode (⌘S): the sidebar hides and floats back in when you reach the window edge
 - New windows (⌘N) open with all your spaces (their sign-ins and Essentials, not their pinned or open tabs), starting on the one you're in, at your window's size; or empty, if you prefer (Settings → General)
 - New windows (⌘N) open on the space you're in, with no tabs, at your window's size
 - Default browser: links and files opened from other apps open in Zepper (Settings → General)
 - Print (⌘P), Save Page As (⇧⌘S), Export as PDF, Open File (⌘O), View Source (⌥⌘U), and Chromium's PDF viewer
+- **Reader Mode** (⌥⌘R, or ⋯ in the address pill): the article on its own, found as Firefox's Reader View finds it, in a clean page with text size and light, sepia or dark (kept for the next one). Done, or Back, returns to the page
 - Zoom in Chrome's steps, remembered per site, with a notice to reset; pinch to zoom
 - Point at a link to see its address in the page's bottom corner, as in Chrome: the site stands out, the whole address shows if you keep pointing, and it moves to the other corner when the pointer comes near
 - A crashed page keeps its tab and offers Reload; a page that stops responding can be waited for or closed
@@ -105,8 +106,8 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 Everything here runs on your Mac with Apple's on-device models (macOS 26 and later); nothing is sent anywhere.
 
-- **Summarise or ask the page** (✦ in the address pill, ⇧⌘A, or the page menu): a summary streams in as soon as the panel opens; follow-up questions are answered from the parts of the page most related to them.
-- **Translate pages:** when a page isn't in your language, a translate button appears in the address pill. Paragraphs on screen are translated first, links and formatting are kept, text added later is translated too, and the original comes back with one click. The faster model is used when its languages are downloaded (System Settings → General → Language & Region → Translation Languages).
+- **Summarise or ask the page** (⇧⌘A, or ⋯ in the address pill): a summary streams in as soon as the panel opens; follow-up questions are answered from the parts of the page most related to them.
+- **Translate pages:** when a page isn't in your language, ⋯ in the address pill offers to translate it. Paragraphs on screen are translated first, links and formatting are kept, text added later is translated too, and the original comes back with one click. The faster model is used when its languages are downloaded (System Settings → General → Language & Region → Translation Languages).
 - **Search history by meaning:** on the History page, a query of a few words shows Best matches by meaning, re-ranked by Apple Intelligence. The index lives with your history and goes when history is cleared.
 - **Tidy Tabs** (see Tabs).
 

@@ -35,6 +35,7 @@ function createMock(): ZepperApi {
     audibleAt: 0,
     language: null,
     translation: null,
+    reader: false,
     capture: null,
     emoji: null,
     ...fields

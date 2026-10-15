@@ -44,6 +44,8 @@ export interface Tab {
   language: string | null
   /** The page is being translated, or shows a translation. */
   translation: 'working' | 'on' | null
+  /** Showing the page in Reader Mode. */
+  reader: boolean
   /** What the page is using right now: camera, microphone, screen (null: none). */
   capture: CaptureState | null
   /** An Essential's own icon (an emoji), shown instead of the site's. */
@@ -579,6 +581,10 @@ export type Command =
   | { type: 'autofill.passkeyPhone' }
   /** Translate the page into your language, or back to the original. */
   | { type: 'page.translate'; tabId: string }
+  /** The ⋯ menu in the address bar: what you can do with the page you're on. */
+  | { type: 'page.menu'; anchor: Rect }
+  /** Reader Mode on or off for a tab (the active one if none). */
+  | { type: 'page.reader'; tabId?: string }
   | { type: 'app.openTranslationSettings' }
   /** System Settings › Privacy & Security › Camera, Microphone, or Screen & System Audio Recording. */
   | { type: 'app.openMediaPrivacySettings'; kind: 'camera' | 'microphone' | 'screen' | 'location' }
