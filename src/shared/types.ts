@@ -320,9 +320,6 @@ export interface SiteInfo {
   /** Each protection: on in Settings, and on for this site. */
   protections: { key: Protection; label: string; global: boolean; site: boolean }[]
   permissions: { permission: string; label: string; state: PermissionState }[]
-  /** Developer Mode is on for this site, and the host it goes by (null: not a web page). */
-  developing: boolean
-  developerHost: string | null
 }
 
 /** A page's alert(), confirm() or prompt(), shown in Zepper's own dialog. */

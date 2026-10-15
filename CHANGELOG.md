@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Changed
+
+- The site panel (the lock icon) no longer has a Developer Mode switch: it's there with ⌥⇧⌘D and in the tab's menu.
+
 ### Fixed
 
 - A notification's sound in another tab (Gmail, Slack, Discord) could show up as music: "2 playing · Pause others" over the now-playing card while something played, or a now-playing card of its own (since 0.1.12, the sound indicator holding on for 2 seconds made a ping look long). Only media counts now, by how long a tab has really made sound.

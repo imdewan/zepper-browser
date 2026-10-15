@@ -5336,9 +5336,7 @@ export class Browser {
         global: this.settings[setting] === true,
         site: this.adblock.protects(tab.url, key)
       })),
-      permissions: /^https?:/.test(tab.url) ? this.permissionsFor(tab).list(origin) : [],
-      developing: this.isDeveloping(tab),
-      developerHost: developerHost(tab.url)
+      permissions: /^https?:/.test(tab.url) ? this.permissionsFor(tab).list(origin) : []
     }
   }
 
