@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-10-15
+
 ### Added
 
 - **Reader Mode** (⌥⌘R): a page's article on its own, found the way Firefox's Reader View finds it, in a clean page with text size and light, sepia or dark colours (kept for the next article). Done, or Back, returns to the page.
@@ -245,7 +247,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.12...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/imdewan/zepper-browser/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/imdewan/zepper-browser/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/imdewan/zepper-browser/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/imdewan/zepper-browser/compare/v0.1.9...v0.1.10
