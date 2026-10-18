@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- In the command bar, → or End on a suggested completion ("go" → "google.com") left the suggested part selected instead of putting the cursor at the end. It goes to the end now, as in Chrome.
+
 ## [0.1.13] - 2026-10-15
 
 ### Added

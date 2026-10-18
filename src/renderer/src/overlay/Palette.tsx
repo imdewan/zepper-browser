@@ -174,9 +174,13 @@ export function Palette({ mode, currentUrl, engineName, onClose, insetLeft = 0, 
       }
     }
     if (completion && (e.key === 'ArrowRight' || e.key === 'End')) {
-      // Take the completion as typed.
+      // Take the completion as typed, with the cursor after it, as in Chrome (the field already shows it,
+      // so nothing else would move the cursor); the next completion waits until you type again.
       e.preventDefault()
+      const field = e.currentTarget as HTMLInputElement
       setText(completion)
+      setNoCompletion(true)
+      field.setSelectionRange(completion.length, completion.length)
       return
     }
     if (down || up) {
