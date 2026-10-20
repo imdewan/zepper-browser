@@ -11,7 +11,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
   - on Apple silicon, one of the common chips as the graphics card;
   - noisy audio readouts. The audio noise missed renders read from their "complete" event, which is how most fingerprinting scripts read them.
 
-  The page, its frames and its workers all see the same values, so sign-in checks that compare them (X's) still pass. Do Not Track is no longer sent; Global Privacy Control still is. Chrome and Brave don't send DNT, so it only made Zepper stand out.
+  The page, its frames and its workers all see the same values, so sign-in checks that compare them (X's does) see one consistent browser. Do Not Track is no longer sent; Global Privacy Control still is. Chrome and Brave don't send DNT, so it only made Zepper stand out.
 
 ### Fixed
 
