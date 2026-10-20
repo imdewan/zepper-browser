@@ -4,6 +4,15 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Changed
+
+- **Stronger fingerprinting protection, as in Brave.** EFF's Cover Your Tracks now reports a randomized fingerprint (it said nearly unique). On top of the canvas and WebGL noise, each site now sees, for this session only:
+  - its own CPU core count, between 2 and your real one, which was the most identifying thing about Zepper;
+  - on Apple silicon, one of the common chips as the graphics card;
+  - noisy audio readouts. The audio noise missed renders read from their "complete" event, which is how most fingerprinting scripts read them.
+
+  The page, its frames and its workers all see the same values, so sign-in checks that compare them (X's) still pass. Do Not Track is no longer sent; Global Privacy Control still is. Chrome and Brave don't send DNT, so it only made Zepper stand out.
+
 ### Fixed
 
 - In the command bar, → or End on a suggested completion ("go" → "google.com") left the suggested part selected instead of putting the cursor at the end. It goes to the end now, as in Chrome.

@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import { CHIP_PATTERN, UNMASKED_RENDERER } from '@shared/fingerprint'
 import { webauthnShim } from './webauthn'
 
 /**
@@ -31,6 +32,7 @@ interface PageConfig {
   askForWidevine: boolean
   globalPrivacyControl: boolean
   fingerprintSeed: number | null
+  fingerprintChip: string | null
   brand: { name: string; major: string; full: string } | null
   passkeys: boolean
   blockedPermissions: string[]
@@ -158,7 +160,7 @@ function chromeIdentityShim(name: string, major: string, full: string): void {
  * are Proxies, so they still look native. The CPU core count is left alone: workers report the
  * real one, and X's sign-in refused a page and its workers that disagreed.
  */
-function fingerprintShim(seed: number): void {
+function fingerprintShim(seed: number, chip: string, chipPattern: string, unmaskedRenderer: number): void {
   let state = seed >>> 0 || 0x9e3779b9
   const random = (): number => {
     state ^= state << 13
@@ -227,8 +229,16 @@ function fingerprintShim(seed: number): void {
     )
   }
 
-  // WebGL: pixels read back carry the noise too.
+  // WebGL: pixels read back carry the noise too, and on Apple silicon the graphics card names one of the
+  // common chips (the site's own this session; its workers say the same, see main/fingerprint.ts).
+  const chipName = new RegExp(chipPattern)
   for (const proto of [WebGLRenderingContext.prototype, globalThis.WebGL2RenderingContext?.prototype]) {
+    if (chip) {
+      patch(proto, 'getParameter', (target, self, args) => {
+        const value = Reflect.apply(target, self, args)
+        return args[0] === unmaskedRenderer && typeof value === 'string' ? value.replace(chipName, chip) : value
+      })
+    }
     patch(proto, 'readPixels', (target, self, args) => {
       const result = Reflect.apply(target, self, args)
       const pixels = args[6]
@@ -238,6 +248,8 @@ function fingerprintShim(seed: number): void {
   }
 
   // Audio: offline renders (how audio fingerprints are taken) and analyser readouts.
+  // (The render can be taken from startRendering's promise, or from its "complete" event, as
+  // FingerprintJS and EFF's Cover Your Tracks do.)
   const offline = new WeakSet<AudioBuffer>()
   patch(globalThis.OfflineAudioContext?.prototype, 'startRendering', (target, self, args) =>
     (Reflect.apply(target, self, args) as Promise<AudioBuffer>).then((buffer) => {
@@ -245,21 +257,53 @@ function fingerprintShim(seed: number): void {
       return buffer
     })
   )
+  const rendered = globalThis.OfflineAudioCompletionEvent
+    ? Object.getOwnPropertyDescriptor(OfflineAudioCompletionEvent.prototype, 'renderedBuffer')
+    : undefined
+  if (rendered?.get) {
+    Object.defineProperty(OfflineAudioCompletionEvent.prototype, 'renderedBuffer', {
+      ...rendered,
+      get: disguise(rendered.get, {
+        apply: (target, self, args) => {
+          const buffer = Reflect.apply(target, self, args) as AudioBuffer
+          offline.add(buffer)
+          return buffer
+        }
+      })
+    })
+  }
   const touched = new WeakMap<AudioBuffer, Set<number>>()
+  const farbleChannel = (buffer: AudioBuffer, channel: number, data: Float32Array): void => {
+    if (!offline.has(buffer) || touched.get(buffer)?.has(channel)) return
+    touched.set(buffer, (touched.get(buffer) ?? new Set()).add(channel))
+    for (let i = 0; i < data.length; i++) data[i] += (bits[i & 255] ? 1 : -1) * 1e-7
+  }
+  const getChannelData = AudioBuffer.prototype.getChannelData
   patch(AudioBuffer.prototype, 'getChannelData', (target, self, args) => {
     const data = Reflect.apply(target, self, args) as Float32Array
-    const buffer = self as AudioBuffer
-    const channel = Number(args[0]) || 0
-    if (offline.has(buffer) && !touched.get(buffer)?.has(channel)) {
-      touched.set(buffer, (touched.get(buffer) ?? new Set()).add(channel))
-      for (let i = 0; i < data.length; i++) data[i] += (bits[i & 255] ? 1 : -1) * 1e-7
-    }
+    farbleChannel(self as AudioBuffer, Number(args[0]) || 0, data)
     return data
+  })
+  patch(AudioBuffer.prototype, 'copyFromChannel', (target, self, args) => {
+    // The noise goes in the buffer first, so a copy carries it too.
+    const channel = Number(args[1]) || 0
+    try {
+      farbleChannel(self as AudioBuffer, channel, getChannelData.call(self as AudioBuffer, channel))
+    } catch {
+      // A channel it doesn't have: the real call throws as it should.
+    }
+    return Reflect.apply(target, self, args)
   })
   patch(AnalyserNode.prototype, 'getFloatFrequencyData', (target, self, args) => {
     const result = Reflect.apply(target, self, args)
     const data = args[0]
     if (data instanceof Float32Array) for (let i = 0; i < data.length; i++) data[i] += (bits[i & 255] ? 1 : -1) * 1e-4
+    return result
+  })
+  patch(AnalyserNode.prototype, 'getFloatTimeDomainData', (target, self, args) => {
+    const result = Reflect.apply(target, self, args)
+    const data = args[0]
+    if (data instanceof Float32Array) for (let i = 0; i < data.length; i++) data[i] += (bits[i & 255] ? 1 : -1) * 1e-7
     return result
   })
 }
@@ -659,7 +703,12 @@ function applyCompat(): void {
     if (config.globalPrivacyControl) contextBridge.executeInMainWorld({ func: privacyControlShim })
     if (config.brand)
       contextBridge.executeInMainWorld({ func: chromeIdentityShim, args: [config.brand.name, config.brand.major, config.brand.full] })
-    if (config.fingerprintSeed !== null) contextBridge.executeInMainWorld({ func: fingerprintShim, args: [config.fingerprintSeed] })
+    if (config.fingerprintSeed !== null) {
+      contextBridge.executeInMainWorld({
+        func: fingerprintShim,
+        args: [config.fingerprintSeed, config.fingerprintChip ?? '', CHIP_PATTERN, UNMASKED_RENDERER]
+      })
+    }
     if (config.signInCompat && location.hostname === 'accounts.google.com')
       contextBridge.executeInMainWorld({ func: signInPageShim, args: [config.passkeys] })
     if (config.passkeys) {

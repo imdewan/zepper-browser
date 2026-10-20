@@ -1,6 +1,7 @@
 import { ipcMain, type WebContents } from 'electron'
 import type { Settings } from '@shared/settings'
 import type { SettingsStore } from './settings-store'
+import { disguiseFor } from './fingerprint'
 import { fingerprintSeed } from './shields'
 import { originOf } from './site'
 
@@ -32,6 +33,8 @@ export interface PageConfig {
   globalPrivacyControl: boolean
   /** Seed for fingerprinting noise on this site (null: protection off here). */
   fingerprintSeed: number | null
+  /** The Apple chip the graphics card says it is on this site (as its workers say; see fingerprint.ts). */
+  fingerprintChip: string | null
   /** The browser brand pages see in navigator.userAgentData, matching the headers (null: leave as is). */
   brand: { name: string; major: string; full: string } | null
   /** Answer WebAuthn (passkeys) with Zepper's password manager: top-level secure pages. */
@@ -115,6 +118,7 @@ export function servePageConfig(
     const ua = currentUa()
     const chromium = isChromiumUa(ua)
     const { googleSignInCompat, widevine, widevinePrompt, globalPrivacyControl, blockFingerprinting } = settings.get()
+    const seed = blockFingerprinting && siteUrl && protects(siteUrl) ? fingerprintSeed(siteUrl) : null
     const config: PageConfig = {
       signInCompat: chromium && googleSignInCompat,
       hideChromium: !chromium,
@@ -122,7 +126,8 @@ export function servePageConfig(
       blockWidevine: !widevine,
       askForWidevine: !widevine && widevinePrompt,
       globalPrivacyControl,
-      fingerprintSeed: blockFingerprinting && siteUrl && protects(siteUrl) ? fingerprintSeed(siteUrl) : null,
+      fingerprintSeed: seed,
+      fingerprintChip: seed === null ? null : disguiseFor(seed).chip,
       brand: chromium
         ? {
             name: / Edg\//.test(ua) ? 'Microsoft Edge' : 'Google Chrome',

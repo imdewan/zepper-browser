@@ -752,7 +752,7 @@ export function SettingsPanel({
                     onOpen={() => openPage('sitePermissions')}
                   />
                   {isMac && <SystemAccessRows access={systemAccess} />}
-                  <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control and Do Not Track.">
+                  <Row label="Ask sites not to sell or share my data" hint="Sends Global Privacy Control.">
                     <Toggle checked={settings.globalPrivacyControl} onChange={(globalPrivacyControl) => set({ globalPrivacyControl })} />
                   </Row>
                   <Row label="Clear history when Zepper quits" hint="Every space’s. Your tabs, spaces and sign-ins stay.">

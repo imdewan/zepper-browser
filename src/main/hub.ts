@@ -460,7 +460,9 @@ export class Hub {
     ses.registerPreloadScript({ type: 'frame', filePath: join(__dirname, '../preload/page.js') })
     ses.webRequest.onBeforeSendHeaders((details, callback) => {
       const headers: Record<string, string> = clientHintHeaders(details.requestHeaders, this.userAgent)
-      if (settings.get().globalPrivacyControl) Object.assign(headers, { 'Sec-GPC': '1', DNT: '1' })
+      // Global Privacy Control; not Do Not Track, which is retired, and which Chrome and Brave don't send
+      // (it only made Zepper stand out to fingerprinters).
+      if (settings.get().globalPrivacyControl) Object.assign(headers, { 'Sec-GPC': '1' })
       // Third parties don't get your cookies (their Set-Cookie is dropped in AdBlock), and nor do sites an
       // extension may only reach once you use it on them (see Extensions.sendsCookies).
       const extensions = this.services.extensions

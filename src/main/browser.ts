@@ -91,6 +91,8 @@ import { SitePermissions, originOf, promptLabel, settingKeys } from './site'
 import { DEFAULT_PROFILE, type ProfileData } from './profiles'
 import { developerHost, isDeveloping, toggleDeveloperHost } from './developer'
 import { fillReader, readArticle, readerPage, type Article } from './reader'
+import { disguiseFor, guardTab, type Disguise } from './fingerprint'
+import { fingerprintSeed } from './shields'
 import { isFolder, type ImportedItem, type ImportedSession } from './session-import'
 import { fetchPageMeta } from './page-meta'
 import { searchSuggestions, suggest } from './suggest'
@@ -4117,6 +4119,12 @@ export class Browser {
     return true
   }
 
+  /** What fingerprinting protection shows a site (see fingerprint.ts), or null where it's off. */
+  private disguiseOf(url: string): Disguise | null {
+    if (!this.settings.blockFingerprinting || !/^https?:/.test(url) || !this.adblock.protects(url, 'fingerprinting')) return null
+    return disguiseFor(fingerprintSeed(url))
+  }
+
   private destroyView(tab: Tab): void {
     if (this.pip?.activeTabId === tab.id) this.pip.exit()
     this.closeDevTools(tab.id)
@@ -4143,6 +4151,8 @@ export class Browser {
   private wire(tabId: string, wc: WebContents): void {
     // Zepper and the extensions layer each watch a page's lifetime; more than Node's default ten is expected.
     wc.setMaxListeners(30)
+    // Fingerprinting protection's core count and graphics chip, the same in the page, its frames and workers.
+    guardTab(wc, (url) => this.disguiseOf(url))
     // Every listener is noted, so the page can move to another window without this one still listening.
     const listening: [string, (...args: unknown[]) => void][] = []
     const on = ((event: string, listener: (...args: unknown[]) => void) => {

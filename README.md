@@ -99,7 +99,7 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 | -------------------------- | ------------------------------------------------------------------ |
 | Ad and tracker blocking    | uBlock Origin's filter lists, including YouTube ads                |
 | Cookie banners hidden      | uBlock Origin's annoyance lists                                    |
-| Fingerprinting protection  | Per-site noise on canvas, WebGL and audio; no local IP leaks       |
+| Fingerprinting protection  | Per-site values for canvas, WebGL, audio, CPU cores and GPU, as in Brave; no local IP leaks |
 | Cross-site cookies blocked | Embedded third parties can't set or read cookies                   |
 | HTTPS upgrades             | Plain-HTTP pages load over HTTPS when the site supports it         |
 | Clean links                | Click identifiers (fbclid, gclid…) and Google AMP wrappers removed |
