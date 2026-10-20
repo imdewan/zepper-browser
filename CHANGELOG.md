@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-10-21
+
 ### Changed
 
 - **Stronger fingerprinting protection, as in Brave.** EFF's Cover Your Tracks now reports a randomized fingerprint (it said nearly unique). On top of the canvas and WebGL noise, each site now sees, for this session only:
@@ -260,7 +262,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.13...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.14...HEAD
+[0.1.14]: https://github.com/imdewan/zepper-browser/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/imdewan/zepper-browser/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/imdewan/zepper-browser/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/imdewan/zepper-browser/compare/v0.1.10...v0.1.11
