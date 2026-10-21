@@ -6,12 +6,15 @@ import { CHIP_PATTERN, UNMASKED_RENDERER } from '@shared/fingerprint'
  * Fingerprinting protection's values that must agree everywhere a site's code runs: the page, its
  * frames and its workers (sign-in checks compare them: X refused a page whose workers disagreed).
  * As in Brave, each site sees its own values this session, so they can't link you across sites:
- * - the CPU core count, between 2 and the real one;
+ * - the CPU core count: up to a quarter fewer than the real one, never more (sites size their worker
+ *   pools by it, so a much smaller number would slow them down);
  * - on Apple silicon, which chip the graphics card says it is, one of the common ones.
  * They're set through the DevTools protocol, before any of the page's (or a worker's) code runs.
  */
 
 const REAL_CORES = availableParallelism()
+/** The fewest cores a site is shown: three quarters of the real count (15 → 12), and at least 2. */
+const FEWEST_CORES = Math.min(REAL_CORES, Math.max(2, Math.ceil(REAL_CORES * 0.75)))
 const CHIPS = ['Apple M1', 'Apple M2', 'Apple M3', 'Apple M1 Pro', 'Apple M2 Pro', 'Apple M3 Pro', 'Apple M4', 'Apple M1 Max']
 
 export interface Disguise {
@@ -22,7 +25,7 @@ export interface Disguise {
 /** A site's values for this session, from its fingerprinting seed (see shields.fingerprintSeed). */
 export function disguiseFor(seed: number): Disguise {
   return {
-    cores: REAL_CORES <= 2 ? REAL_CORES : 2 + ((seed >>> 3) % (REAL_CORES - 1)),
+    cores: FEWEST_CORES + ((seed >>> 3) % (REAL_CORES - FEWEST_CORES + 1)),
     chip: CHIPS[(seed >>> 11) % CHIPS.length]
   }
 }

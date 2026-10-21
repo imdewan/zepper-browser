@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Changed
+
+- Fingerprinting protection keeps the CPU core count close to your real one: up to a quarter fewer (12 to 15 on a 15-core Mac), never more. It was anywhere from 2 up, and sites that size their background work by it could run slower.
+
 ## [0.1.14] - 2026-10-21
 
 ### Changed
