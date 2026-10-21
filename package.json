@@ -32,7 +32,8 @@
     "vmp:signup": ".evs/bin/python -m castlabs_evs.account signup",
     "vmp:login": ".evs/bin/python -m castlabs_evs.account reauth",
     "vmp:sign": ".evs/bin/python -m castlabs_evs.vmp sign-pkg node_modules/electron/dist",
-    "vmp:verify": ".evs/bin/python -m castlabs_evs.vmp verify-pkg node_modules/electron/dist"
+    "vmp:verify": ".evs/bin/python -m castlabs_evs.vmp verify-pkg node_modules/electron/dist",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/test-resolve.mjs --test \"test/**/*.test.ts\""
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "^2.18.2",
@@ -43,6 +44,8 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@mozilla/readability": "^0.6.0",
+    "@noble/ciphers": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -52,6 +55,8 @@
     "electron-vite": "^5.0.0",
     "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "firebase": "^13.1.0",
+    "fractional-indexing": "^4.0.0",
     "globals": "^17.13.0",
     "lucide-react": "^1.52.0",
     "motion": "^14.0.0",

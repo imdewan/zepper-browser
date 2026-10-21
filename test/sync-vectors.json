@@ -1,0 +1,19 @@
+{
+  "secret": "CzBVep_E6Q4zWH2ix-wRNluApcrvFDleg6jN8hc8YYY",
+  "code": "1CR5-AYMZ-RKMG-WCTR-FPHC-FV0H-6SDR-19EA-XWA3-JQM3-N36Z-45SW-C630",
+  "link": "zepper://sync#1CR5AYMZRKMGWCTRFPHCFV0H6SDR19EAXWA3JQM3N36Z45SWC630",
+  "chainId": "mGp2D_hw9bP5jyEvhPpgNg",
+  "record": {
+    "type": "pin",
+    "id": "b3f1c2a4-0000-4000-8000-000000000001",
+    "spaceId": "space-1",
+    "zone": "essential",
+    "parentId": null,
+    "order": "a0",
+    "url": "https://example.com/",
+    "title": "Example"
+  },
+  "docId": "IxV0zR6zc3hQZcJpswHeCQ",
+  "nonce": "BRIfLDlGU2BteoeUoa67yNXi7_wJFiMw",
+  "sealed": "BRIfLDlGU2BteoeUoa67yNXi7_wJFiMwrBukYmGrjTT5eazwTAbrcE3V7h1dCPtpDAY8-N9fiJo-9GsQK-UnPiUko1uFpbl_Ob_Cuq8Sbiv1NHdU9Wfqsdx6r_CkMyr4Yql88DkjXyCZdcWmIAFJg3V9t9fZW2wUikPiwQD60lKt8M2Q3lxN12gvrwIEmg9xhDkWvC5YQuF44OQj8rRb94abp7HVuV8toyFdpnFHMVz6J6acDlVe-HCgcW2S7WwUzEyVCchkC_9NdKLVj890P80SLzIp"
+}

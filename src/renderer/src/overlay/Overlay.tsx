@@ -279,6 +279,7 @@ export function Overlay(): React.JSX.Element | null {
             sitePermissions={snapshot.sitePermissions}
             profileScope={snapshot.profileScope}
             systemAccess={snapshot.systemAccess}
+            sync={snapshot.sync}
             initialSection={settingsSection}
             onClose={closeSettings}
           />

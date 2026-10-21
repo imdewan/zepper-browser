@@ -9,6 +9,7 @@ import {
   Music,
   Palette,
   Puzzle,
+  RefreshCw,
   Search,
   Settings2,
   ShieldCheck,
@@ -27,12 +28,22 @@ import {
   type Settings,
   type UserAgentChoice
 } from '@shared/settings'
-import type { AccessState, IntelligenceStatus, SiteDecisions, Snapshot, SystemAccess, UpdateStatus, WidevineStatus } from '@shared/types'
+import type {
+  AccessState,
+  IntelligenceStatus,
+  SiteDecisions,
+  Snapshot,
+  SyncSnapshot,
+  SystemAccess,
+  UpdateStatus,
+  WidevineStatus
+} from '@shared/types'
 import { zepper } from '../bridge'
 import { IconBack, IconClose } from '../icons'
 import { SHOW_IN_FOLDER, YOUR_COMPUTER, cx, isLinux, isMac, listNames, shortcut } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
 import { PasswordsSettings } from './PasswordsSettings'
+import { SyncSettings } from './SyncSettings'
 import { SiteListLink, SiteListPage, type SiteListItem } from './SiteListPage'
 import { Toggle } from './Toggle'
 
@@ -68,6 +79,7 @@ const TRANSLATION_LANGUAGES = [
 
 type Section =
   | 'general'
+  | 'sync'
   | 'appearance'
   | 'tabs'
   | 'media'
@@ -84,6 +96,7 @@ type Section =
 /** The settings sections; `title` heads the page when it differs from the sidebar's label. */
 const SECTIONS: { id: Section; label: string; title?: string; Icon: LucideIcon; color: string }[] = [
   { id: 'general', label: 'General', Icon: Settings2, color: '#8e8e93' },
+  { id: 'sync', label: 'Sync', title: 'Sync with iPhone', Icon: RefreshCw, color: '#0a84ff' },
   { id: 'appearance', label: 'Appearance', Icon: Palette, color: '#5e5ce6' },
   { id: 'tabs', label: 'Tabs', Icon: Layers, color: '#ff9f0a' },
   { id: 'media', label: 'Media', Icon: Music, color: '#ff375f' },
@@ -153,6 +166,7 @@ interface SettingsPanelProps {
   /** Whose passwords and site permissions these are (see Snapshot.profileScope). */
   profileScope: string[] | null
   systemAccess: SystemAccess
+  sync: SyncSnapshot
   /** The section to open on (e.g. "passwords" from the passwords popup). */
   initialSection?: string
   onClose: () => void
@@ -186,6 +200,7 @@ export function SettingsPanel({
   sitePermissions,
   profileScope,
   systemAccess,
+  sync,
   initialSection,
   onClose
 }: SettingsPanelProps): React.JSX.Element {
@@ -645,6 +660,8 @@ export function SettingsPanel({
                   </Row>
                 </>
               )}
+
+              {!page && section === 'sync' && <SyncSettings sync={sync} />}
 
               {!page && section === 'downloads' && (
                 <>

@@ -101,6 +101,8 @@ import { tidyGroups } from './tidy'
 import { AiError, intelligence } from './ai'
 import { resolveInput, searchEngineName, searchUrl, setSearchEngine, stripHash, stripTracking } from './url'
 import { nextZoom } from './zoom'
+import { applyChanges, toRecords, type Change, type SharedRecord } from './sync-model'
+import type { DeviceRecord, SpaceRecord } from '@shared/sync-protocol'
 import { desktopPicture, fileTypeIcon, requestLocationAccess } from './native'
 import { CAPTURE_TARGETS_SCRIPT, captureArea, captureFullPage, pngWithDensity, type CaptureTargets } from './capture'
 
@@ -1677,6 +1679,36 @@ export class Browser {
         return void this.setSpaceProfile(command.spaceId, command.profile)
       case 'space.update':
         return this.updateSpace(command.spaceId, command.patch)
+      case 'sync.start':
+        return void this.hub.sync.start()
+      case 'sync.join':
+        return void this.hub.sync.join(command.code).then((ok) => {
+          if (!ok)
+            this.toast({
+              id: 'sync-code',
+              message: 'That isn’t a sync code',
+              description: 'Check it against the one on your other device.'
+            })
+        })
+      case 'sync.showCode':
+        return this.hub.sync.showCode(command.show)
+      case 'sync.leave':
+        return void this.hub.sync.leave()
+      case 'sync.rename':
+        return this.hub.sync.rename(command.name)
+      case 'sync.sendTab': {
+        const tab = this.tab(command.tabId ?? this.activeTabId)
+        if (!tab) return
+        return void this.hub.sync.sendTab(command.deviceId, tab.url, tab.title).then(() => {
+          const device = this.hub.sync.snapshot().devices.find((d) => d.id === command.deviceId)
+          this.toast({
+            id: 'sync-sent',
+            message: `Sent to ${device?.name ?? 'your device'}`,
+            description: tab.title || tab.url,
+            timeout: 2500
+          })
+        })
+      }
       case 'space.contextMenu':
         return this.spaceContextMenu(command.spaceId, command.anchor)
       case 'space.clearTabs':
@@ -5858,7 +5890,12 @@ export class Browser {
     if (!/^https?:/.test(tab.url)) return
     const article = await readArticle(wc)
     if (!article) return this.toast({ id: 'reader', message: 'Reader Mode isn’t available for this page', timeout: 3000 })
-    const page = readerPage(randomUUID(), article, { size: this.settings.readerTextSize, theme: this.settings.readerTheme }, safeHost(tab.url).replace(/^www\./, ''))
+    const page = readerPage(
+      randomUUID(),
+      article,
+      { size: this.settings.readerTextSize, theme: this.settings.readerTheme },
+      safeHost(tab.url).replace(/^www\./, '')
+    )
     this.readerPages.set(page, { url: tab.url, article })
     if (this.readerPages.size > 30) this.readerPages.delete(this.readerPages.keys().next().value!)
     void wc.loadURL(page).catch(() => {})
@@ -5894,7 +5931,11 @@ export class Browser {
     })
     const items: MenuItemConstructorOptions[] = [
       { label: 'Copy Link', ...key('⇧⌘C', 'CmdOrCtrl+Shift+C'), click: () => this.handle({ type: 'ui.copyUrl' }) },
-      { label: 'Copy Link as Markdown', ...key('⌥⇧⌘C', 'CmdOrCtrl+Alt+Shift+C'), click: () => this.handle({ type: 'ui.copyUrl', markdown: true }) }
+      {
+        label: 'Copy Link as Markdown',
+        ...key('⌥⇧⌘C', 'CmdOrCtrl+Alt+Shift+C'),
+        click: () => this.handle({ type: 'ui.copyUrl', markdown: true })
+      }
     ]
     if (process.platform === 'darwin' && web) items.push({ role: 'shareMenu', sharingItem: { urls: [tab.url] } })
     items.push(
@@ -5913,7 +5954,8 @@ export class Browser {
         click: () => void this.translatePage(tab.id)
       })
     }
-    if (this.ai.ai && web) items.push({ label: 'Summarise or Ask This Page', ...key('⇧⌘A', 'CmdOrCtrl+Shift+A'), click: () => this.openAssistant(anchor) })
+    if (this.ai.ai && web)
+      items.push({ label: 'Summarise or Ask This Page', ...key('⇧⌘A', 'CmdOrCtrl+Shift+A'), click: () => this.openAssistant(anchor) })
     items.push(
       { type: 'separator' },
       { label: 'Capture…', ...key('⇧⌘2', 'CmdOrCtrl+Shift+2'), enabled: live, click: () => void this.startCapture() },
@@ -6559,6 +6601,7 @@ export class Browser {
       profileScope: this.profileScope(),
       systemAccess: this.hub.systemAccess,
       intelligence: this.ai,
+      sync: this.hub.sync.snapshot(),
       extensionsPartition: this.extensionsPartition(),
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
@@ -6596,6 +6639,8 @@ export class Browser {
       this.pip?.controlsWebContents()?.send(IPC.snapshot, snapshot)
       for (const call of this.docPips.values()) call.bar?.send(IPC.snapshot, snapshot)
       this.stateFile?.schedule(this.persistedState())
+      // The main window's spaces and pins sync (sync.ts works out whether anything synced changed).
+      if (this.kind === 'main') this.hub.sync.noteChange()
     }, 16)
   }
 
@@ -6610,6 +6655,58 @@ export class Browser {
     if (this.windowClosed) return
     const wc = target === 'chrome' ? this.win.webContents : this.overlay.webContents
     if (!wc.isDestroyed()) wc.send(IPC.event, event)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Zepper Sync (the main window only; see sync.ts and sync-model.ts)
+
+  /** This window's spaces, Essentials, pinned tabs and folders, as sync records. */
+  syncRecords(orders: Map<string, string>): SharedRecord[] {
+    return toRecords({ spaces: this.spaces, tabs: this.tabs.filter((t) => t.spaceId), folders: this.folders }, orders)
+  }
+
+  /** Other devices' changes: pins and folders in their places, new spaces sharing your main sign-ins. */
+  applySynced(changes: Change[], orders: Map<string, string>): void {
+    const state = { spaces: this.spaces, tabs: this.tabs, folders: this.folders }
+    const { removed, removedSpaces } = applyChanges(state, changes, orders, {
+      tab: (fields) => makeTab(fields),
+      space: (record: SpaceRecord) => ({ ...makeSpace(record.name, record.icon, { ...record.theme }, DEFAULT_PROFILE), id: record.id })
+    })
+    this.spaces = state.spaces
+    this.folders = state.folders
+    this.tabs = state.tabs
+    for (const tab of removed) {
+      this.destroyView(tab)
+      this.openers.delete(tab.id)
+    }
+    if (this.spaces.length === 0) this.spaces = [makeSpace('Personal', '😀', DEFAULT_THEME, DEFAULT_PROFILE)]
+    // A space deleted on another device: what was open in it here stays open, in another space.
+    if (removedSpaces.length > 0) {
+      const home = this.spaces.find((s) => s.id === this.activeSpaceId) ?? this.spaces[0]
+      for (const tab of this.tabs) if (tab.spaceId && removedSpaces.includes(tab.spaceId)) tab.spaceId = home.id
+      if (!this.space(this.activeSpaceId)) {
+        this.activeSpaceId = ''
+        this.switchSpace(home.id)
+      }
+    }
+    if (this.activeTabId && !this.tab(this.activeTabId)) this.activeTabId = null
+    this.normalizePinned()
+    this.broadcast()
+  }
+
+  /** What's open here, for your other devices (most recent first). */
+  syncTabs(): DeviceRecord['tabs'] {
+    return this.tabs
+      .filter((t) => t.kind === 'normal' && /^https?:/i.test(t.url))
+      .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+      .slice(0, 60)
+      .map((t) => ({ url: t.url, title: t.title, spaceId: t.spaceId }))
+  }
+
+  /** A tab another device sent here. */
+  openSentTab(url: string, from: string): void {
+    this.openTab(url, { background: true })
+    this.toast({ id: 'sync-received', message: `Tab from ${from}`, description: url, timeout: 4000 })
   }
 
   private persistedState(): PersistedState {

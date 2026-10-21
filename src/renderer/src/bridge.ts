@@ -155,6 +155,7 @@ function createMock(): ZepperApi {
     systemAccess: { camera: 'allowed', microphone: 'allowed', screen: 'allowed', location: 'allowed' },
     extensionsPartition: 'zepper-browsing',
     intelligence: { ai: true, translation: true, embeddings: true },
+    sync: { status: { kind: 'off' }, deviceName: 'Mac', devices: [], code: null },
     windowSize: { width: window.innerWidth, height: window.innerHeight },
     splits: [],
     panes: []

@@ -169,6 +169,29 @@ export interface WidevineStatus {
   version: string | null
 }
 
+/** Zepper Sync, as Settings shows it. */
+export interface SyncSnapshot {
+  status:
+    | { kind: 'off' }
+    /** This build has no sync service set up. */
+    | { kind: 'unavailable' }
+    | { kind: 'connecting' }
+    | { kind: 'on'; devices: number }
+    | { kind: 'error'; message: string }
+  /** What other devices call this computer. */
+  deviceName: string
+  /** Your other devices, with their open tabs. */
+  devices: {
+    id: string
+    name: string
+    platform: 'ios' | 'mac' | 'linux' | 'windows'
+    seenAt: number
+    tabs: { url: string; title: string; spaceId: string | null }[]
+  }[]
+  /** The sync code, while you've asked to see it. */
+  code: string | null
+}
+
 export interface Snapshot {
   spaces: Space[]
   tabs: Tab[]
@@ -210,6 +233,8 @@ export interface Snapshot {
   extensionsPartition: string
   /** What Apple's on-device intelligence can do on this Mac. */
   intelligence: IntelligenceStatus
+  /** Zepper Sync (with Zepper for iPhone). */
+  sync: SyncSnapshot
   /** The command bar is open (the empty page steps back while it is). */
   paletteOpen: boolean
   /** Window content size, so floating UI can line up with the window's background. */
@@ -645,6 +670,13 @@ export type Command =
   /** Forget history since a time; 0 clears it all. */
   | { type: 'history.clear'; since: number }
   | { type: 'settings.update'; patch: Partial<Settings> }
+  /** Zepper Sync: start a chain here (its code shows for the phone to scan), or join one with its code. */
+  | { type: 'sync.start' }
+  | { type: 'sync.join'; code: string }
+  | { type: 'sync.showCode'; show: boolean }
+  | { type: 'sync.leave' }
+  | { type: 'sync.rename'; name: string }
+  | { type: 'sync.sendTab'; deviceId: string; tabId?: string }
   | { type: 'ui.openSettings'; section?: string }
   /** The welcome and setup (it opens by itself on first launch; Settings › General shows it again). */
   /** The welcome and setup; `step: 'import'` opens it at bringing things over from other browsers. */

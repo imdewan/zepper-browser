@@ -42,6 +42,7 @@ import { handleVaultRequest } from './password-settings'
 import { DEFAULT_PROFILE, Profiles } from './profiles'
 import { locationAccess } from './native'
 import { RELEASES_PAGE, Updater } from './updater'
+import { SyncService } from './sync'
 
 /** Zepper's desktop entry on Linux (package.json's desktopName, which the .deb, .rpm and AppImage install). */
 const LINUX_DESKTOP_FILE = 'zepper.desktop'
@@ -97,6 +98,10 @@ export class Hub {
   systemAccess: SystemAccess = { camera: 'ask', microphone: 'ask', screen: 'ask', location: 'ask' }
   /** Every download, shared by all windows. */
   readonly downloads = new Downloads(() => {
+    for (const browser of this.browsers) browser.refresh()
+  })
+  /** Zepper Sync, with Zepper for iPhone: the main window's spaces, Essentials and pinned tabs. */
+  readonly sync = new SyncService(() => {
     for (const browser of this.browsers) browser.refresh()
   })
   private main: Browser | null = null
@@ -290,6 +295,7 @@ export class Hub {
     this.browsers.add(browser)
     if (kind === 'main') this.main = browser
     browser.start(url)
+    if (kind === 'main') this.sync.attach(browser)
     return browser
   }
 
@@ -349,7 +355,10 @@ export class Hub {
     }
     // Other windows stay open when the main one closes (it has saved its spaces and tabs);
     // Zepper quits with the last window.
-    if (browser === this.main) this.main = null
+    if (browser === this.main) {
+      this.sync.detach(browser)
+      this.main = null
+    }
   }
 
   /** The window that owns a WebContents: its chrome, overlay, player controls or one of its tabs. */
@@ -407,6 +416,8 @@ export class Hub {
     // Passwords are written in the background: those just saved get to the file before Zepper goes
     // (but an unanswered Keychain prompt doesn't keep it from quitting).
     await Promise.race([this.services.profiles.written(), new Promise((resolve) => setTimeout(resolve, 3000))])
+    // Sync's last changes go out too (briefly: offline, they wait for next time).
+    await Promise.race([this.sync.flush(), new Promise((resolve) => setTimeout(resolve, 2500))])
   }
 
   persist(): void {

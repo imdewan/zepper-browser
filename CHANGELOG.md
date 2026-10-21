@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- **Sync with Zepper for iPhone** (Settings › Sync): your spaces, with their colours, Essentials, pinned tabs and folders, the same on your Mac and your phone, and each device's open tabs for the others to see. No account: your phone scans a code on your Mac. Everything is encrypted on your devices before it leaves them, so the server can't read it ([how it works](docs/SYNC.md)). Each device keeps its own sign-ins and history. Sync needs a build with its service set up.
+
 ### Changed
 
 - Fingerprinting protection keeps the CPU core count nearer your real one: between half of it and all of it (8 to 15 on a 15-core Mac), never more. It was anywhere from 2 up, and sites that size their background work by it could run slower.
