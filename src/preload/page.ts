@@ -306,6 +306,87 @@ function fingerprintShim(seed: number, chip: string, chipPattern: string, unmask
     if (data instanceof Float32Array) for (let i = 0; i < data.length; i++) data[i] += (bits[i & 255] ? 1 : -1) * 1e-7
     return result
   })
+
+  // Plugins: as in Brave, the list (Chrome's five PDF viewers, which sites look for, first) ends with two
+  // made-up ones of this site's own. The list and its plugins answer as the real ones do, however a
+  // script asks (index, name, item(), iteration, the prototype's own getters).
+  const pluginsDescriptor = Object.getOwnPropertyDescriptor(Navigator.prototype, 'plugins')
+  const realPlugins = pluginsDescriptor?.get ? (Reflect.apply(pluginsDescriptor.get, navigator, []) as PluginArray) : null
+  if (pluginsDescriptor?.get && realPlugins && realPlugins.length > 0) {
+    const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    const word = (n: number): string => Array.from({ length: n }, () => letters[Math.floor(random() * letters.length)]).join('')
+    type Made = { name: string; description: string; filename: string }
+    const made = new WeakMap<object, Made>()
+    const template = realPlugins[0]
+    const fakes = [0, 1].map(() => {
+      const fake: Made = { name: `${word(8)} Plugin`, description: `${word(6)} ${word(9)}`, filename: `${word(10).toLowerCase()}.plugin` }
+      const plugin = new Proxy(template, {
+        get: (target, key) => {
+          if (key === 'name' || key === 'description' || key === 'filename') return fake[key]
+          if (key === 'length') return 0
+          if (typeof key === 'string' && (/^\d+$/.test(key) || key.includes('/'))) return undefined
+          return Reflect.get(target, key, target)
+        },
+        has: (target, key) => (typeof key === 'string' && (/^\d+$/.test(key) || key.includes('/')) ? false : Reflect.has(target, key)),
+        ownKeys: () => [],
+        getOwnPropertyDescriptor: () => undefined
+      })
+      made.set(plugin, fake)
+      return plugin
+    })
+    const list: Plugin[] = [...Array.from({ length: realPlugins.length }, (_, i) => realPlugins[i]), ...fakes]
+    const named = (key: string): Plugin | undefined => list.find((p) => (made.get(p)?.name ?? p.name) === key)
+    const plugins = new Proxy(realPlugins, {
+      get: (target, key) => {
+        if (key === 'length') return list.length
+        if (typeof key === 'string' && /^\d+$/.test(key)) return list[Number(key)]
+        if (typeof key === 'string' && named(key)) return named(key)
+        return Reflect.get(target, key, target)
+      },
+      has: (target, key) =>
+        typeof key === 'string' && (/^\d+$/.test(key) ? Number(key) < list.length : !!named(key)) ? true : Reflect.has(target, key),
+      ownKeys: () => [...list.map((_, i) => String(i)), ...list.map((p) => made.get(p)?.name ?? p.name)],
+      getOwnPropertyDescriptor: (_target, key) => {
+        if (typeof key !== 'string') return undefined
+        const value = /^\d+$/.test(key) ? list[Number(key)] : named(key)
+        return value ? { value, writable: false, enumerable: /^\d+$/.test(key), configurable: true } : undefined
+      }
+    })
+    Object.defineProperty(Navigator.prototype, 'plugins', {
+      ...pluginsDescriptor,
+      get: disguise(pluginsDescriptor.get, { apply: (target, self, args) => (self === navigator ? plugins : Reflect.apply(target, self, args)) })
+    })
+    // The prototypes' own getters and methods, called on the list or a made-up plugin.
+    const getter = <T extends object>(proto: T, key: string, value: (self: unknown) => unknown | typeof NOT_OURS): void => {
+      const descriptor = Object.getOwnPropertyDescriptor(proto, key)
+      if (!descriptor?.get) return
+      Object.defineProperty(proto, key, {
+        ...descriptor,
+        get: disguise(descriptor.get, {
+          apply: (target, self, args) => {
+            const answer = value(self)
+            return answer === NOT_OURS ? Reflect.apply(target, self, args) : answer
+          }
+        })
+      })
+    }
+    const NOT_OURS = Symbol('not ours')
+    getter(PluginArray.prototype, 'length', (self) => (self === plugins ? list.length : NOT_OURS))
+    patch(PluginArray.prototype, 'item', (target, self, args) =>
+      self === plugins ? (list[Number(args[0]) >>> 0] ?? null) : Reflect.apply(target, self, args)
+    )
+    patch(PluginArray.prototype, 'namedItem', (target, self, args) =>
+      self === plugins ? (named(String(args[0])) ?? null) : Reflect.apply(target, self, args)
+    )
+    patch(PluginArray.prototype, 'refresh', (target, self, args) => Reflect.apply(target, self === plugins ? realPlugins : self, args))
+    for (const key of ['name', 'description', 'filename'] as const) {
+      getter(Plugin.prototype, key, (self) => made.get(self as object)?.[key] ?? NOT_OURS)
+    }
+    getter(Plugin.prototype, 'length', (self) => (made.has(self as object) ? 0 : NOT_OURS))
+    for (const key of ['item', 'namedItem']) {
+      patch(Plugin.prototype, key, (target, self, args) => (made.has(self as object) ? null : Reflect.apply(target, self, args)))
+    }
+  }
 }
 
 /**

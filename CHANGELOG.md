@@ -6,7 +6,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ### Changed
 
-- Fingerprinting protection keeps the CPU core count close to your real one: up to a quarter fewer (12 to 15 on a 15-core Mac), never more. It was anywhere from 2 up, and sites that size their background work by it could run slower.
+- Fingerprinting protection keeps the CPU core count nearer your real one: between half of it and all of it (8 to 15 on a 15-core Mac), never more. It was anywhere from 2 up, and sites that size their background work by it could run slower.
+- Fingerprinting protection also varies the plugin list per site, as in Brave: Chrome's five PDF viewers (which sites look for) stay first, then two made-up plugins of the site's own. With five values varying per site rather than four, EFF's Cover Your Tracks reports a randomized fingerprint every time, not just when two sites happened to get different core counts.
 
 ## [0.1.14] - 2026-10-21
 
