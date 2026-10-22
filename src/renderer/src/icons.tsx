@@ -105,14 +105,13 @@ export const IconPin = (p: IconProps): React.JSX.Element => (
   </Icon>
 )
 
-/** Hat and glasses: private browsing. */
+/** A pair of eyes glancing sideways: private browsing, as Zepper for iPhone draws it. */
 export const IconPrivate = (p: IconProps): React.JSX.Element => (
-  <Icon {...p}>
-    <path d="M3 11h18" />
-    <path d="M5.5 11l1.6-5.2a1.5 1.5 0 0 1 2-.9L12 6l2.9-1.1a1.5 1.5 0 0 1 2 .9l1.6 5.2" />
-    <circle cx="7.5" cy="16.5" r="2.5" />
-    <circle cx="16.5" cy="16.5" r="2.5" />
-    <path d="M10 16.5c1.3-.8 2.7-.8 4 0" />
+  <Icon {...p} fill="currentColor" stroke="none">
+    <path
+      fillRule="evenodd"
+      d="M1 9.9A5 5 0 0 1 11 9.9V14.1A5 5 0 0 1 1 14.1Z M6.2 13.8a2.3 2.3 0 1 0 4.6 0a2.3 2.3 0 1 0-4.6 0Z M13 9.9A5 5 0 0 1 23 9.9V14.1A5 5 0 0 1 13 14.1Z M18.2 13.8a2.3 2.3 0 1 0 4.6 0a2.3 2.3 0 1 0-4.6 0Z"
+    />
   </Icon>
 )
 export const IconLockOpen = (p: IconProps): React.JSX.Element => (
