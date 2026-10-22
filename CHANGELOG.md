@@ -8,10 +8,24 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 - **Sync with Zepper for iPhone** (Settings › Sync): your spaces, with their colours, Essentials, pinned tabs and folders, the same on your Mac and your phone, and each device's open tabs for the others to see. No account: your phone scans a code on your Mac. Everything is encrypted on your devices before it leaves them, so the server can't read it ([how it works](docs/SYNC.md)). Each device keeps its own sign-ins and history. Sync needs a build with its service set up.
 
+## [0.1.15] - 2026-10-23
+
+### Added
+
+- **Your own keyboard shortcuts** (Settings › Shortcuts): click a shortcut and press the keys you want; ⌫ takes it off, Esc keeps it. Keys another command already has are offered to move over, the menus' own (Copy, Quit, ⌘1–9 for tabs, ⌥1–9 for Essentials, ⌃1–9 for spaces) can't be given away, and the system's (Spotlight, screenshots) come with a warning that macOS may take them first. Each one can go back to its own, or all at once. The hints in Settings show yours.
+- **Shift-right-click for Zepper's menu**, as in Firefox: on a site with its own right-click menu, hold Shift to get Zepper's (Open Link in New Tab, Copy, Inspect…). Settings › Spaces & Gestures turns it off.
+
 ### Changed
 
+- The first-launch setup fills the window, on its plain background, with each step in a clean card.
+- Private browsing's icon is a pair of eyes, as in Zepper for iPhone.
 - Fingerprinting protection keeps the CPU core count nearer your real one: between half of it and all of it (8 to 15 on a 15-core Mac), never more. It was anywhere from 2 up, and sites that size their background work by it could run slower.
 - Fingerprinting protection also varies the plugin list per site, as in Brave: Chrome's five PDF viewers (which sites look for) stay first, then two made-up plugins of the site's own. With five values varying per site rather than four, EFF's Cover Your Tracks reports a randomized fingerprint every time, not just when two sites happened to get different core counts.
+
+### Fixed
+
+- In a call's floating window (Google Meet's, Teams'), the call's buttons didn't respond: every click started moving the window instead.
+- **Unsplit All** and **Stacked** never answered their shortcuts, which were already View Page Source's (⌥⌘U) and macOS's Hide Others (⌥⌘H). They're now ⌥⇧⌘U and ⌥⇧⌘H.
 
 ## [0.1.14] - 2026-10-21
 
@@ -271,7 +285,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.14...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.15...HEAD
+[0.1.15]: https://github.com/imdewan/zepper-browser/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/imdewan/zepper-browser/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/imdewan/zepper-browser/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/imdewan/zepper-browser/compare/v0.1.11...v0.1.12

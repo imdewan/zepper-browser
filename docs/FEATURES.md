@@ -7,6 +7,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - On first launch, a short setup: bring over your open tabs, history and passwords from other browsers on this Mac, choose a look for your first space, review the privacy protections, turn on-device intelligence on or off, and make Zepper your default browser.
 - **Open tabs** come from Chrome, Brave, Edge, Arc, Vivaldi, Opera, Helium, Chromium and Firefox. A browser's first window joins the space you're in and other windows get spaces of their own; pinned tabs stay pinned. From Arc you get its spaces (with their emoji), pinned tabs and folders, today's tabs, and its favourites as Essentials. Tabs load when you open them.
 - Every step can be skipped. Settings → General → Import from another browser opens the import step again, and Welcome and setup the whole thing.
+- The setup fills the window, on its plain background, with each step in a clean card.
 
 ## Window and sidebar
 
@@ -24,6 +25,8 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - Point at a link to see its address in the page's bottom corner, as in Chrome: the site stands out, the whole address shows if you keep pointing, and it moves to the other corner when the pointer comes near
 - A crashed page keeps its tab and offers Reload; a page that stops responding can be waited for or closed
 - Closing a tab with unsaved changes asks first ("Leave site?")
+- **Your own shortcuts** (Settings → Shortcuts): click one and press the new keys (⌫ takes it off, Esc keeps it). Keys another command has are offered to move over; the menus' own (Copy, Quit, tabs, Essentials, spaces) can't be given away, and the system's (Spotlight, screenshots) come with a warning that macOS may take them first. Each can go back to its own, or all at once
+- **Shift-right-click** shows Zepper's menu (Open Link in New Tab, Copy, Inspect…) even on a site with its own right-click menu, as in Firefox (Settings → Spaces & Gestures turns it off)
 
 ## Spaces
 

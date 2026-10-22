@@ -95,17 +95,17 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 
 **Privacy, the way it should be.** Every protection is on by default and can be switched off for one site from the lock icon.
 
-| Protection                 | What it does                                                       |
-| -------------------------- | ------------------------------------------------------------------ |
-| Ad and tracker blocking    | uBlock Origin's filter lists, including YouTube ads                |
-| Cookie banners hidden      | uBlock Origin's annoyance lists                                    |
+| Protection                 | What it does                                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Ad and tracker blocking    | uBlock Origin's filter lists, including YouTube ads                                                  |
+| Cookie banners hidden      | uBlock Origin's annoyance lists                                                                      |
 | Fingerprinting protection  | Per-site values for canvas, WebGL, audio, plugins, CPU cores and GPU, as in Brave; no local IP leaks |
-| Cross-site cookies blocked | Embedded third parties can't set or read cookies                   |
-| HTTPS upgrades             | Plain-HTTP pages load over HTTPS when the site supports it         |
-| Clean links                | Click identifiers (fbclid, gclid…) and Google AMP wrappers removed |
-| Secure DNS                 | DNS over HTTPS, automatic or through Cloudflare, Quad9 or Google   |
-| Global Privacy Control     | Asks sites not to sell or share your data                          |
-| Private windows            | A throwaway session that leaves nothing behind                     |
+| Cross-site cookies blocked | Embedded third parties can't set or read cookies                                                     |
+| HTTPS upgrades             | Plain-HTTP pages load over HTTPS when the site supports it                                           |
+| Clean links                | Click identifiers (fbclid, gclid…) and Google AMP wrappers removed                                   |
+| Secure DNS                 | DNS over HTTPS, automatic or through Cloudflare, Quad9 or Google                                     |
+| Global Privacy Control     | Asks sites not to sell or share your data                                                            |
+| Private windows            | A throwaway session that leaves nothing behind                                                       |
 
 **Apple Intelligence, on your Mac.** Nothing leaves your computer.
 
@@ -194,20 +194,22 @@ Run `npm run vmp:sign` again after reinstalling Electron, and `npm run vmp:login
 <summary><b>Keyboard shortcuts</b></summary>
 <br>
 
-| Action                                        | Keys                  |
-| --------------------------------------------- | --------------------- |
-| Command bar / new tab · open location         | ⌘T · ⌘L               |
-| Close tab · close window · reopen closed tab  | ⌘W · ⇧⌘W · ⇧⌘T        |
-| Recent tab · next / previous tab              | ⌃⇥ · ⌥⌘↓ / ⌥⌘↑        |
-| Space 1–9 · next / previous space             | ⌃1…⌃9 · ⌥⌘→ / ⌥⌘←     |
-| Essential 1–9 · tab 1–8 / last                | ⌥1…⌥9 · ⌘1…⌘8 / ⌘9    |
-| Pin / unpin · clear unpinned tabs             | ⌘D · ⇧⌘K              |
-| Compact mode · find in page                   | ⌘S · ⌘F               |
-| Split side by side / stacked / grid · unsplit | ⌥⌘V / ⌥⌘H / ⌥⌘G · ⌥⌘U |
-| Print · save page · open file · view source   | ⌘P · ⇧⌘S · ⌘O · ⌥⌘U   |
-| History · downloads                           | ⌘Y · ⌥⌘L              |
-| New window · new private window               | ⌘N · ⇧⌘N              |
-| Copy URL · copy as Markdown                   | ⇧⌘C · ⌥⇧⌘C            |
+| Action                                        | Keys                    |
+| --------------------------------------------- | ----------------------- |
+| Command bar / new tab · open location         | ⌘T · ⌘L                 |
+| Close tab · close window · reopen closed tab  | ⌘W · ⇧⌘W · ⇧⌘T          |
+| Recent tab · next / previous tab              | ⌃⇥ · ⌥⌘↓ / ⌥⌘↑          |
+| Space 1–9 · next / previous space             | ⌃1…⌃9 · ⌥⌘→ / ⌥⌘←       |
+| Essential 1–9 · tab 1–8 / last                | ⌥1…⌥9 · ⌘1…⌘8 / ⌘9      |
+| Pin / unpin · clear unpinned tabs             | ⌘D · ⇧⌘K                |
+| Compact mode · find in page                   | ⌘S · ⌘F                 |
+| Split side by side / stacked / grid · unsplit | ⌥⌘V / ⌥⇧⌘H / ⌥⌘G · ⌥⇧⌘U |
+| Print · save page · open file · view source   | ⌘P · ⇧⌘S · ⌘O · ⌥⌘U     |
+| History · downloads                           | ⌘Y · ⌥⌘L                |
+| New window · new private window               | ⌘N · ⇧⌘N                |
+| Copy URL · copy as Markdown                   | ⇧⌘C · ⌥⇧⌘C              |
+
+Change any of them in Settings › Shortcuts.
 
 </details>
 
