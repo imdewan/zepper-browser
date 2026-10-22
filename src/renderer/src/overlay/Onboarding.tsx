@@ -34,9 +34,9 @@ import { Toggle } from './Toggle'
 /**
  * The first-launch welcome and setup: what Zepper is, bringing history and passwords over from
  * other browsers, choosing a look, the privacy protections, on-device intelligence, syncing with
- * Zepper for iPhone, and becoming the default browser. It fills the window, over the space's own
- * colours (which change as you pick a look). Every step can be skipped; Settings › General shows
- * it again.
+ * Zepper for iPhone, and becoming the default browser. It fills the window with the window's own
+ * plain ground, faintly tinted with the space's colour (which follows the look you pick). Every step
+ * can be skipped; Settings › General shows it again.
  */
 
 const ALL_STEPS = ['welcome', 'import', 'look', 'privacy', 'intelligence', 'sync', 'ready'] as const
@@ -50,9 +50,6 @@ const SLIDE = {
   center: { opacity: 1, x: 0, filter: 'blur(0px)' },
   exit: (direction: number) => ({ opacity: 0, x: -32 * direction, filter: 'blur(4px)', transition: { duration: 0.14 } })
 }
-
-/** Zepper's own colours, for a space that has none yet. */
-const ZEPPER_COLOURS = ['#5f86f5', '#9a6cf0', '#3cbfc7']
 
 export function Onboarding({
   snapshot,
@@ -69,7 +66,7 @@ export function Onboarding({
   const step: Step = STEPS[index]
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
   const space = snapshot.spaces.find((s) => s.id === snapshot.activeSpaceId) ?? snapshot.spaces[0]
-  const colours = space?.theme.colors.length ? space.theme.colors : ZEPPER_COLOURS
+  const tint = space?.theme.colors[0]
 
   const finish = (): void => {
     set({ onboarded: true })
@@ -97,8 +94,8 @@ export function Onboarding({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.25 } }}
+      style={tint ? ({ '--ob-tint': tint } as React.CSSProperties) : undefined}
     >
-      <Aurora colours={colours} />
       <motion.div
         className="ob"
         initial={{ opacity: 0, scale: 0.96, y: 18 }}
@@ -158,21 +155,6 @@ export function Onboarding({
         </footer>
       </motion.div>
     </motion.div>
-  )
-}
-
-/**
- * Behind the setup, the whole window: the space's colours as a gentle wash over a deep ground (a
- * pale one in light mode), with softer light drifting slowly through it. Still, with Reduce Motion.
- */
-function Aurora({ colours }: { colours: string[] }): React.JSX.Element {
-  const [a, b = a, c = b] = colours
-  return (
-    <div className="ob-aurora" aria-hidden="true" style={{ '--ob-a': a, '--ob-b': b, '--ob-c': c } as React.CSSProperties}>
-      <span className="ob-blob one" style={{ backgroundColor: a }} />
-      <span className="ob-blob two" style={{ backgroundColor: b }} />
-      <span className="ob-blob three" style={{ backgroundColor: c }} />
-    </div>
   )
 }
 

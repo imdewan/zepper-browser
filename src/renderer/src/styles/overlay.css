@@ -3519,98 +3519,8 @@
 /* ---- Welcome and setup ------------------------------------------------------------- */
 
 .ob-backdrop {
-  /* The window itself becomes the setup: a deep ground (pale in light mode) under the aurora. */
-  overflow: hidden;
-  background: #15161e;
-}
-
-[data-ui='light'] .ob-backdrop {
-  background: #eff0f5;
-}
-
-/* The space's colours as a gentle wash, with softer light drifting slowly through it. */
-.ob-aurora {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-}
-
-/* All the colours at once, faintly, so the light never leaves dark gaps between. */
-.ob-aurora::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, var(--ob-a), var(--ob-b) 50%, var(--ob-c));
-  opacity: 0.2;
-  filter: saturate(0.8);
-}
-
-[data-ui='light'] .ob-aurora::before {
-  opacity: 0.16;
-}
-
-.ob-aurora::after {
-  /* A little deeper at the edges, so the panel sits in the light. */
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(8, 9, 16, 0.3) 100%);
-}
-
-[data-ui='light'] .ob-aurora::after {
-  background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(255, 255, 255, 0.35) 100%);
-}
-
-.ob-blob {
-  position: absolute;
-  width: 95vmax;
-  height: 95vmax;
-  border-radius: 50%;
-  opacity: 0.28;
-  filter: blur(160px) saturate(0.75);
-  transition: background-color 0.8s ease;
-  animation: ob-drift 30s ease-in-out infinite alternate;
-}
-
-[data-ui='light'] .ob-blob {
-  opacity: 0.24;
-}
-
-.ob-blob.one {
-  top: -45vmax;
-  left: -35vmax;
-}
-
-.ob-blob.two {
-  right: -45vmax;
-  top: -15vmax;
-  animation-duration: 36s;
-  animation-delay: -11s;
-}
-
-.ob-blob.three {
-  left: -5vmax;
-  bottom: -60vmax;
-  animation-duration: 42s;
-  animation-delay: -21s;
-}
-
-@keyframes ob-drift {
-  0% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(6vmax, 4vmax) scale(1.08);
-  }
-  100% {
-    transform: translate(-4vmax, 7vmax) scale(0.96);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ob-blob {
-    animation: none;
-  }
+  /* The window itself becomes the setup: its own plain ground, a breath of the space's colour. */
+  background: color-mix(in srgb, var(--window-base) 94%, var(--ob-tint, var(--window-base)));
 }
 
 .ob {
@@ -3621,22 +3531,18 @@
   height: min(640px, calc(100vh - 64px));
   display: flex;
   flex-direction: column;
-  border-radius: 28px;
+  border-radius: 24px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--panel) 74%, transparent);
-  backdrop-filter: blur(40px) saturate(1.6);
+  background: var(--panel);
   box-shadow:
-    0 40px 120px rgba(0, 0, 0, 0.42),
-    0 0 0 0.5px var(--panel-border),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.1);
+    0 24px 70px rgba(0, 0, 0, 0.3),
+    0 0 0 0.5px var(--panel-border);
 }
 
 [data-ui='light'] .ob {
-  background: color-mix(in srgb, var(--panel) 80%, transparent);
   box-shadow:
-    0 40px 120px rgba(30, 40, 80, 0.18),
-    0 0 0 0.5px var(--panel-border),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
+    0 20px 60px rgba(0, 0, 0, 0.1),
+    0 0 0 0.5px var(--panel-border);
 }
 
 .ob-body {
@@ -3652,23 +3558,16 @@
   min-height: 100%;
 }
 
-/* Each step's mark: its icon on Zepper blue, lit from above. */
+/* Each step's mark: its icon on Zepper blue, as System Settings marks its panes. */
 .ob-badge {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   margin-bottom: 18px;
-  border-radius: 14px;
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--accent) 70%, #fff),
-    var(--accent) 55%,
-    color-mix(in srgb, var(--accent) 80%, #000)
-  );
-  box-shadow:
-    0 8px 24px color-mix(in srgb, var(--accent) 40%, transparent),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 85%, #fff), var(--accent));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
   color: #fff;
 }
 
@@ -3744,7 +3643,6 @@
   height: 96px;
   margin-bottom: 26px;
   object-fit: contain;
-  filter: drop-shadow(0 12px 32px color-mix(in srgb, var(--accent) 45%, transparent));
 }
 
 .ob-highlights {
@@ -4193,9 +4091,7 @@
 .ob-primary {
   min-width: 120px;
   background: color-mix(in srgb, var(--accent) 88%, #000);
-  box-shadow:
-    0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
   color: #fff;
 }
 
