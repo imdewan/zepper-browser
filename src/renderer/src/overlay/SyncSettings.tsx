@@ -106,17 +106,21 @@ export function SyncSettings({ sync }: { sync: SyncSnapshot }): React.JSX.Elemen
   )
 }
 
-function CodeCard({ code }: { code: string }): React.JSX.Element {
+/** The sync code as a QR code, for the iPhone's Camera app (which opens it in Zepper). */
+export function SyncQr({ code, className = 'sync-qr' }: { code: string; className?: string }): React.JSX.Element {
   const svg = useMemo(() => {
     const qr = qrcode(0, 'M')
-    // The iPhone's Camera app opens this in Zepper.
     qr.addData(`zepper://sync#${code.replace(/-/g, '')}`)
     qr.make()
     return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true })
   }, [code])
+  return <div className={className} dangerouslySetInnerHTML={{ __html: svg }} />
+}
+
+function CodeCard({ code }: { code: string }): React.JSX.Element {
   return (
     <div className="sync-code">
-      <div className="sync-qr" dangerouslySetInnerHTML={{ __html: svg }} />
+      <SyncQr code={code} />
       <div className="sync-code-text">
         <div className="settings-row-label">Scan this with your iPhone</div>
         <div className="settings-row-hint">

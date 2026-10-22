@@ -1,32 +1,58 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Cookie, Fingerprint, Globe, Languages, Link2, Lock, ScanSearch, ShieldCheck, Sparkles, Wand2, type LucideIcon } from 'lucide-react'
+import {
+  ArrowDownToLine,
+  Cookie,
+  Fingerprint,
+  Globe,
+  Languages,
+  Layers,
+  Link2,
+  Lock,
+  MonitorSmartphone,
+  Palette,
+  PanelLeft,
+  Pin,
+  Rocket,
+  ScanSearch,
+  ShieldCheck,
+  Smartphone,
+  Sparkles,
+  Wand2,
+  type LucideIcon
+} from 'lucide-react'
 import type { Settings } from '@shared/settings'
 import { THEME_PRESETS, themeBackground } from '@shared/theme'
-import type { ImportKind, ImportSource, Snapshot } from '@shared/types'
+import type { ImportKind, ImportSource, Snapshot, SyncSnapshot } from '@shared/types'
 import logo from '../assets/logo.png'
 import { zepper } from '../bridge'
 import { IconCheck } from '../icons'
 import { THIS_COMPUTER, cx, isMac, shortcut } from '../util'
+import { SyncQr } from './SyncSettings'
 import { Toggle } from './Toggle'
 
 /**
  * The first-launch welcome and setup: what Zepper is, bringing history and passwords over from
- * other browsers, choosing a look, the privacy protections, on-device intelligence, and becoming
- * the default browser. Every step can be skipped; Settings › General shows it again.
+ * other browsers, choosing a look, the privacy protections, on-device intelligence, syncing with
+ * Zepper for iPhone, and becoming the default browser. It fills the window, over the space's own
+ * colours (which change as you pick a look). Every step can be skipped; Settings › General shows
+ * it again.
  */
 
-const ALL_STEPS = ['welcome', 'import', 'look', 'privacy', 'intelligence', 'ready'] as const
+const ALL_STEPS = ['welcome', 'import', 'look', 'privacy', 'intelligence', 'sync', 'ready'] as const
 type Step = (typeof ALL_STEPS)[number]
 /** Apple Intelligence is macOS's: elsewhere its step is left out. */
 const STEPS: readonly Step[] = ALL_STEPS.filter((step) => isMac || step !== 'intelligence')
 
 /** Steps slide in the direction you're going; `custom` reaches the leaving step too. */
 const SLIDE = {
-  enter: (direction: number) => ({ opacity: 0, x: 24 * direction }),
-  center: { opacity: 1, x: 0 },
-  exit: (direction: number) => ({ opacity: 0, x: -24 * direction, transition: { duration: 0.12 } })
+  enter: (direction: number) => ({ opacity: 0, x: 32 * direction, filter: 'blur(4px)' }),
+  center: { opacity: 1, x: 0, filter: 'blur(0px)' },
+  exit: (direction: number) => ({ opacity: 0, x: -32 * direction, filter: 'blur(4px)', transition: { duration: 0.14 } })
 }
+
+/** Zepper's own colours, for a space that has none yet. */
+const ZEPPER_COLOURS = ['#5f86f5', '#9a6cf0', '#3cbfc7']
 
 export function Onboarding({
   snapshot,
@@ -42,6 +68,8 @@ export function Onboarding({
   const [direction, setDirection] = useState(1)
   const step: Step = STEPS[index]
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
+  const space = snapshot.spaces.find((s) => s.id === snapshot.activeSpaceId) ?? snapshot.spaces[0]
+  const colours = space?.theme.colors.length ? space.theme.colors : ZEPPER_COLOURS
 
   const finish = (): void => {
     set({ onboarded: true })
@@ -68,14 +96,15 @@ export function Onboarding({
       className="settings-backdrop ob-backdrop"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.2 } }}
+      exit={{ opacity: 0, transition: { duration: 0.25 } }}
     >
+      <Aurora colours={colours} />
       <motion.div
         className="ob"
-        initial={{ opacity: 0, scale: 0.97, y: 12 }}
+        initial={{ opacity: 0, scale: 0.96, y: 18 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
-        transition={{ type: 'spring', bounce: 0.12, duration: 0.45 }}
+        transition={{ type: 'spring', bounce: 0.14, duration: 0.55, delay: 0.08 }}
       >
         <div className="ob-body">
           <AnimatePresence mode="wait" custom={direction} initial={false}>
@@ -94,6 +123,7 @@ export function Onboarding({
               {step === 'look' && <LookStep snapshot={snapshot} />}
               {step === 'privacy' && <PrivacyStep settings={snapshot.settings} />}
               {step === 'intelligence' && <IntelligenceStep snapshot={snapshot} />}
+              {step === 'sync' && <SyncStep sync={snapshot.sync} />}
               {step === 'ready' && <ReadyStep snapshot={snapshot} />}
             </motion.div>
           </AnimatePresence>
@@ -131,23 +161,74 @@ export function Onboarding({
   )
 }
 
-function Heading({ title, children }: { title: string; children?: React.ReactNode }): React.JSX.Element {
+/**
+ * Behind the setup, the whole window: the space's colours as a gentle wash over a deep ground (a
+ * pale one in light mode), with softer light drifting slowly through it. Still, with Reduce Motion.
+ */
+function Aurora({ colours }: { colours: string[] }): React.JSX.Element {
+  const [a, b = a, c = b] = colours
+  return (
+    <div className="ob-aurora" aria-hidden="true" style={{ '--ob-a': a, '--ob-b': b, '--ob-c': c } as React.CSSProperties}>
+      <span className="ob-blob one" style={{ backgroundColor: a }} />
+      <span className="ob-blob two" style={{ backgroundColor: b }} />
+      <span className="ob-blob three" style={{ backgroundColor: c }} />
+    </div>
+  )
+}
+
+function Heading({ title, icon: Icon, children }: { title: string; icon?: LucideIcon; children?: React.ReactNode }): React.JSX.Element {
   return (
     <header className="ob-heading">
+      {Icon && (
+        <span className="ob-badge">
+          <Icon size={20} strokeWidth={2.1} />
+        </span>
+      )}
       <h1>{title}</h1>
       {children && <p>{children}</p>}
     </header>
   )
 }
 
+const HIGHLIGHTS: { icon: LucideIcon; title: string; detail: string }[] = [
+  { icon: Layers, title: 'Spaces', detail: 'Work, home, side projects' },
+  { icon: PanelLeft, title: 'A sidebar for tabs', detail: 'Essentials, pins and folders' },
+  { icon: ShieldCheck, title: 'Private by default', detail: 'Ads and trackers blocked' }
+]
+
 function Welcome(): React.JSX.Element {
   return (
     <div className="ob-welcome">
-      <img className="ob-logo" src={logo} alt="" draggable={false} />
+      <motion.img
+        className="ob-logo"
+        src={logo}
+        alt=""
+        draggable={false}
+        initial={{ opacity: 0, scale: 0.85, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0.3, duration: 0.7, delay: 0.15 }}
+      />
       <Heading title="Welcome to Zepper">
         Your new browser{isMac ? ' for the Mac' : ''}: spaces for each part of your life, a sidebar built for tabs, and privacy that’s on
         from the start.
       </Heading>
+      <div className="ob-highlights">
+        {HIGHLIGHTS.map(({ icon: Icon, title, detail }, i) => (
+          <motion.div
+            key={title}
+            className="ob-highlight"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.5, delay: 0.3 + i * 0.07 }}
+          >
+            <span className="ob-feature-icon">
+              <Icon size={15} strokeWidth={2} />
+            </span>
+            <span className="ob-highlight-title">{title}</span>
+            <span className="ob-highlight-detail">{detail}</span>
+          </motion.div>
+        ))}
+      </div>
       <p className="ob-note">This takes about a minute. You can change everything later in Settings.</p>
     </div>
   )
@@ -245,7 +326,7 @@ function ImportStep(): React.JSX.Element {
   return (
     <div>
       <div className="ob-heading-row">
-        <Heading title="Bring your things">
+        <Heading title="Bring your things" icon={ArrowDownToLine}>
           Your open tabs, history and passwords from the browsers you use now. Everything stays on {THIS_COMPUTER}.
         </Heading>
         {runnable.length > 1 && (
@@ -332,7 +413,9 @@ function LookStep({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
   return (
     <div>
-      <Heading title="Make it yours">Each space has its own colours. Pick one for this space; you can change it any time.</Heading>
+      <Heading title="Make it yours" icon={Palette}>
+        Each space has its own colours. Pick one for this space; you can change it any time.
+      </Heading>
       <div className="ob-swatches">
         {SWATCHES.map((preset, i) => (
           <button
@@ -405,7 +488,9 @@ const PROTECTIONS: { key: keyof Settings; icon: LucideIcon; title: string; detai
 function PrivacyStep({ settings }: { settings: Settings }): React.JSX.Element {
   return (
     <div>
-      <Heading title="Private by default">Everything here is already on. Turn any of them off for one site from the lock icon.</Heading>
+      <Heading title="Private by default" icon={ShieldCheck}>
+        Everything here is already on. Turn any of them off for one site from the lock icon.
+      </Heading>
       <div className="ob-rows ob-list">
         {PROTECTIONS.map(({ key, icon: Icon, title, detail }) => (
           <div key={key} className="ob-row">
@@ -443,7 +528,7 @@ function IntelligenceStep({ snapshot }: { snapshot: Snapshot }): React.JSX.Eleme
   const available = snapshot.intelligence.ai || snapshot.intelligence.translation || snapshot.intelligence.embeddings
   return (
     <div>
-      <Heading title="Apple Intelligence, on your Mac">
+      <Heading title="Apple Intelligence, on your Mac" icon={Sparkles}>
         Helpful features that run entirely on this Mac. Nothing you read is sent anywhere.
       </Heading>
       <div className="ob-features">
@@ -473,6 +558,114 @@ function IntelligenceStep({ snapshot }: { snapshot: Snapshot }): React.JSX.Eleme
   )
 }
 
+const SYNCED: { icon: LucideIcon; title: string; detail: string }[] = [
+  { icon: Layers, title: 'Spaces and colours', detail: 'The same on both' },
+  { icon: Pin, title: 'Essentials and pins', detail: 'Folders too' },
+  { icon: MonitorSmartphone, title: 'Open tabs', detail: 'Each other’s, a tap away' }
+]
+
+/**
+ * Zepper for iPhone: the phone scans the code shown here (as in Settings › Sync), or another
+ * computer types it. Already syncing, it says with what.
+ */
+function SyncStep({ sync }: { sync: SyncSnapshot }): React.JSX.Element {
+  const [typing, setTyping] = useState(false)
+  const [code, setCode] = useState('')
+  const { status } = sync
+  const others = sync.devices.length
+  return (
+    <div className="ob-sync">
+      <Heading title="Zepper on your iPhone too" icon={Smartphone}>
+        Your spaces, Essentials and pinned tabs, the same on your phone, and each other’s open tabs. No account: it’s encrypted on your
+        devices, with a code only they have.
+      </Heading>
+      {status.kind === 'unavailable' ? (
+        <p className="ob-note">Sync isn’t set up in this build of Zepper.</p>
+      ) : sync.code ? (
+        <div className="ob-sync-code">
+          <SyncQr code={sync.code} className="ob-qr" />
+          <div className="ob-sync-text">
+            <span className="ob-feature-title">Scan this with your iPhone</span>
+            <span className="ob-feature-detail">
+              With the Camera app, or in Zepper › Settings › Sync. On another computer, type the code instead:
+            </span>
+            <code className="ob-sync-value">{sync.code}</code>
+            <span className="ob-feature-detail">
+              {status.kind === 'on' && status.devices > 0
+                ? `Synced with ${status.devices} other device${status.devices === 1 ? '' : 's'}.`
+                : status.kind === 'error'
+                  ? status.message
+                  : 'Waiting for your phone…'}
+            </span>
+          </div>
+        </div>
+      ) : status.kind === 'off' ? (
+        <div className="ob-sync-start">
+          <div className="ob-sync-what">
+            {SYNCED.map(({ icon: Icon, title, detail }) => (
+              <div key={title} className="ob-highlight">
+                <span className="ob-feature-icon">
+                  <Icon size={15} strokeWidth={2} />
+                </span>
+                <span className="ob-highlight-title">{title}</span>
+                <span className="ob-highlight-detail">{detail}</span>
+              </div>
+            ))}
+          </div>
+          <button className="ob-primary" onClick={() => zepper.send({ type: 'sync.start' })}>
+            Sync with iPhone
+          </button>
+          {typing ? (
+            <div className="ob-sync-join">
+              <input
+                className="settings-input"
+                autoFocus
+                value={code}
+                placeholder="XXXX-XXXX-XXXX-…"
+                spellCheck={false}
+                onChange={(e) => setCode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && code.trim()) zepper.send({ type: 'sync.join', code })
+                  if (e.key === 'Escape') {
+                    e.stopPropagation()
+                    setTyping(false)
+                  }
+                }}
+              />
+              <button className="ob-secondary small" disabled={!code.trim()} onClick={() => zepper.send({ type: 'sync.join', code })}>
+                Join
+              </button>
+            </div>
+          ) : (
+            <button className="ob-link" onClick={() => setTyping(true)}>
+              Have a code from another device?
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="ob-rows">
+          <div className="ob-row">
+            <span>
+              {status.kind === 'on'
+                ? others
+                  ? `Synced with ${sync.devices.map((d) => d.name).join(', ')}`
+                  : 'Waiting for your phone'
+                : status.kind === 'connecting'
+                  ? 'Connecting…'
+                  : status.kind === 'error'
+                    ? status.message
+                    : 'Sync stopped'}
+            </span>
+            <button className="ob-secondary small" onClick={() => zepper.send({ type: 'sync.showCode', show: true })}>
+              Show Code
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const TIPS: [string, string][] = [
   ['⌘T', 'Search, open a site or jump to a tab'],
   ['⌘S', 'Show or hide the sidebar'],
@@ -485,7 +678,9 @@ const TIPS: [string, string][] = [
 function ReadyStep({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
   return (
     <div>
-      <Heading title="You’re all set">A few shortcuts worth knowing. They’re all in the menu bar too.</Heading>
+      <Heading title="You’re all set" icon={Rocket}>
+        A few shortcuts worth knowing. They’re all in the menu bar too.
+      </Heading>
       <div className="ob-rows ob-tips">
         {TIPS.map(([keys, label]) => (
           <div key={keys} className="ob-row">

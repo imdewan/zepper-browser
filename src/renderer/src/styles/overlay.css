@@ -1033,7 +1033,11 @@
 }
 
 .sync-code-value {
-  font: 600 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    600 13px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   letter-spacing: 0.02em;
   user-select: text;
 }
@@ -3515,30 +3519,131 @@
 /* ---- Welcome and setup ------------------------------------------------------------- */
 
 .ob-backdrop {
-  background: rgba(0, 0, 0, 0.36);
-  backdrop-filter: blur(6px);
+  /* The window itself becomes the setup: a deep ground (pale in light mode) under the aurora. */
+  overflow: hidden;
+  background: #15161e;
+}
+
+[data-ui='light'] .ob-backdrop {
+  background: #eff0f5;
+}
+
+/* The space's colours as a gentle wash, with softer light drifting slowly through it. */
+.ob-aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* All the colours at once, faintly, so the light never leaves dark gaps between. */
+.ob-aurora::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--ob-a), var(--ob-b) 50%, var(--ob-c));
+  opacity: 0.2;
+  filter: saturate(0.8);
+}
+
+[data-ui='light'] .ob-aurora::before {
+  opacity: 0.16;
+}
+
+.ob-aurora::after {
+  /* A little deeper at the edges, so the panel sits in the light. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(8, 9, 16, 0.3) 100%);
+}
+
+[data-ui='light'] .ob-aurora::after {
+  background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(255, 255, 255, 0.35) 100%);
+}
+
+.ob-blob {
+  position: absolute;
+  width: 95vmax;
+  height: 95vmax;
+  border-radius: 50%;
+  opacity: 0.28;
+  filter: blur(160px) saturate(0.75);
+  transition: background-color 0.8s ease;
+  animation: ob-drift 30s ease-in-out infinite alternate;
+}
+
+[data-ui='light'] .ob-blob {
+  opacity: 0.24;
+}
+
+.ob-blob.one {
+  top: -45vmax;
+  left: -35vmax;
+}
+
+.ob-blob.two {
+  right: -45vmax;
+  top: -15vmax;
+  animation-duration: 36s;
+  animation-delay: -11s;
+}
+
+.ob-blob.three {
+  left: -5vmax;
+  bottom: -60vmax;
+  animation-duration: 42s;
+  animation-delay: -21s;
+}
+
+@keyframes ob-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(6vmax, 4vmax) scale(1.08);
+  }
+  100% {
+    transform: translate(-4vmax, 7vmax) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-blob {
+    animation: none;
+  }
 }
 
 .ob {
   /* Zepper blue throughout, whatever the space's colours. */
   --accent: var(--system-accent);
-  width: min(600px, calc(100vw - 48px));
-  height: min(560px, calc(100vh - 48px));
+  position: relative;
+  width: min(720px, calc(100vw - 64px));
+  height: min(640px, calc(100vh - 64px));
   display: flex;
   flex-direction: column;
-  border-radius: 20px;
+  border-radius: 28px;
   overflow: hidden;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 74%, transparent);
+  backdrop-filter: blur(40px) saturate(1.6);
   box-shadow:
-    0 30px 100px rgba(0, 0, 0, 0.45),
-    0 0 0 0.5px var(--panel-border);
+    0 40px 120px rgba(0, 0, 0, 0.42),
+    0 0 0 0.5px var(--panel-border),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-ui='light'] .ob {
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  box-shadow:
+    0 40px 120px rgba(30, 40, 80, 0.18),
+    0 0 0 0.5px var(--panel-border),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
 }
 
 .ob-body {
   flex: 1;
   min-height: 0;
   overflow: hidden auto;
-  padding: 44px 48px 12px;
+  padding: 48px 56px 12px;
 }
 
 .ob-step {
@@ -3547,33 +3652,54 @@
   min-height: 100%;
 }
 
+/* Each step's mark: its icon on Zepper blue, lit from above. */
+.ob-badge {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--accent) 70%, #fff),
+    var(--accent) 55%,
+    color-mix(in srgb, var(--accent) 80%, #000)
+  );
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--accent) 40%, transparent),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.45);
+  color: #fff;
+}
+
 .ob-heading h1 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
   color: var(--text);
 }
 
 .ob-heading p {
-  margin: 8px 0 0;
-  max-width: 440px;
-  font-size: 13.5px;
-  line-height: 1.5;
+  margin: 10px 0 0;
+  max-width: 500px;
+  font-size: 14px;
+  line-height: 1.55;
   color: var(--text-2);
 }
 
 /* A heading with a button beside it (Import All). */
 .ob-heading-row {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
 }
 
 .ob-heading-row > button {
   flex: none;
-  margin-top: 6px;
+  margin-bottom: 2px;
 }
 
 .ob-note {
@@ -3595,32 +3721,168 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding-bottom: 24px;
+  padding-bottom: 8px;
 }
 
 .ob-welcome .ob-heading h1 {
-  font-size: 30px;
+  font-size: 40px;
+  letter-spacing: -0.03em;
 }
 
 .ob-welcome .ob-heading p {
   margin-inline: auto;
-  max-width: 400px;
-  font-size: 14px;
+  max-width: 440px;
+  font-size: 15px;
+}
+
+.ob-welcome .ob-note {
+  margin-top: 22px;
 }
 
 .ob-logo {
   width: auto;
-  height: 88px;
-  margin-bottom: 24px;
+  height: 96px;
+  margin-bottom: 26px;
   object-fit: contain;
+  filter: drop-shadow(0 12px 32px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+
+.ob-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+  max-width: 560px;
+  margin-top: 30px;
+}
+
+.ob-highlight {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 12px 14px;
+  border-radius: 16px;
+  background: var(--element);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+}
+
+.ob-highlight .ob-feature-icon {
+  margin-bottom: 6px;
+}
+
+.ob-highlight-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ob-highlight-detail {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+/* Sync */
+
+.ob-sync-code {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  margin-top: 26px;
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--element);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+}
+
+.ob-qr {
+  flex: none;
+  width: 168px;
+  height: 168px;
+  padding: 10px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.ob-qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ob-sync-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ob-sync-text .ob-feature-title {
+  font-size: 15px;
+}
+
+.ob-sync-value {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--element);
+  font:
+    500 12.5px ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+  letter-spacing: 0.02em;
+  word-break: break-all;
+  user-select: text;
+  color: var(--text);
+}
+
+.ob-sync-start {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 26px;
+}
+
+/* What syncs, before you start. */
+.ob-sync-what {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.ob-sync-what .ob-highlight {
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px;
+}
+
+.ob-sync-start .ob-primary {
+  height: 40px;
+  padding: 0 22px;
+  font-size: 14px;
+}
+
+.ob-sync-join {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ob-sync-join .settings-input {
+  width: 300px;
 }
 
 /* Import */
 
 .ob-sources {
-  margin-top: 22px;
-  border-radius: 12px;
+  margin-top: 24px;
+  border-radius: 16px;
   background: var(--element);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
   overflow: hidden;
 }
 
@@ -3720,7 +3982,7 @@
 
 .ob-swatch {
   aspect-ratio: 1.35;
-  border-radius: 12px;
+  border-radius: 14px;
   box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.12);
   transition:
     transform 0.15s ease,
@@ -3742,9 +4004,10 @@
 }
 
 .ob-rows {
-  margin-top: 22px;
-  border-radius: 12px;
+  margin-top: 24px;
+  border-radius: 16px;
   background: var(--element);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
 }
 
 .ob-row {
@@ -3790,9 +4053,10 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 12px 12px 14px;
-  border-radius: 12px;
+  padding: 14px 14px 14px 16px;
+  border-radius: 16px;
   background: var(--element);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
 }
 
 .ob-feature-icon {
@@ -3855,8 +4119,9 @@
   gap: 16px;
   margin-top: 12px;
   padding: 14px 14px 14px 16px;
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--element);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
   font-size: 13px;
   color: var(--text);
 }
@@ -3879,7 +4144,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px 20px 48px;
+  padding: 18px 24px 24px 56px;
 }
 
 .ob-dots {
@@ -3914,9 +4179,9 @@
 .ob-primary,
 .ob-secondary,
 .ob-quiet {
-  height: 34px;
-  padding: 0 18px;
-  border-radius: 10px;
+  height: 36px;
+  padding: 0 20px;
+  border-radius: 12px;
   font-size: 13px;
   font-weight: 550;
   transition:
@@ -3926,8 +4191,11 @@
 }
 
 .ob-primary {
-  min-width: 112px;
+  min-width: 120px;
   background: color-mix(in srgb, var(--accent) 88%, #000);
+  box-shadow:
+    0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
   color: #fff;
 }
 
