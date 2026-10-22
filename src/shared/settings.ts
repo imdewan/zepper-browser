@@ -137,6 +137,11 @@ export interface Settings {
   secureDns: SecureDns
   /** The first-launch setup was finished (or skipped). */
   onboarded: boolean
+  /**
+   * Your own shortcuts (Settings › Shortcuts), by command (see SHORTCUT_COMMANDS): an accelerator,
+   * or "" for none. Commands not here keep their own.
+   */
+  shortcuts: Record<string, string>
   /** Offer and save passwords in sign-in forms. */
   passwords: boolean
   /** Sites (registrable domains) where Zepper never offers to save passwords. */
@@ -224,6 +229,7 @@ export const DEFAULT_SETTINGS: Settings = {
   newWindowSpace: 'current',
   secureDns: 'automatic',
   onboarded: false,
+  shortcuts: {},
   passwords: true,
   neverSavePasswords: [],
   developerMode: true,

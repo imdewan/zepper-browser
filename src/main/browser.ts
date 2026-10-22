@@ -762,6 +762,8 @@ export class Browser {
   private readonly attached = new Set<string>()
   /** Ctrl+Tab most-recently-used cycling: the order captured when cycling began. */
   private recentCycle: { order: string[]; index: number; timer: NodeJS.Timeout | null } | null = null
+  /** Settings is recording a shortcut (see watchShortcutRecording). */
+  private recordingShortcut = false
 
   constructor(
     private readonly hub: Hub,
@@ -975,6 +977,7 @@ export class Browser {
     this.win.contentView.addChildView(this.pageHints)
 
     this.pageHints.webContents.on('will-navigate', (event) => event.preventDefault())
+    this.watchShortcutRecording(this.overlay.webContents)
     for (const wc of [this.win.webContents, this.overlay.webContents]) {
       this.watchControlKey(wc)
       wc.on('will-navigate', (event) => event.preventDefault())
@@ -1937,6 +1940,9 @@ export class Browser {
         return shell.showItemInFolder(command.path)
       case 'settings.update':
         return this.settingsStore.update(command.patch)
+      case 'shortcuts.record':
+        this.recordingShortcut = command.on
+        return
       case 'ui.openSettings':
         this.setOverlayMode('full')
         this.overlay.webContents.focus()
@@ -3393,6 +3399,19 @@ export class Browser {
     this.recentCycle = null
     const tab = this.tab(this.activeTabId)
     if (tab) tab.lastActiveAt = Date.now()
+  }
+
+  /**
+   * Settings (in the overlay) recording a shortcut: each key goes to it, before the menu can take it
+   * as a shortcut (⌘T would open a tab) or the page can see it.
+   */
+  private watchShortcutRecording(wc: WebContents): void {
+    wc.on('before-input-event', (event, input) => {
+      if (!this.recordingShortcut || input.type !== 'keyDown') return
+      event.preventDefault()
+      const { key, code, meta, control, alt, shift } = input
+      this.emit({ type: 'shortcuts.key', key, code, meta, control, alt, shift }, 'overlay')
+    })
   }
 
   /** Releasing Control ends a ⌃Tab cycle, wherever focus is. */

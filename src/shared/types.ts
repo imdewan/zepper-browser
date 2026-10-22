@@ -670,6 +670,11 @@ export type Command =
   /** Forget history since a time; 0 clears it all. */
   | { type: 'history.clear'; since: number }
   | { type: 'settings.update'; patch: Partial<Settings> }
+  /**
+   * Settings is recording a shortcut: the keys you press go to it (shortcuts.key), not to the menu or
+   * the page, until it stops.
+   */
+  | { type: 'shortcuts.record'; on: boolean }
   /** Zepper Sync: start a chain here (its code shows for the phone to scan), or join one with its code. */
   | { type: 'sync.start' }
   | { type: 'sync.join'; code: string }
@@ -735,6 +740,8 @@ export type UiEvent =
   | { type: 'about.open'; info: AboutInfo }
   /** Show the downloads window (centred, like History). */
   | { type: 'downloads.open' }
+  /** A key pressed while Settings records a shortcut (see shortcuts.record). */
+  | { type: 'shortcuts.key'; key: string; code: string; meta: boolean; control: boolean; alt: boolean; shift: boolean }
   | { type: 'space.startRename'; spaceId: string }
   | { type: 'space.startCreate' }
   | { type: 'popover.open'; popover: PopoverSpec }

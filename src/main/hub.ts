@@ -1,5 +1,6 @@
 import {
   BrowserWindow,
+  Menu,
   components,
   ipcMain,
   nativeTheme,
@@ -29,6 +30,7 @@ import type { AdBlock } from './adblock'
 import { Browser, WINDOWS_DIR, declineShare, type BrowserKind, type WindowSeed } from './browser'
 import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
 import { bangs } from './bangs'
+import { buildMenu } from './menu'
 import { Downloads } from './downloads'
 import { Extensions } from './extensions'
 import { tidyMode, type TidyMode } from './tidy'
@@ -231,6 +233,8 @@ export class Hub {
     services.settings.onChange((next, prev) => {
       // Sliders change settings many times a second: only redo what the change touched.
       if (next.appIcon !== prev.appIcon) this.applyAppIcon()
+      // The menu is the shortcut table: your shortcuts take effect at once.
+      if (next.shortcuts !== prev.shortcuts) Menu.setApplicationMenu(buildMenu(this))
       const touched = (keys: (keyof typeof next)[]): boolean => keys.some((key) => next[key] !== prev[key])
       if (
         touched([

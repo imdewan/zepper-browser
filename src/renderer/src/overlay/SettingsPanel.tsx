@@ -40,10 +40,12 @@ import type {
 } from '@shared/types'
 import { zepper } from '../bridge'
 import { IconBack, IconClose } from '../icons'
-import { SHOW_IN_FOLDER, YOUR_COMPUTER, cx, isLinux, isMac, listNames, shortcut } from '../util'
+import { SHOW_IN_FOLDER, YOUR_COMPUTER, cx, isLinux, isMac, listNames } from '../util'
 import { ExtensionsSettings } from './ExtensionsSettings'
 import { PasswordsSettings } from './PasswordsSettings'
 import { SyncSettings } from './SyncSettings'
+import { ShortcutsSettings } from './ShortcutsSettings'
+import { acceleratorFor, acceleratorLabel } from '@shared/shortcuts'
 import { SiteListLink, SiteListPage, type SiteListItem } from './SiteListPage'
 import { Toggle } from './Toggle'
 
@@ -120,41 +122,6 @@ const SUB_PAGES: Record<SubPage, { title: string; section: Section }> = {
   notDeveloperSites: { title: 'Local sites without Developer Mode', section: 'developer' }
 }
 
-const SHORTCUTS: [string, string][] = [
-  ['Command bar / new tab', '⌘T'],
-  ['Open location', '⌘L'],
-  ['Toggle sidebar (compact mode)', '⌘S'],
-  ['Close tab / window', '⌘W / ⇧⌘W'],
-  ['Reopen closed tab', '⇧⌘T'],
-  ['Switch to recent tab', '⌃⇥'],
-  ['Next / previous tab in sidebar', '⌥⌘↓ / ⌥⌘↑'],
-  ['Pin / unpin tab', '⌘D'],
-  ['Copy current URL', '⇧⌘C'],
-  ['Copy URL as Markdown', '⌥⇧⌘C'],
-  ['Clear unpinned tabs', '⇧⌘K'],
-  ['New window / private window', '⌘N / ⇧⌘N'],
-  ['Go to space 1–9', '⌃1 … ⌃9'],
-  ['Go to Essential 1–9', '⌥1 … ⌥9'],
-  ['Next / previous space', '⌥⌘→ / ⌥⌘←'],
-  ['Go to tab 1–8 / last', '⌘1 … ⌘8 / ⌘9'],
-  ['Add / remove split pane', '⌃⇧= / ⌃⇧−'],
-  ['Split side by side / stacked / grid', '⌥⌘V / ⌥⌘H / ⌥⌘G'],
-  ['Unsplit all', '⌥⌘U'],
-  ['Screenshot', '⇧⌘2'],
-  ['Print / save page as', '⌘P / ⇧⌘S'],
-  ['Open file', '⌘O'],
-  ['View page source', '⌥⌘U'],
-  ['Reader Mode', '⌥⌘R'],
-  ['Find in page', '⌘F'],
-  ['History / downloads', '⌘Y / ⌥⌘L'],
-  ['Back / forward', '⌘[ / ⌘]'],
-  ['Zoom in / out / reset', '⌘+ / ⌘− / ⌘0'],
-  ['Developer tools', '⌥⌘I'],
-  ['JavaScript console / inspect an element', '⌥⌘J / ⌥⌘C'],
-  ['Developer Mode for this site', '⌥⇧⌘D'],
-  ['Settings', '⌘,']
-]
-
 interface SettingsPanelProps {
   settings: Settings
   widevine: WidevineStatus
@@ -212,6 +179,11 @@ export function SettingsPanel({
   // A list's own page within its section (site permissions…), with a way back.
   const [page, setPage] = useState<SubPage | null>(null)
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
+  /** A command's shortcut as you've set it (Settings › Shortcuts), for the hints that mention it. */
+  const keys = (id: string): string => {
+    const accelerator = acceleratorFor(id, settings.shortcuts, zepper.platform)
+    return accelerator ? acceleratorLabel(accelerator, zepper.platform) : 'no shortcut'
+  }
   const show = (next: Section, nextPage: SubPage | null = null): void => {
     setSection(next)
     setPage(nextPage)
@@ -310,7 +282,7 @@ export function SettingsPanel({
                   items={settings.developerSites.map((host) => ({ key: host, site: host }))}
                   action="Remove"
                   actionTitle={(item) => `Turn off Developer Mode for ${item.site}`}
-                  empty={`Sites you turn Developer Mode on for (${shortcut('⌥⇧⌘D')}, their lock icon or their tab’s menu) show up here.`}
+                  empty={`Sites you turn Developer Mode on for (${keys('developerMode')}, their lock icon or their tab’s menu) show up here.`}
                   onAction={(item) => set({ developerSites: settings.developerSites.filter((h) => h !== item.key) })}
                 />
               )}
@@ -377,7 +349,7 @@ export function SettingsPanel({
                   )}
                   <Row
                     label="New windows open"
-                    hint={`${shortcut('⌘N')}. With your spaces: every space, with its sign-ins and Essentials, starting on the one you're in (pinned and open tabs stay in your main window).`}
+                    hint={`${keys('newWindow')}. With your spaces: every space, with its sign-ins and Essentials, starting on the one you're in (pinned and open tabs stay in your main window).`}
                   >
                     <Segmented
                       value={settings.newWindowSpace}
@@ -543,7 +515,7 @@ export function SettingsPanel({
                       onChange={(memorySaverMode) => set({ memorySaverMode })}
                     />
                   </Row>
-                  <Row label="Closing a pinned tab" hint={`What ${shortcut('⌘W')} does on pinned tabs and Essentials.`}>
+                  <Row label="Closing a pinned tab" hint={`What ${keys('closeTab')} does on pinned tabs and Essentials.`}>
                     <select
                       value={settings.pinnedCloseBehavior}
                       onChange={(e) => set({ pinnedCloseBehavior: e.target.value as PinnedCloseBehavior })}
@@ -678,7 +650,7 @@ export function SettingsPanel({
                   <Row label="Ask where to save each file">
                     <Toggle checked={settings.downloadAsk} onChange={(downloadAsk) => set({ downloadAsk })} />
                   </Row>
-                  <Row label="Your downloads" hint={`Progress, finished files and ${SHOW_IN_FOLDER}. ${shortcut('⌥⌘L')}`}>
+                  <Row label="Your downloads" hint={`Progress, finished files and ${SHOW_IN_FOLDER}. ${keys('downloads')}`}>
                     <button className="panel-button" onClick={() => zepper.send({ type: 'ui.downloads' })}>
                       Show Downloads
                     </button>
@@ -776,7 +748,7 @@ export function SettingsPanel({
                     <Toggle checked={settings.clearHistoryOnQuit} onChange={(clearHistoryOnQuit) => set({ clearHistoryOnQuit })} />
                   </Row>
                   <ClearBrowsingData />
-                  <Row label="Browsing history" hint={`Search it, open pages again or delete them. ${shortcut('⌘Y')}`}>
+                  <Row label="Browsing history" hint={`Search it, open pages again or delete them. ${keys('history')}`}>
                     <button className="panel-button" onClick={() => zepper.send({ type: 'ui.openHistory' })}>
                       Show History
                     </button>
@@ -818,7 +790,7 @@ export function SettingsPanel({
                   </Row>
                   <SiteListLink
                     label="Sites you’re building"
-                    hint={`Turn Developer Mode on or off for any site with ${shortcut('⌥⇧⌘D')}, from its lock icon, or from its tab’s menu.`}
+                    hint={`Turn Developer Mode on or off for any site with ${keys('developerMode')}, from its lock icon, or from its tab’s menu.`}
                     count={settings.developerSites.length}
                     onOpen={() => openPage('developerSites')}
                   />
@@ -831,18 +803,7 @@ export function SettingsPanel({
                 </>
               )}
 
-              {!page && section === 'shortcuts' && (
-                <>
-                  <div className="shortcut-list">
-                    {SHORTCUTS.map(([label, keys]) => (
-                      <div key={label} className="shortcut-row">
-                        <span>{label}</span>
-                        <kbd>{shortcut(keys)}</kbd>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+              {!page && section === 'shortcuts' && <ShortcutsSettings settings={settings} />}
             </motion.div>
           </div>
         </div>
