@@ -36,6 +36,7 @@ interface PageConfig {
   brand: { name: string; major: string; full: string } | null
   passkeys: boolean
   blockedPermissions: string[]
+  shiftRightClick: boolean
 }
 
 /**
@@ -354,7 +355,9 @@ function fingerprintShim(seed: number, chip: string, chipPattern: string, unmask
     })
     Object.defineProperty(Navigator.prototype, 'plugins', {
       ...pluginsDescriptor,
-      get: disguise(pluginsDescriptor.get, { apply: (target, self, args) => (self === navigator ? plugins : Reflect.apply(target, self, args)) })
+      get: disguise(pluginsDescriptor.get, {
+        apply: (target, self, args) => (self === navigator ? plugins : Reflect.apply(target, self, args))
+      })
     })
     // The prototypes' own getters and methods, called on the list or a made-up plugin.
     const getter = <T extends object>(proto: T, key: string, value: (self: unknown) => unknown | typeof NOT_OURS): void => {
@@ -760,6 +763,24 @@ function hideSwitchToChrome(): void {
   })
 }
 
+/**
+ * Shift-right-click shows Zepper's menu (Open Link in New Tab, Copy, Inspect…), as in Firefox, even on
+ * a page that draws its own menu. Added before the page's scripts run, at the very start of the
+ * event's way down to what was clicked, this stops the page's handlers ever seeing it: nothing
+ * prevents the default, so the menu shows. Its other right-button events go unseen too, so a page that
+ * opens its menu on the button going down doesn't open it as well.
+ */
+function forceMenuOnShift(): void {
+  const hide = (event: Event): void => {
+    const mouse = event as MouseEvent
+    if (!mouse.shiftKey) return
+    if (event.type === 'contextmenu' || mouse.button === 2) event.stopImmediatePropagation()
+  }
+  for (const type of ['contextmenu', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'auxclick']) {
+    window.addEventListener(type, hide, { capture: true })
+  }
+}
+
 /** Reader Mode's page tells Zepper its text size and colours, for the next one (main checks it's Zepper's). */
 const READER_PREFS_EVENT = 'zepper-reader-prefs'
 const READER_PREFS_CHANNEL = 'zepper:reader-prefs'
@@ -775,6 +796,7 @@ function applyCompat(): void {
   try {
     const config = ipcRenderer.sendSync(PAGE_CONFIG_CHANNEL) as PageConfig
     contextBridge.executeInMainWorld({ func: permissionsShim, args: [config.blockedPermissions ?? []] })
+    if (config.shiftRightClick) forceMenuOnShift()
     // Camera, microphone and screen use, for the tab's indicators (the event name is this page's secret).
     const captureEvent = `zepper-capture-${crypto.randomUUID()}`
     document.addEventListener(captureEvent, (event) => ipcRenderer.send(CAPTURE_CHANNEL, String((event as CustomEvent).detail)))

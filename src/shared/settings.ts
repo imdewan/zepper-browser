@@ -164,6 +164,8 @@ export interface Settings {
   // Spaces and gestures
   swipeBetweenSpaces: boolean
   swipeToNavigate: boolean
+  /** Shift-right-click shows Zepper's menu, even on a page with its own (its right-click handlers don't see it). */
+  shiftRightClick: boolean
   wrapSpaces: boolean
   compactRevealOnHover: boolean
   // Privacy
@@ -246,6 +248,7 @@ export const DEFAULT_SETTINGS: Settings = {
   downloadAsk: false,
   swipeBetweenSpaces: true,
   swipeToNavigate: true,
+  shiftRightClick: true,
   wrapSpaces: true,
   compactRevealOnHover: true,
   adblock: true,

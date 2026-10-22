@@ -666,6 +666,12 @@ export function SettingsPanel({
                   <Row label="Swipe to go back and forward" hint="Two-finger swipe on a page.">
                     <Toggle checked={settings.swipeToNavigate} onChange={(swipeToNavigate) => set({ swipeToNavigate })} />
                   </Row>
+                  <Row
+                    label="Shift-right-click for Zepper’s menu"
+                    hint="On sites with their own right-click menu, hold Shift to get Zepper’s instead. Applies as pages load."
+                  >
+                    <Toggle checked={settings.shiftRightClick} onChange={(shiftRightClick) => set({ shiftRightClick })} />
+                  </Row>
                   <Row label="Wrap around spaces" hint="Next space after the last one is the first.">
                     <Toggle checked={settings.wrapSpaces} onChange={(wrapSpaces) => set({ wrapSpaces })} />
                   </Row>

@@ -41,6 +41,8 @@ export interface PageConfig {
   passkeys: boolean
   /** Permissions this frame's site was refused; any other undecided one reads as "prompt", not "denied". */
   blockedPermissions: string[]
+  /** Shift-right-click shows Zepper's menu, whatever the page does with right-clicks. */
+  shiftRightClick: boolean
 }
 
 const FIREFOX_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0'
@@ -117,7 +119,7 @@ export function servePageConfig(
     }
     const ua = currentUa()
     const chromium = isChromiumUa(ua)
-    const { googleSignInCompat, widevine, widevinePrompt, globalPrivacyControl, blockFingerprinting } = settings.get()
+    const { googleSignInCompat, widevine, widevinePrompt, globalPrivacyControl, blockFingerprinting, shiftRightClick } = settings.get()
     const seed = blockFingerprinting && siteUrl && protects(siteUrl) ? fingerprintSeed(siteUrl) : null
     const config: PageConfig = {
       signInCompat: chromium && googleSignInCompat,
@@ -136,7 +138,8 @@ export function servePageConfig(
           }
         : null,
       passkeys: topLevel && /^https:|^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(pageUrl),
-      blockedPermissions: pageUrl ? blockedPermissions(event.sender, originOf(pageUrl)) : []
+      blockedPermissions: pageUrl ? blockedPermissions(event.sender, originOf(pageUrl)) : [],
+      shiftRightClick
     }
     event.returnValue = config
   })
