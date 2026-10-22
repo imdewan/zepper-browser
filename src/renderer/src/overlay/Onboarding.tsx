@@ -41,8 +41,13 @@ import { Toggle } from './Toggle'
 
 const ALL_STEPS = ['welcome', 'import', 'look', 'privacy', 'intelligence', 'sync', 'ready'] as const
 type Step = (typeof ALL_STEPS)[number]
-/** Apple Intelligence is macOS's: elsewhere its step is left out. */
-const STEPS: readonly Step[] = ALL_STEPS.filter((step) => isMac || step !== 'intelligence')
+/**
+ * Apple Intelligence is macOS's: elsewhere its step is left out. So is syncing, in a build without
+ * its service.
+ */
+function stepsFor(sync: SyncSnapshot): readonly Step[] {
+  return ALL_STEPS.filter((step) => (isMac || step !== 'intelligence') && (step !== 'sync' || sync.status.kind !== 'unavailable'))
+}
 
 /** Steps slide in the direction you're going; `custom` reaches the leaving step too. */
 const SLIDE = {
@@ -61,9 +66,10 @@ export function Onboarding({
   startAt?: Step
   onClose: () => void
 }): React.JSX.Element {
-  const [index, setIndex] = useState(() => Math.max(0, STEPS.indexOf(startAt ?? 'welcome')))
+  const steps = stepsFor(snapshot.sync)
+  const [index, setIndex] = useState(() => Math.max(0, steps.indexOf(startAt ?? 'welcome')))
   const [direction, setDirection] = useState(1)
-  const step: Step = STEPS[index]
+  const step: Step = steps[index]
   const set = (patch: Partial<Settings>): void => zepper.send({ type: 'settings.update', patch })
   const space = snapshot.spaces.find((s) => s.id === snapshot.activeSpaceId) ?? snapshot.spaces[0]
   const tint = space?.theme.colors[0]
@@ -74,7 +80,7 @@ export function Onboarding({
   }
   const go = (delta: number): void => {
     setDirection(delta)
-    setIndex((i) => Math.max(0, Math.min(STEPS.length - 1, i + delta)))
+    setIndex((i) => Math.max(0, Math.min(steps.length - 1, i + delta)))
   }
 
   // Escape skips the rest, like "Skip setup".
@@ -128,7 +134,7 @@ export function Onboarding({
 
         <footer className="ob-footer">
           <div className="ob-dots" aria-hidden="true">
-            {STEPS.map((s, i) => (
+            {steps.map((s, i) => (
               <span key={s} className={cx('ob-dot', i === index && 'current', i < index && 'done')} />
             ))}
           </div>
@@ -142,7 +148,7 @@ export function Onboarding({
                 Back
               </button>
             )}
-            {index < STEPS.length - 1 ? (
+            {index < steps.length - 1 ? (
               <button className="ob-primary" onClick={() => go(1)}>
                 {index === 0 ? 'Get started' : 'Continue'}
               </button>

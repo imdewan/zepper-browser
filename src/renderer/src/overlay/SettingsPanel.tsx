@@ -221,7 +221,8 @@ export function SettingsPanel({
       >
         <nav className="settings-nav">
           <div className="settings-title">Settings</div>
-          {SECTIONS.map((s) => (
+          {/* Sync only in a build with its service. */}
+          {SECTIONS.filter((s) => s.id !== 'sync' || sync.status.kind !== 'unavailable').map((s) => (
             <button key={s.id} className={cx('settings-nav-item', section === s.id && 'active')} onClick={() => open(s.id)}>
               <span className="settings-nav-icon" style={{ background: s.color }}>
                 <s.Icon size={12} strokeWidth={2.4} />
