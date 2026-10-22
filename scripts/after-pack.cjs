@@ -10,7 +10,10 @@
 //    knows each update as the same app and camera/microphone permissions carry over (the Keychain
 //    still asks once per update without an Apple team). Without it, an ad-hoc signature (a new app
 //    to macOS every build).
-//    Apple code signing (when there's a Developer ID) replaces this afterwards.
+//    electron-builder's own signing is off (CSC_IDENTITY_AUTO_DISCOVERY=false in `npm run dist`): it
+//    would pick any Apple certificate on the Mac, an Apple Development one too (Xcode makes one when
+//    you sign in), which isn't for apps you give out, and an update signed differently from the
+//    installed app is refused by the updater. With a Developer ID, name it (CSC_NAME) to sign with it.
 const { execFileSync } = require('node:child_process')
 const { existsSync } = require('node:fs')
 const { join } = require('node:path')

@@ -24,7 +24,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "check": "npm run typecheck && npm run lint && prettier --check .",
-    "dist": "electron-vite build && npm run build:native && node scripts/stage-electron.mjs && electron-builder --mac --arm64 --x64 && cp dist/latest-mac.yml dist/Zepper-update-mac.yml",
+    "dist": "electron-vite build && npm run build:native && node scripts/stage-electron.mjs && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 --x64 && cp dist/latest-mac.yml dist/Zepper-update-mac.yml",
     "dist:linux": "electron-vite build && node scripts/stage-electron.mjs linux && electron-builder --linux --publish never",
     "dist:browser": "node scripts/dist-browser.mjs",
     "brand:dev": "node scripts/brand-dev-runtime.mjs",
