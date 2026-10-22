@@ -221,10 +221,12 @@
   inset: 0;
   background: var(--window-base);
   color: var(--text-2);
-  -webkit-app-region: drag;
 }
 
+/* Only the bar itself moves the window: a drag region is the whole window's, under the call too, so
+   one filling the window took every click on the call (Meet's buttons) as the start of a drag. */
 .call-row {
+  -webkit-app-region: drag;
   height: 32px;
   display: flex;
   align-items: center;
