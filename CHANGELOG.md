@@ -8,6 +8,16 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 - **Sync with Zepper for iPhone** (Settings › Sync): your spaces, with their colours, Essentials, pinned tabs and folders, the same on your Mac and your phone, and each device's open tabs for the others to see. No account: your phone scans a code on your Mac. Everything is encrypted on your devices before it leaves them, so the server can't read it ([how it works](docs/SYNC.md)). Each device keeps its own sign-ins and history. Sync needs a build with its service set up.
 
+## [0.1.17] - 2026-10-26
+
+### Added
+
+- **Credits** (About Zepper › Credits): Zepper is open source, under the GPL, and here's everything it's built on, each with its license in full: Chromium, Electron, the filter lists and data it downloads, the icons it borrows, and all 125 packages, MIT-licensed ones too. Chromium's own credits, every component it's made of, now come with Zepper and open in a tab.
+
+### Fixed
+
+- **A YouTube video that kept reloading without playing**, the time flickering to 0:00 and back: after four tries, Zepper loads the page again, which starts it. That page leaves out uBlock Origin's fix that kept reloading the player, so if YouTube still holds the video back, it waits out the ad's time instead, and plays. Once per video, so the page can't keep reloading.
+
 ## [0.1.16] - 2026-10-26
 
 ### Changed
@@ -295,7 +305,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.16...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.17...HEAD
+[0.1.17]: https://github.com/imdewan/zepper-browser/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/imdewan/zepper-browser/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/imdewan/zepper-browser/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/imdewan/zepper-browser/compare/v0.1.13...v0.1.14
