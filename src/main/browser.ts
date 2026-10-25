@@ -36,9 +36,10 @@ import {
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { copyFile, readFile, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { gunzipSync } from 'node:zlib'
 import {
   PEEK_AREA_EXTRA,
   PEEK_HOVER_EXTRA,
@@ -1814,6 +1815,8 @@ export class Browser {
         return void this.hub.updater.check(true)
       case 'app.restartToUpdate':
         return this.hub.restartToUpdate()
+      case 'app.openChromiumCredits':
+        return void this.openChromiumCredits()
       case 'share.choose':
         return this.answerShare(command.id, command.sourceId, command.audio)
       case 'ui.openAssistant':
@@ -6197,6 +6200,20 @@ export class Browser {
     this.setOverlayMode('full')
     this.overlay.webContents.focus()
     this.emit({ type: 'about.open', info }, 'overlay')
+  }
+
+  /**
+   * Chromium's credits, packaged compressed (they're 20 MB of HTML): unpacked once into the temporary
+   * folder, then opened like any page. A development build reads Electron's own copy.
+   */
+  private async openChromiumCredits(): Promise<void> {
+    const packaged = join(process.resourcesPath, 'licenses', 'chromium.html.gz')
+    const unpacked = join(app.getPath('temp'), `zepper-chromium-credits-${process.versions.chrome}.html`)
+    if (!existsSync(unpacked)) {
+      if (!app.isPackaged) await copyFile(join(app.getAppPath(), 'node_modules', 'electron', 'dist', 'LICENSES.chromium.html'), unpacked)
+      else await writeFile(unpacked, gunzipSync(await readFile(packaged)))
+    }
+    this.openInput(pathToFileURL(unpacked).href, 'new')
   }
 
   private async confirmClearSpaceData(id: string): Promise<void> {

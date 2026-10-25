@@ -5,3 +5,4 @@ src/main/bangs-top.json
 package-lock.json
 .evs
 build/AppIcon.icon
+src/renderer/src/overlay/open-source.generated.json

@@ -5,6 +5,7 @@ import logo from '../assets/logo.png'
 import { zepper } from '../bridge'
 import { IconCheck, IconClose, IconCopy, IconSparkle, IconUpdate } from '../icons'
 import { isMac } from '../util'
+import { OpenSourcePanel } from './OpenSourcePanel'
 
 const dayFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -84,14 +85,17 @@ function UpdateStatusLine({ update }: { update: UpdateStatus }): React.JSX.Eleme
 /** About Zepper: what you're running and what it's built on. */
 export function AboutPanel({ info, update, onClose }: { info: AboutInfo; update: UpdateStatus; onClose: () => void }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  /** Open Source, the list of what Zepper is built on, in place of About. */
+  const [credits, setCredits] = useState(false)
 
   useEffect(() => {
+    if (credits) return
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, credits])
 
   const rows: [string, string, string?][] = [
     ['Chromium', info.chromium],
@@ -131,46 +135,56 @@ export function AboutPanel({ info, update, onClose }: { info: AboutInfo; update:
       exit={{ opacity: 0, transition: { duration: 0.15 } }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <motion.div
-        className="about"
-        initial={{ opacity: 0, scale: 0.95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.97, y: 6, transition: { duration: 0.15 } }}
-        transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-      >
-        <button className="about-close" title="Close (Esc)" onClick={onClose}>
-          <IconClose size={13} />
-        </button>
-        <div className="about-hero">
-          <img className="about-logo" src={logo} alt="" draggable={false} />
-          <h1 className="about-name">Zepper</h1>
-          <p className="about-tagline">A private browser with Spaces and built-in ad blocking, on Chromium.</p>
-          <div className="about-version">Version {info.version}</div>
-          <UpdateStatusLine update={update} />
-        </div>
-        <dl className="about-rows">
-          {rows.map(([label, value, title]) => (
-            <div key={label} className="about-row">
-              <dt>{label}</dt>
-              <dd title={title ?? value}>{value}</dd>
+      {credits ? (
+        <OpenSourcePanel onBack={() => setCredits(false)} onClose={onClose} />
+      ) : (
+        <motion.div
+          className="about"
+          initial={{ opacity: 0, scale: 0.95, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.97, y: 6, transition: { duration: 0.15 } }}
+          transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+        >
+          <button className="about-close" title="Close (Esc)" onClick={onClose}>
+            <IconClose size={13} />
+          </button>
+          <div className="about-hero">
+            <img className="about-logo" src={logo} alt="" draggable={false} />
+            <h1 className="about-name">Zepper</h1>
+            <p className="about-tagline">A private browser with Spaces and built-in ad blocking, on Chromium.</p>
+            <div className="about-version">Version {info.version}</div>
+            <UpdateStatusLine update={update} />
+          </div>
+          <dl className="about-rows">
+            {rows.map(([label, value, title]) => (
+              <div key={label} className="about-row">
+                <dt>{label}</dt>
+                <dd title={title ?? value}>{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="about-actions">
+            <button className="panel-button" onClick={copy}>
+              {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
+              {copied ? 'Copied' : 'Copy version info'}
+            </button>
+            <button className="panel-button" onClick={whatsNew}>
+              <IconSparkle size={13} />
+              What’s new
+            </button>
+          </div>
+          <footer className="about-footer">
+            <div>© 2026 Dewan Shakil</div>
+            <div>
+              Zepper is open source, under the GPL.{' '}
+              <button className="about-link" onClick={() => setCredits(true)}>
+                Credits
+              </button>
             </div>
-          ))}
-        </dl>
-        <div className="about-actions">
-          <button className="panel-button" onClick={copy}>
-            {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
-            {copied ? 'Copied' : 'Copy version info'}
-          </button>
-          <button className="panel-button" onClick={whatsNew}>
-            <IconSparkle size={13} />
-            What’s new
-          </button>
-        </div>
-        <footer className="about-footer">
-          <div>© 2026 Dewan Shakil</div>
-          <div>Chromium and Widevine are ©&nbsp;Google; filter lists by their authors.</div>
-        </footer>
-      </motion.div>
+            <div>Chromium and Widevine are ©&nbsp;Google; filter lists by their authors.</div>
+          </footer>
+        </motion.div>
+      )}
     </motion.div>
   )
 }

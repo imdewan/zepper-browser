@@ -24,11 +24,12 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "check": "npm run typecheck && npm run lint && prettier --check .",
-    "dist": "electron-vite build && npm run build:native && node scripts/stage-electron.mjs && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 --x64 && cp dist/latest-mac.yml dist/Zepper-update-mac.yml",
-    "dist:linux": "electron-vite build && node scripts/stage-electron.mjs linux && electron-builder --linux --publish never",
+    "dist": "node scripts/licenses.mjs && electron-vite build && npm run build:native && node scripts/stage-electron.mjs && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 --x64 && cp dist/latest-mac.yml dist/Zepper-update-mac.yml",
+    "dist:linux": "node scripts/licenses.mjs && electron-vite build && node scripts/stage-electron.mjs linux && electron-builder --linux --publish never",
     "dist:browser": "node scripts/dist-browser.mjs",
     "brand:dev": "node scripts/brand-dev-runtime.mjs",
     "build:native": "node scripts/build-native.mjs",
+    "licenses": "node scripts/licenses.mjs",
     "vmp:signup": ".evs/bin/python -m castlabs_evs.account signup",
     "vmp:login": ".evs/bin/python -m castlabs_evs.account reauth",
     "vmp:sign": ".evs/bin/python -m castlabs_evs.vmp sign-pkg node_modules/electron/dist",
@@ -119,6 +120,12 @@
       "out/**",
       "resources/**",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/licenses/chromium.html.gz",
+        "to": "licenses/chromium.html.gz"
+      }
     ],
     "mac": {
       "icon": "build/icon.icns",

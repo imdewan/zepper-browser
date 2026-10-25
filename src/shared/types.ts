@@ -617,6 +617,8 @@ export type Command =
   | { type: 'app.checkForUpdates' }
   /** Restart into the downloaded update (or, where Zepper can't update itself, open the download page). */
   | { type: 'app.restartToUpdate' }
+  /** Chromium's credits (every component it's made of, with its license) in a new tab. */
+  | { type: 'app.openChromiumCredits' }
   /** The screen-share picker's answer: a tab, window or screen (null: cancelled), and whether to share audio. */
   | { type: 'share.choose'; id: number; sourceId: string | null; audio: boolean }
   /** Summarise the current page, or answer a question about it (with earlier questions and answers). */

@@ -2795,6 +2795,145 @@
   color: var(--text-3);
 }
 
+.about-link {
+  font: inherit;
+  color: var(--accent);
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- About → Open Source ------------------------------------------------------------- */
+
+.open-source {
+  --accent: var(--system-accent);
+  width: min(640px, calc(100vw - 48px));
+  height: min(600px, calc(100vh - 48px));
+}
+
+.open-source-intro {
+  padding-bottom: 6px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.open-source-intro p {
+  margin: 0 0 10px;
+}
+
+.open-source-actions,
+.open-source-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.open-source-actions {
+  margin: 14px 0 4px;
+}
+
+.open-source-search {
+  width: 100%;
+  margin: 18px 0 2px;
+  font-family: inherit;
+}
+
+.open-source-count {
+  font-weight: 500;
+  text-transform: none;
+}
+
+.open-source-item {
+  border-bottom: 1px solid var(--separator);
+}
+
+.open-source-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  text-align: left;
+  color: var(--text);
+}
+
+.open-source-row .settings-row-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.open-source-chevron {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  color: var(--text-3);
+}
+
+.open-source-version {
+  font-weight: 400;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.open-source-hint {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.open-source-item.expanded .open-source-hint {
+  white-space: normal;
+}
+
+.open-source-license {
+  flex: none;
+  max-width: 45%;
+  padding: 2px 8px;
+  border-radius: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--element);
+}
+
+.open-source-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 0 14px 24px;
+  font-size: 12px;
+}
+
+.open-source-by,
+.open-source-note {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.open-source-text {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--element);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.open-source-intro .open-source-text {
+  margin-top: 10px;
+}
+
 /* ---- Settings → Extensions ----------------------------------------------------------- */
 
 .ext-list {
