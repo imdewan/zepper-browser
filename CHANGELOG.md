@@ -8,6 +8,16 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 - **Sync with Zepper for iPhone** (Settings › Sync): your spaces, with their colours, Essentials, pinned tabs and folders, the same on your Mac and your phone, and each device's open tabs for the others to see. No account: your phone scans a code on your Mac. Everything is encrypted on your devices before it leaves them, so the server can't read it ([how it works](docs/SYNC.md)). Each device keeps its own sign-ins and history. Sync needs a build with its service set up.
 
+## [0.1.16] - 2026-10-26
+
+### Changed
+
+- Private browsing's icon is a hat pulled down and dark glasses, as in Zepper for iPhone. Its badge in the sidebar no longer sits right against the window's buttons.
+
+### Fixed
+
+- **YouTube videos that reloaded over and over** before playing, the time flickering to 0:00 and back, and some that never started. The ad blocker now has uBlock Origin's 2025 and 2026 filters, which hold its newer YouTube fixes, and Ghostery's engine 2.20, whose scripts no longer slow YouTube's player down by wrapping one another. A video can still reload once as it starts, where YouTube builds its ad into the video: that's uBlock Origin's way past it, rather than a wait as long as the ad.
+
 ## [0.1.15] - 2026-10-23
 
 ### Added
@@ -285,7 +295,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.15...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.16...HEAD
+[0.1.16]: https://github.com/imdewan/zepper-browser/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/imdewan/zepper-browser/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/imdewan/zepper-browser/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/imdewan/zepper-browser/compare/v0.1.12...v0.1.13
