@@ -1,4 +1,4 @@
-import { ElectronBlocker } from '@ghostery/adblocker-electron'
+import { ElectronBlocker, adsAndTrackingLists, fullLists } from '@ghostery/adblocker-electron'
 import {
   app,
   ipcMain,
@@ -16,6 +16,21 @@ import type { Protection } from '@shared/settings'
 import { HttpsUpgrades, cleanLink } from './shields'
 
 const REFRESH_AFTER_MS = 24 * 60 * 60 * 1000
+
+/**
+ * uBlock Origin keeps each year's new filters in a file of its own, and Ghostery mirrors them all, but
+ * its list sets stop at 2024: YouTube's newer fixes are in the later years' files. Only years whose
+ * file exists can go here, as one missing list fails the whole set.
+ */
+const RECENT_YEARS = ['2025', '2026']
+
+function withRecentFilters(lists: string[]): string[] {
+  const last = lists.find((url) => url.endsWith('/ublock-origin/filters-2024.txt'))
+  if (!last) return lists
+  const recent = RECENT_YEARS.map((year) => last.replace('2024', year)).filter((url) => !lists.includes(url))
+  const at = lists.indexOf(last) + 1
+  return [...lists.slice(0, at), ...recent, ...lists.slice(at)]
+}
 
 export const COSMETICS_CHANNEL = 'zepper:cosmetics'
 export const COSMETICS_DOM_CHANNEL = 'zepper:cosmetics-dom'
@@ -72,8 +87,8 @@ function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): str
  * Built-in ad and tracker blocking, uBlock Origin–style.
  *
  * - Network requests are matched by Ghostery's engine against uBlock Origin's
- *   default lists (EasyList, EasyPrivacy, Peter Lowe, uBO filters/badware/
- *   privacy/quick-fixes/unbreak).
+ *   default lists (EasyList, EasyPrivacy, Peter Lowe, uBO filters of every
+ *   year/badware/privacy/quick-fixes/unbreak).
  * - Cosmetic filters and scriptlets are handed to our page preload
  *   synchronously, so they apply at document start, before any page script
  *   runs. That is what defeats YouTube's player ads; the stock Electron
@@ -126,7 +141,7 @@ export class AdBlock {
     if (this.annoyances && !this.full) this.full = await this.load(true)
   }
 
-  /** Loads an engine from its cache (refreshed daily) or the prebuilt lists. */
+  /** Loads an engine from its cache (refreshed daily) or the lists. */
   private async load(full: boolean): Promise<ElectronBlocker | null> {
     const path = this.cachePath(full)
     if (await this.cacheIsStale(path)) await unlink(path).catch(() => {})
@@ -136,9 +151,7 @@ export class AdBlock {
         read: async (file: string) => new Uint8Array(await readFile(file)),
         write: (file: string, buffer: Uint8Array) => writeFile(file, buffer)
       }
-      const blocker = full
-        ? await ElectronBlocker.fromPrebuiltFull(fetch, cache)
-        : await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, cache)
+      const blocker = await ElectronBlocker.fromLists(fetch, withRecentFilters(full ? fullLists : adsAndTrackingLists), {}, cache)
       blocker.on('request-blocked', (request) => this.onBlocked(request.tabId))
       return blocker
     } catch (error) {
