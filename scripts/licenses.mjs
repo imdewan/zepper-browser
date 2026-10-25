@@ -9,6 +9,7 @@
 //   compressed, to open in a tab.
 //
 // Writes src/renderer/src/overlay/open-source.generated.json and build/licenses/chromium.html.gz.
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, existsSync, statSync, writeFileSync } from 'node:fs'
 import { builtinModules } from 'node:module'
 import { dirname, join, relative } from 'node:path'
@@ -173,7 +174,22 @@ for (const name of roots) visit(name, root)
 const electronDist = join(root, 'node_modules', 'electron', 'dist')
 const electronVersion = JSON.parse(readFileSync(join(root, 'node_modules', 'electron', 'package.json'), 'utf8')).version
 
-const ELECTRON = textId(readFileSync(join(electronDist, 'LICENSE'), 'utf8').trim())
+/**
+ * One of the files Electron's runtime comes with (its license, Chromium's credits): from the runtime in
+ * node_modules, or where that isn't installed (Linux packaging, which uses castLabs' runtimes), from
+ * one of the runtimes scripts/stage-electron.mjs downloaded.
+ */
+function electronFile(name) {
+  const installed = join(electronDist, name)
+  if (existsSync(installed)) return readFileSync(installed)
+  const cache = join(root, 'node_modules', '.cache')
+  const zip =
+    existsSync(cache) && readdirSync(cache).find((file) => file.startsWith(`electron-v${electronVersion}-`) && file.endsWith('.zip'))
+  if (!zip) throw new Error(`No Electron runtime to read ${name} from: run npm install, or scripts/stage-electron.mjs`)
+  return execFileSync('unzip', ['-p', join(cache, zip), name], { maxBuffer: 256 * 1024 * 1024 })
+}
+
+const ELECTRON = textId(electronFile('LICENSE').toString('utf8').trim())
 
 // Not npm packages, or not only: what Zepper is made of and what it downloads.
 const projects = [
@@ -258,9 +274,8 @@ const data = {
 }
 writeFileSync(OUT, JSON.stringify(data) + '\n')
 
-const credits = join(electronDist, 'LICENSES.chromium.html')
 mkdirSync(dirname(CHROMIUM_OUT), { recursive: true })
-writeFileSync(CHROMIUM_OUT, gzipSync(readFileSync(credits), { level: 9 }))
+writeFileSync(CHROMIUM_OUT, gzipSync(electronFile('LICENSES.chromium.html'), { level: 9 }))
 
 const size = (path) => `${Math.round(statSync(path).size / 1024)} KB`
 console.log(
