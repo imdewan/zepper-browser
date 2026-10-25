@@ -232,7 +232,8 @@
   flex: none;
 }
 
-.extensions-button {
+.extensions-button,
+.top-row .private-badge {
   margin-left: 12px;
 }
 
@@ -290,6 +291,9 @@
 /* Full screen: the sidebar button stands where the traffic lights were, extensions beside it. */
 .top-row .sidebar-toggle + .extensions-button {
   margin-left: 0;
+}
+.top-row .sidebar-toggle + .private-badge {
+  margin-left: 6px;
 }
 
 /* Optional row of pinned extensions under the address bar. */
@@ -358,7 +362,10 @@
     display: none;
   }
   .top-row .private-badge {
-    padding: 0 5px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    justify-content: center;
   }
 }
 
