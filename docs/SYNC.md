@@ -12,7 +12,9 @@ The format is version 1. It's implemented, byte for byte the same, in:
 - desktop: `src/shared/sync-protocol.ts` (with `src/main/sync.ts` and `src/main/sync-model.ts`);
 - iPhone: `src/sync/protocol.ts` (with `src/sync/engine.ts` and `src/sync/merge.ts`).
 
-Both test suites check the same vectors (`test/sync-vectors.json`, `src/sync/vectors.json`).
+Both test suites check the same vectors (`test/sync-vectors.json`, `src/sync/vectors.json`). They
+talk to the server with the same client (`src/shared/sync-relay.ts`, `src/sync/relay.ts`), and the
+server is in `sync-server/`.
 
 ## Pairing
 
@@ -28,26 +30,51 @@ new chain and pair the others again.
 
 From the secret, with HKDF-SHA256 and the salt `zepper-sync-v1`:
 
-| info      | length | used for                                                    |
-| --------- | ------ | ----------------------------------------------------------- |
-| `chain`   | 16     | the chain id (base64url), where the records live            |
-| `encrypt` | 32     | the XChaCha20-Poly1305 key records are sealed with          |
-| `name`    | 32     | the HMAC-SHA256 key for document ids                        |
+| info      | length | used for                                             |
+| --------- | ------ | ---------------------------------------------------- |
+| `chain`   | 16     | the chain id (base64url), where the records live     |
+| `access`  | 32     | the access token (base64url), which gets a device in |
+| `encrypt` | 32     | the XChaCha20-Poly1305 key records are sealed with   |
+| `name`    | 32     | the HMAC-SHA256 key for document ids                 |
 
 ## Storage
 
-One Firestore collection per chain: `chains/{chainId}/records/{docId}`.
+A server that keeps each chain's records, encrypted, and passes changes between its devices, as
+Brave Sync's server does: a Cloudflare Worker, with a Durable Object for each chain (named by its
+id) holding the records in SQLite (`sync-server/src/index.ts`). It's at
+`wss://sync.zepper.workers.dev`; `npm run dev` in `sync-server/` runs one locally
+(`ZEPPER_SYNC_SERVER=ws://127.0.0.1:8787` points the desktop app at it,
+`EXPO_PUBLIC_SYNC_SERVER` the iPhone app).
 
-- `docId` is base64url of the first 16 bytes of HMAC(`name`, `"{type}/{id}"`): every device
-  computes the same id for the same thing, and the server can't tell what it is.
-- Each document is `{ v: 1, c, t }`: `c` is base64url of a 24-byte random nonce followed by the
-  ciphertext and tag of the record's JSON, sealed with the document id as associated data (a record
-  copied into another document doesn't open); `t` is the server's write time. A deleted record keeps
-  its document with `c: null` for 30 days, so devices that were away hear of it, and is then removed.
+- A record is a document `{ doc, c, t }`. `doc` is base64url of the first 16 bytes of
+  HMAC(`name`, `"{type}/{id}"`): every device computes the same id for the same thing, and the server
+  can't tell what it is. `c` is base64url of a 24-byte random nonce followed by the ciphertext and
+  tag of the record's JSON, sealed with the document id as associated data (a record copied into
+  another document doesn't open). `t` is the server's write time (ms), always moving forward.
+- A deleted record keeps its document with `c: null` for 30 days, so devices that were away hear of
+  it, and the server then removes it. A sent tab, once opened, and a device that leaves are removed
+  straight away.
 
-The security rules (`firebase/firestore.rules` in the iPhone app) let signed-in devices (anonymous
-sign-in) read and write records of a chain whose id they know, in that shape only. Chains can't be
-listed or searched.
+A device connects to `/v1/chains/{chainId}` over a WebSocket, and messages are JSON:
+
+| from   | message                                 | what it does                                                |
+| ------ | --------------------------------------- | ----------------------------------------------------------- |
+| device | `{ op: 'hello', v: 1, token }`          | first, with the access token                                |
+| server | `{ op: 'records', records, done }`      | the whole chain, in parts, then `done: true`                |
+| server | `{ op: 'changes', records?, removed? }` | each change as it's made, the device's own included         |
+| device | `{ op: 'put', id, docs: [{ doc, c }] }` | writes (or deletes, with `c: null`); the server sets `t`    |
+| device | `{ op: 'remove', id, docs: [doc] }`     | removes documents for good                                  |
+| server | `{ op: 'ack', id }`                     | the server has a put or remove                              |
+| server | `{ op: 'error', message }`              | refused (a wrong code, a malformed message), then it closes |
+| device | `ping`                                  | the server answers `pong`, so a lost connection is noticed  |
+
+The first device to say hello sets the chain's token: the server keeps only its SHA-256, and from
+then on lets in only devices with the same one, so knowing a chain's id isn't enough to read or
+change it. Chains can't be listed or searched.
+
+The client keeps the chain as the server has it and reports what changed (the whole chain the first
+time), sends writes made while offline once it's back, and reconnects by itself; each time it does,
+the chain comes in again and only what differs is reported.
 
 ## Records
 

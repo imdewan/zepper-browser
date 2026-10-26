@@ -1,22 +1,8 @@
 import { execFile } from 'node:child_process'
 import { hostname } from 'node:os'
-import { safeStorage } from 'electron'
-import { initializeApp } from 'firebase/app'
-import { connectAuthEmulator, initializeAuth, signInAnonymously, type Auth, type Persistence } from 'firebase/auth'
-import {
-  collection,
-  connectFirestoreEmulator,
-  deleteDoc,
-  doc,
-  initializeFirestore,
-  onSnapshot,
-  serverTimestamp,
-  writeBatch,
-  type CollectionReference,
-  type Firestore,
-  type QuerySnapshot,
-  type Timestamp
-} from 'firebase/firestore'
+import { unlink } from 'node:fs/promises'
+import { join } from 'node:path'
+import { app, safeStorage } from 'electron'
 import {
   base64url,
   decodeCode,
@@ -26,13 +12,12 @@ import {
   fromBase64url,
   newSecret,
   open,
-  PROTOCOL_VERSION,
   seal,
   type ChainKeys,
   type DeviceRecord,
-  type SendRecord,
-  type StoredRecord
+  type SendRecord
 } from '@shared/sync-protocol'
+import { Relay, type RelayChange } from '@shared/sync-relay'
 import type { SyncSnapshot } from '@shared/types'
 import { JsonFile } from './persist'
 import { type Change, type SharedRecord } from './sync-model'
@@ -41,8 +26,8 @@ import config from './sync-config.json'
 /**
  * Zepper Sync: this computer's spaces, Essentials, pinned tabs and folders, the same as on your other
  * devices (Zepper for iPhone). Devices pair with a code (a QR code for the phone); everything they
- * keep in the shared Firestore is encrypted with it (sync-protocol.ts). The main window is what syncs;
- * other windows and private ones don't.
+ * keep on Zepper's sync server is encrypted with it (sync-protocol.ts, sync-relay.ts). The main window
+ * is what syncs; other windows and private ones don't.
  */
 
 /** What sync needs from the main window. */
@@ -64,11 +49,13 @@ interface Saved {
 
 const PUSH_DELAY_MS = 800
 const DEVICE_DELAY_MS = 15_000
-const TOMBSTONE_MS = 30 * 24 * 60 * 60 * 1000
+/** Records per write, at most (the server takes 500). */
 const BATCH = 400
+/** How long leaving or quitting waits to tell the others, offline. */
+const LEAVE_WAIT_MS = 3000
 
-/** The Firebase emulators, for development (ZEPPER_SYNC_EMULATOR=127.0.0.1). */
-const EMULATOR = process.env.ZEPPER_SYNC_EMULATOR || null
+/** Zepper's sync server, or another (development: ZEPPER_SYNC_SERVER=ws://127.0.0.1:8787, from sync-server/). */
+const SERVER = process.env.ZEPPER_SYNC_SERVER || config.server
 
 export class SyncService {
   private readonly file = new JsonFile<Saved>('sync.json', 500)
@@ -76,9 +63,7 @@ export class SyncService {
   private orders = new Map<string, string>()
   private window: SyncedWindow | null = null
   private keys: ChainKeys | null = null
-  private records: CollectionReference | null = null
-  private services: { auth: Auth; db: Firestore } | null = null
-  private stopListening: (() => void) | null = null
+  private relay: Relay | null = null
   private known = new Map<string, SharedRecord>()
   private devices = new Map<string, DeviceRecord>()
   private ready = false
@@ -99,10 +84,12 @@ export class SyncService {
         if (!error && out.trim()) this.computerName = out.trim()
       })
     }
+    // Firebase's sign-in, from before sync had its own server.
+    void unlink(join(app.getPath('userData'), 'sync-auth.json')).catch(() => {})
   }
 
   get available(): boolean {
-    return !!EMULATOR || !!(config.apiKey && config.projectId)
+    return !!SERVER
   }
 
   snapshot(): SyncSnapshot {
@@ -171,7 +158,10 @@ export class SyncService {
   }
 
   async leave(): Promise<void> {
-    if (this.records && this.keys) await deleteDoc(doc(this.records, documentId(this.keys, 'device', this.saved.deviceId))).catch(() => {})
+    if (this.relay && this.keys) {
+      const gone = this.relay.remove([documentId(this.keys, 'device', this.saved.deviceId)])
+      await Promise.race([gone, new Promise((resolve) => setTimeout(resolve, LEAVE_WAIT_MS))])
+    }
     this.stop()
     this.saved = { deviceId: this.saved.deviceId, deviceName: this.saved.deviceName }
     this.orders.clear()
@@ -190,7 +180,7 @@ export class SyncService {
   }
 
   async sendTab(deviceId: string, url: string, title: string): Promise<void> {
-    if (!this.records || !this.keys) return
+    if (!this.relay || !this.keys) return
     const record: SendRecord = {
       type: 'send',
       id: crypto.randomUUID(),
@@ -201,16 +191,17 @@ export class SyncService {
       at: Date.now()
     }
     const docId = documentId(this.keys, 'send', record.id)
-    const batch = writeBatch(this.records.firestore)
-    batch.set(doc(this.records, docId), { v: PROTOCOL_VERSION, c: seal(this.keys, docId, record), t: serverTimestamp() })
-    await batch.commit()
+    await this.relay.put([{ doc: docId, c: seal(this.keys, docId, record) }])
   }
 
-  /** Before quitting: the window's last changes, and this computer's tabs. */
+  /** Before quitting: the window's last changes, and this computer's tabs (waiting a moment, offline). */
   async flush(): Promise<void> {
     if (!this.ready) return
-    if (this.pushTimer) await this.push()
-    await this.pushDevice(true)
+    const sent = (async () => {
+      if (this.pushTimer) await this.push()
+      await this.pushDevice(true)
+    })()
+    await Promise.race([sent, new Promise((resolve) => setTimeout(resolve, LEAVE_WAIT_MS))])
     this.saveOrders()
     this.file.flush()
   }
@@ -237,47 +228,29 @@ export class SyncService {
     this.file.schedule(this.saved)
   }
 
-  private connect(): { auth: Auth; db: Firestore } {
-    if (this.services) return this.services
-    const firebase = initializeApp(EMULATOR ? { apiKey: 'emulator', projectId: 'demo-zepper', appId: 'emulator' } : config, 'zepper-sync')
-    const auth = initializeAuth(firebase, { persistence: filePersistence() })
-    const db = initializeFirestore(firebase, {})
-    if (EMULATOR) {
-      connectAuthEmulator(auth, `http://${EMULATOR}:9099`, { disableWarnings: true })
-      connectFirestoreEmulator(db, EMULATOR, 8080)
-    }
-    this.services = { auth, db }
-    return this.services
-  }
-
   private async begin(): Promise<void> {
     const secret = this.secret()
     if (!secret || !this.available) return
     this.stop()
     this.status = { kind: 'connecting' }
     this.changed()
-    try {
-      const { auth, db } = this.connect()
-      if (!auth.currentUser) await signInAnonymously(auth)
-      this.keys = deriveKeys(secret)
-      this.records = collection(db, 'chains', this.keys.chainId, 'records')
-      this.stopListening = onSnapshot(
-        this.records,
-        (snapshot) => this.received(snapshot),
-        (error) => {
-          this.status = { kind: 'error', message: error.message }
-          this.changed()
-        }
-      )
-    } catch (error) {
-      this.status = { kind: 'error', message: (error as Error).message }
-      this.changed()
-    }
+    const keys = deriveKeys(secret)
+    this.keys = keys
+    this.relay = new Relay(`${SERVER}/v1/chains/${keys.chainId}`, keys.access, {
+      changes: (changes) => this.received(changes),
+      status: (status) => {
+        // Connected shows once the chain is in (received).
+        if (status.kind === 'connected') return
+        this.status = status.kind === 'error' ? { kind: 'error', message: status.message } : { kind: 'connecting' }
+        this.changed()
+      }
+    })
+    this.relay.start()
   }
 
   private stop(): void {
-    this.stopListening?.()
-    this.stopListening = null
+    this.relay?.close()
+    this.relay = null
     this.ready = false
     this.known.clear()
     this.devices.clear()
@@ -286,14 +259,13 @@ export class SyncService {
     this.pushTimer = this.deviceTimer = null
   }
 
-  private received(snapshot: QuerySnapshot): void {
+  private received(incoming: RelayChange[]): void {
     if (!this.keys) return
     const changes: Change[] = []
-    for (const change of snapshot.docChanges()) {
-      const docId = change.doc.id
-      const data = change.doc.data() as StoredRecord & { t?: Timestamp | null }
-      const gone = change.type === 'removed' || !data.c
-      const record = gone ? null : open(this.keys, docId, data.c!)
+    for (const change of incoming) {
+      const docId = change.doc
+      const gone = change.type === 'removed' || !change.data.c
+      const record = gone ? null : open(this.keys, docId, change.data.c!)
       // From a newer Zepper: leave it be.
       if (!gone && !record) continue
       if (record?.type === 'device') {
@@ -304,7 +276,7 @@ export class SyncService {
         if (record.to === this.saved.deviceId) {
           const from = this.devices.get(documentId(this.keys, 'device', record.from))?.name ?? 'another device'
           this.window?.openSentTab(record.url, from)
-          void deleteDoc(change.doc.ref).catch(() => {})
+          void this.relay?.remove([docId])
         }
         continue
       }
@@ -313,8 +285,6 @@ export class SyncService {
         const previous = this.known.get(docId)
         if (previous) changes.push({ record: null, previous })
         this.known.delete(docId)
-        if (change.type !== 'removed' && data.t && Date.now() - data.t.toMillis() > TOMBSTONE_MS)
-          void deleteDoc(change.doc.ref).catch(() => {})
         continue
       }
       changes.push({ record, previous: this.known.get(docId) })
@@ -339,8 +309,9 @@ export class SyncService {
 
   private async push(): Promise<void> {
     this.pushTimer = null
-    if (!this.window || !this.records || !this.keys) return
+    if (!this.window || !this.relay || !this.keys) return
     const keys = this.keys
+    const relay = this.relay
     const present = new Set<string>()
     const writes: { docId: string; record: SharedRecord }[] = []
     for (const record of this.window.syncRecords(this.orders)) {
@@ -354,22 +325,16 @@ export class SyncService {
     for (const w of writes) this.known.set(w.docId, w.record)
     for (const docId of deletes) this.known.delete(docId)
     this.saveOrders()
-    const operations = [
-      ...writes.map((w) => ({ docId: w.docId, data: { v: PROTOCOL_VERSION, c: seal(keys, w.docId, w.record), t: serverTimestamp() } })),
-      ...deletes.map((docId) => ({ docId, data: { v: PROTOCOL_VERSION, c: null, t: serverTimestamp() } }))
+    // Deleted ones keep their document a while (c: null), so devices that were away hear of it.
+    const docs = [
+      ...writes.map((w) => ({ doc: w.docId, c: seal(keys, w.docId, w.record) })),
+      ...deletes.map((docId) => ({ doc: docId, c: null }))
     ]
-    for (let i = 0; i < operations.length; i += BATCH) {
-      const batch = writeBatch(this.records.firestore)
-      for (const op of operations.slice(i, i + BATCH)) batch.set(doc(this.records, op.docId), op.data)
-      await batch.commit().catch((error: Error) => {
-        this.status = { kind: 'error', message: error.message }
-        this.changed()
-      })
-    }
+    for (let i = 0; i < docs.length; i += BATCH) await relay.put(docs.slice(i, i + BATCH))
   }
 
   private async pushDevice(force: boolean): Promise<void> {
-    if (!this.window || !this.records || !this.keys || !this.ready) return
+    if (!this.window || !this.relay || !this.keys || !this.ready) return
     const tabs = this.window.syncTabs()
     const fingerprint = JSON.stringify([this.deviceName(), tabs])
     if (!force && fingerprint === this.lastDevice) return
@@ -383,9 +348,7 @@ export class SyncService {
       tabs
     }
     const docId = documentId(this.keys, 'device', record.id)
-    const batch = writeBatch(this.records.firestore)
-    batch.set(doc(this.records, docId), { v: PROTOCOL_VERSION, c: seal(this.keys, docId, record), t: serverTimestamp() })
-    await batch.commit().catch(() => {})
+    await this.relay.put([{ doc: docId, c: seal(this.keys, docId, record) }])
   }
 
   private saveOrders(): void {
@@ -400,35 +363,4 @@ function fingerprint(record: SharedRecord): string {
 
 function platform(): DeviceRecord['platform'] {
   return process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'windows' : 'linux'
-}
-
-/**
- * Keeps the anonymous sign-in between launches (in sync-auth.json), so this computer stays the same
- * user rather than a new one each time. Firebase's own persistences are for browsers and React Native.
- */
-function filePersistence(): Persistence {
-  const file = new JsonFile<Record<string, unknown>>('sync-auth.json', 0)
-  let data: Record<string, unknown> = file.read() ?? {}
-  class FilePersistence {
-    static type = 'LOCAL' as const
-    readonly type = 'LOCAL' as const
-    async _isAvailable(): Promise<boolean> {
-      return true
-    }
-    async _set(key: string, value: unknown): Promise<void> {
-      data = { ...data, [key]: value }
-      file.schedule(data)
-    }
-    async _get(key: string): Promise<unknown> {
-      return data[key] ?? null
-    }
-    async _remove(key: string): Promise<void> {
-      const { [key]: _gone, ...rest } = data
-      data = rest
-      file.schedule(data)
-    }
-    _addListener(): void {}
-    _removeListener(): void {}
-  }
-  return FilePersistence as unknown as Persistence
 }

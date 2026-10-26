@@ -56,7 +56,6 @@
     "electron-vite": "^5.0.0",
     "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "firebase": "^13.1.0",
     "fractional-indexing": "^4.0.0",
     "globals": "^17.13.0",
     "lucide-react": "^1.52.0",

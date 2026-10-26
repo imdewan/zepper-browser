@@ -1,0 +1,14 @@
+// Zepper Sync's server (src/index.ts): a Worker, and a Durable Object for each chain.
+// Deploy: npm run deploy (wrangler signed in to Zepper's Cloudflare account).
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "sync",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "durable_objects": {
+    "bindings": [{ "name": "CHAINS", "class_name": "Chain" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Chain"] }],
+  "observability": { "enabled": true }
+}

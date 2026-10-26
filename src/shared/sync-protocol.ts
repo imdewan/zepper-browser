@@ -5,7 +5,8 @@
  *
  * Devices that sync share a 32-byte secret (the sync code, from a QR code or typed). Everything is
  * derived from it, and everything the server keeps is encrypted with it:
- * - the chain id, where the records live (chains/{chainId}/records/{docId} in Firestore);
+ * - the chain id, where the records live (a chain on Zepper's sync server, sync-relay.ts);
+ * - the access token, which shows the server a device has the code (it keeps only its hash);
  * - each record's document id, an HMAC of its kind and id (the server can't tell what it is);
  * - the record itself, sealed with XChaCha20-Poly1305 and bound to its document id.
  * The server sees opaque ids, ciphertext and when each document last changed. Nothing else.
@@ -85,7 +86,7 @@ export interface SendRecord {
 export type SyncRecord = SpaceRecord | PinRecord | FolderRecord | DeviceRecord | SendRecord
 export type RecordType = SyncRecord['type']
 
-/** A Firestore document: the sealed record, or null once it's been deleted (kept a while so others hear of it). */
+/** A document on the server: the sealed record, or null once it's been deleted (kept a while so others hear of it). */
 export interface StoredRecord {
   v: number
   c: string | null
@@ -93,6 +94,8 @@ export interface StoredRecord {
 
 export interface ChainKeys {
   chainId: string
+  /** Shown to the server, which lets only devices with it into the chain. */
+  access: string
   encrypt: Uint8Array
   name: Uint8Array
 }
@@ -106,6 +109,7 @@ export function deriveKeys(secret: Uint8Array): ChainKeys {
   if (secret.length !== 32) throw new Error('A sync secret is 32 bytes')
   return {
     chainId: base64url(hkdf(sha256, secret, SALT, utf8.encode('chain'), 16)),
+    access: base64url(hkdf(sha256, secret, SALT, utf8.encode('access'), 32)),
     encrypt: hkdf(sha256, secret, SALT, utf8.encode('encrypt'), 32),
     name: hkdf(sha256, secret, SALT, utf8.encode('name'), 32)
   }

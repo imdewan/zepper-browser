@@ -17,7 +17,7 @@ export function SyncSettings({ sync }: { sync: SyncSnapshot }): React.JSX.Elemen
     return (
       <Row
         label="Sync isn’t set up in this build"
-        hint="It needs the Firebase project’s settings in src/main/sync-config.json (see the iPhone app’s firebase/README.md)."
+        hint="It needs a sync server’s address in src/main/sync-config.json (sync-server/ has one to deploy)."
       />
     )
   }

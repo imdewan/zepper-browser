@@ -10,3 +10,4 @@ build/bin/
 native/credentials/build/
 build/entitlements.browser.plist
 build/licenses/
+sync-server/.wrangler/

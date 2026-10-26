@@ -24,6 +24,7 @@ test('derives the same chain, names and sealed records as the iPhone app', () =>
   const secret = fromBase64url(vectors.secret)
   const keys = deriveKeys(secret)
   assert.equal(keys.chainId, vectors.chainId)
+  assert.equal(keys.access, vectors.access)
   assert.equal(documentId(keys, 'pin', vectors.record.id), vectors.docId)
   assert.equal(seal(keys, vectors.docId, vectors.record, fromBase64url(vectors.nonce)), vectors.sealed)
   assert.deepEqual(open(keys, vectors.docId, vectors.sealed), vectors.record)

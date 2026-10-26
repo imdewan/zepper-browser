@@ -1,6 +1,3 @@
 {
-  "apiKey": "",
-  "authDomain": "",
-  "projectId": "",
-  "appId": ""
+  "server": "wss://sync.zepper.workers.dev"
 }
