@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-10-27
+
 ### Security
 
 - **Certificates from eMudhra's compromised CAs are refused.** On October 17, the keys of eight of eMudhra's intermediate CAs were found to be guessable (one was the number 4), so anyone could make a certificate for any site that browsers would trust. Chrome and Firefox blocked them that day, through updates Electron apps don't get. Zepper now runs Electron 44.9.3 (Chromium 152.0.7977.167), which refuses them.
@@ -320,7 +322,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.18...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.19...HEAD
+[0.1.19]: https://github.com/imdewan/zepper-browser/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/imdewan/zepper-browser/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/imdewan/zepper-browser/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/imdewan/zepper-browser/compare/v0.1.15...v0.1.16
