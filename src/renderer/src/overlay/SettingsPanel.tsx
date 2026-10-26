@@ -686,7 +686,7 @@ export function SettingsPanel({
                 <>
                   <Row
                     label="Block ads and trackers"
-                    hint="uBlock Origin’s filter lists, built in. Turn protections off for one site from the lock icon."
+                    hint="The lists Brave uses, built in: uBlock Origin’s, EasyList’s and Brave’s own. Turn protections off for one site from the lock icon."
                   >
                     <Toggle checked={settings.adblock} onChange={(adblock) => set({ adblock })} />
                   </Row>
@@ -696,7 +696,7 @@ export function SettingsPanel({
                     count={protectionsOff(settings).length}
                     onOpen={() => openPage('protectionsOff')}
                   />
-                  <Row label="Hide cookie banners" hint="Hides cookie consent pop-ups and other annoyances, using uBlock Origin’s lists.">
+                  <Row label="Hide cookie banners" hint="Hides cookie consent pop-ups, with Brave’s cookie notice blocker.">
                     <Toggle checked={settings.hideCookieBanners} onChange={(hideCookieBanners) => set({ hideCookieBanners })} />
                   </Row>
                   <Row

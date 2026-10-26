@@ -886,13 +886,11 @@ function applyCosmetics(): void {
   }
   if (response.styles) webFrame.insertCSS(response.styles, { cssOrigin: 'user' })
   const youtube = window === window.top && /(^|\.)youtube\.com$/.test(location.hostname)
-  // Loaded again because the player kept reloading: without the fix that reloads it, it waits instead.
-  const scripts = youtube && reloadedForVideo() ? response.scripts.filter((script) => !script.includes('serverContract')) : response.scripts
-  if (scripts.length > 0) {
+  if (response.scripts.length > 0) {
     // Compile in this (isolated, CSP-free) world, then run the function in the
     // page's main world. Scriptlets must patch page globals before any page
     // script runs, and page CSP or Trusted Types must not be able to block them.
-    const body = scripts.map((script) => `try { ${script} } catch (e) {}`).join('\n')
+    const body = response.scripts.map((script) => `try { ${script} } catch (e) {}`).join('\n')
     try {
       contextBridge.executeInMainWorld({ func: new Function(body) as () => void })
     } catch {
@@ -906,23 +904,10 @@ function applyCosmetics(): void {
 /** Player reloads of one video, without it playing, before the page is loaded again. */
 const YOUTUBE_RELOADS = 4
 
-const reloadedKey = (video: string): string => `zepper-reloaded-${video}`
-
-/** Whether this page was loaded again for the video it shows (see reloadStuckYouTube). */
-function reloadedForVideo(): boolean {
-  const id = location.pathname === '/watch' ? new URLSearchParams(location.search).get('v') : null
-  try {
-    return id !== null && sessionStorage.getItem(reloadedKey(id)) !== null
-  } catch {
-    return false
-  }
-}
-
 /**
  * YouTube, with its ads blocked: uBlock Origin's fix reloads the player when it looks stuck, and now and
  * then it never stops (the time flickering to 0:00 and back, the video never starting). Loading the page
- * again starts it, or else (it's loaded without that fix) lets it wait out the ad's time and play. Once
- * per video, so one that won't play can't keep reloading the page.
+ * again starts it. Once per video, so one that won't play can't keep reloading the page.
  */
 function reloadStuckYouTube(): void {
   let video = ''
@@ -937,7 +922,7 @@ function reloadStuckYouTube(): void {
         loads = 0
       }
       if (++loads < YOUTUBE_RELOADS) return
-      const key = reloadedKey(id)
+      const key = `zepper-reloaded-${id}`
       try {
         if (sessionStorage.getItem(key)) return
         sessionStorage.setItem(key, '1')

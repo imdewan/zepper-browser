@@ -27,6 +27,8 @@ interface Project {
   standard?: boolean
   /** Chromium: its own credits, every component with its license, open in a tab. */
   chromiumCredits?: boolean
+  /** Where its license is, when its text isn't here. */
+  licenseUrl?: string
 }
 
 const SOURCE = 'https://github.com/imdewan/zepper-browser'
@@ -172,6 +174,11 @@ export function OpenSourcePanel({ onBack, onClose }: { onBack: () => void; onClo
                               {project.chromiumCredits ? 'Website' : 'Project Page'}
                             </button>
                           )}
+                          {project.licenseUrl && (
+                            <button className="panel-button" onClick={() => visit(project.licenseUrl!)}>
+                              License
+                            </button>
+                          )}
                         </div>
                         {project.standard && (
                           <p className="open-source-note">
@@ -180,7 +187,7 @@ export function OpenSourcePanel({ onBack, onClose }: { onBack: () => void; onClo
                         )}
                         {project.text !== undefined && <pre className="open-source-text">{data.texts[project.text]}</pre>}
                         {project.notice !== undefined && <pre className="open-source-text">{data.texts[project.notice]}</pre>}
-                        {project.text === undefined && !project.chromiumCredits && (
+                        {project.text === undefined && !project.chromiumCredits && !project.licenseUrl && (
                           <p className="open-source-note">Its license is on its project page.</p>
                         )}
                       </div>

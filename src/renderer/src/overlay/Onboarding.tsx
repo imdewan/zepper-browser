@@ -465,7 +465,7 @@ function LookStep({ snapshot }: { snapshot: Snapshot }): React.JSX.Element {
 }
 
 const PROTECTIONS: { key: keyof Settings; icon: LucideIcon; title: string; detail: string }[] = [
-  { key: 'adblock', icon: ShieldCheck, title: 'Ads and trackers blocked', detail: 'uBlock Origin’s lists, including YouTube ads' },
+  { key: 'adblock', icon: ShieldCheck, title: 'Ads and trackers blocked', detail: 'The lists Brave uses, including YouTube ads' },
   { key: 'hideCookieBanners', icon: Cookie, title: 'Cookie banners hidden', detail: 'No more consent pop-ups on every site' },
   { key: 'blockFingerprinting', icon: Fingerprint, title: 'Fingerprinting protection', detail: 'Sites can’t recognise you by your device' },
   { key: 'blockCrossSiteCookies', icon: Lock, title: 'Cross-site cookies blocked', detail: 'Embedded trackers can’t follow you around' },

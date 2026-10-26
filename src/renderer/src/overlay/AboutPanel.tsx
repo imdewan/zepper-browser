@@ -103,7 +103,7 @@ export function AboutPanel({ info, update, onClose }: { info: AboutInfo; update:
     ['Widevine', widevineLabel(info)],
     [
       'Ad blocking',
-      info.filtersUpdatedAt ? `uBlock Origin lists · ${dayFormat.format(info.filtersUpdatedAt)}` : 'uBlock Origin lists',
+      info.filtersUpdatedAt ? `Brave’s lists · ${dayFormat.format(info.filtersUpdatedAt)}` : 'Brave’s lists',
       info.filtersUpdatedAt ? `Filter lists updated ${dateFormat.format(info.filtersUpdatedAt)}` : undefined
     ],
     ['V8 · Node', `${info.v8} · ${info.node}`]

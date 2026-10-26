@@ -97,8 +97,8 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 
 | Protection                 | What it does                                                                                         |
 | -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Ad and tracker blocking    | uBlock Origin's filter lists, including YouTube ads                                                  |
-| Cookie banners hidden      | uBlock Origin's annoyance lists                                                                      |
+| Ad and tracker blocking    | The lists Brave uses (uBlock Origin's, EasyList's, Brave's own), including YouTube ads               |
+| Cookie banners hidden      | Brave's cookie notice blocker                                                                        |
 | Fingerprinting protection  | Per-site values for canvas, WebGL, audio, plugins, CPU cores and GPU, as in Brave; no local IP leaks |
 | Cross-site cookies blocked | Embedded third parties can't set or read cookies                                                     |
 | HTTPS upgrades             | Plain-HTTP pages load over HTTPS when the site supports it                                           |
@@ -248,7 +248,7 @@ Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIB
 
 Zepper's sidebar-first design is inspired by [Zen Browser](https://zen-browser.app/). Go give it a try too.
 
-Zepper stands on the shoulders of [Electron](https://www.electronjs.org/) and [Chromium](https://www.chromium.org/), [castLabs' Electron for Content Security](https://github.com/castlabs/electron-releases), [Ghostery's adblocker](https://github.com/ghostery/adblocker) with [uBlock Origin](https://github.com/uBlockOrigin/uAssets) and [EasyList](https://easylist.to/) filter lists, [electron-chrome-extensions](https://github.com/samuelmaddock/electron-browser-shell), [Mozilla's Readability](https://github.com/mozilla/readability) (Reader Mode), [tldts](https://github.com/remusao/tldts), [React](https://react.dev/), [Motion](https://motion.dev/) and [DuckDuckGo's bangs](https://duckduckgo.com/bangs). Every project Zepper uses is credited in the app, with its license in full: About Zepper › Credits (`npm run licenses` writes the list).
+Zepper stands on the shoulders of [Electron](https://www.electronjs.org/) and [Chromium](https://www.chromium.org/), [castLabs' Electron for Content Security](https://github.com/castlabs/electron-releases), [Ghostery's adblocker](https://github.com/ghostery/adblocker) with the filter lists [Brave](https://github.com/brave/adblock-lists) uses ([uBlock Origin](https://github.com/uBlockOrigin/uAssets)'s, [EasyList](https://easylist.to/)'s and Brave's own) and Brave's scripts, [electron-chrome-extensions](https://github.com/samuelmaddock/electron-browser-shell), [Mozilla's Readability](https://github.com/mozilla/readability) (Reader Mode), [tldts](https://github.com/remusao/tldts), [React](https://react.dev/), [Motion](https://motion.dev/) and [DuckDuckGo's bangs](https://duckduckgo.com/bangs). Every project Zepper uses is credited in the app, with its license in full: About Zepper › Credits (`npm run licenses` writes the list).
 
 ## License
 

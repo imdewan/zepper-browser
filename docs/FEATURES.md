@@ -73,9 +73,9 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 ## Privacy and security
 
-- **Ad blocking:** built in, using uBlock Origin's filter lists (refreshed daily). Covers network requests, cosmetic filtering and scriptlets, including YouTube ads.
+- **Ad blocking:** built in, as Brave Shields does it: the same lists (uBlock Origin's, EasyList and EasyPrivacy, Brave's own and its first-party list, URLhaus's malware list), refreshed daily, and Brave's scripts. Covers network requests, cosmetic filtering and scriptlets, including YouTube ads.
 - **Protections, on by default.** Each can be turned off in Settings → Privacy, and all of them for one site from the lock icon:
-  - **Cookie banners hidden**, with uBlock Origin's annoyance lists.
+  - **Cookie banners hidden**, with Brave's cookie notice blocker (Fanboy's and uBlock Origin's cookie lists, and Brave's).
   - **Fingerprinting protection,** as in Brave: each site sees its own values this session, so they can't be used to recognise you across sites. Tiny noise on canvas, WebGL and audio readouts; a CPU core count between half your real one and all of it (never more, so sites still use your cores); two made-up plugins after Chrome's PDF viewers; on Apple silicon, one of the common chips as the graphics card. The page, its frames and its workers all see the same values (sign-in checks compare them). WebRTC is kept to the public network interface, and Do Not Track isn't sent (only Global Privacy Control). EFF's Cover Your Tracks reports a randomized fingerprint.
   - **Cross-site cookies blocked:** third-party requests can't set or send cookies (sign-in frames from Google, Microsoft and Apple still work).
   - **HTTPS upgrades** for plain-HTTP pages, falling back for sites without HTTPS.

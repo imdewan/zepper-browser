@@ -48,17 +48,17 @@ git merge upstream/main
 
 ## Change the behaviour
 
-| What                                                                       | Where                                                                                                                                                                                         |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default settings                                                           | `DEFAULT_SETTINGS` in `src/shared/settings.ts`                                                                                                                                                |
-| Search engines                                                             | `SEARCH_ENGINES` in `src/shared/settings.ts`                                                                                                                                                  |
-| Keyboard shortcuts and menus                                               | `src/main/menu.ts`                                                                                                                                                                            |
-| DuckDuckGo bangs                                                           | `src/main/bangs.ts` (the bundled list is `src/main/bangs-top.json`)                                                                                                                           |
-| Ad-blocking filter lists                                                   | `AdBlock.load()` in `src/main/adblock.ts`: the lists given to Ghostery's `ElectronBlocker.fromLists()` (uBlock Origin's and EasyList, with `withRecentFilters`). Put your own list URLs there |
-| Privacy protections (HTTPS upgrades, link cleaning, cross-site cookies)    | `src/main/shields.ts` and `src/main/adblock.ts`                                                                                                                                               |
-| Fingerprinting protection                                                  | `fingerprintShim` in `src/preload/page.ts`                                                                                                                                                    |
-| User agent and site compatibility                                          | `src/main/compat.ts`                                                                                                                                                                          |
-| On-device intelligence (summaries, translation, history search, Tidy Tabs) | `src/main/ai.ts` and the Swift helper in `native/zepper-ai/`; prompts are in its `main.swift`                                                                                                 |
+| What                                                                       | Where                                                                                                |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Default settings                                                           | `DEFAULT_SETTINGS` in `src/shared/settings.ts`                                                       |
+| Search engines                                                             | `SEARCH_ENGINES` in `src/shared/settings.ts`                                                         |
+| Keyboard shortcuts and menus                                               | `src/main/menu.ts`                                                                                   |
+| DuckDuckGo bangs                                                           | `src/main/bangs.ts` (the bundled list is `src/main/bangs-top.json`)                                  |
+| Ad-blocking filter lists                                                   | `LISTS` and `COOKIE_LISTS` in `src/main/adblock.ts` (Brave's defaults). Add your own list URLs there |
+| Privacy protections (HTTPS upgrades, link cleaning, cross-site cookies)    | `src/main/shields.ts` and `src/main/adblock.ts`                                                      |
+| Fingerprinting protection                                                  | `fingerprintShim` in `src/preload/page.ts`                                                           |
+| User agent and site compatibility                                          | `src/main/compat.ts`                                                                                 |
+| On-device intelligence (summaries, translation, history search, Tidy Tabs) | `src/main/ai.ts` and the Swift helper in `native/zepper-ai/`; prompts are in its `main.swift`        |
 
 ## Add a feature
 

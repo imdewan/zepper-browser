@@ -1,4 +1,4 @@
-import { ElectronBlocker, adsAndTrackingLists, fullLists } from '@ghostery/adblocker-electron'
+import { ElectronBlocker } from '@ghostery/adblocker-electron'
 import {
   app,
   ipcMain,
@@ -18,18 +18,112 @@ import { HttpsUpgrades, cleanLink } from './shields'
 const REFRESH_AFTER_MS = 24 * 60 * 60 * 1000
 
 /**
- * uBlock Origin keeps each year's new filters in a file of its own, and Ghostery mirrors them all, but
- * its list sets stop at 2024: YouTube's newer fixes are in the later years' files. Only years whose
- * file exists can go here, as one missing list fails the whole set.
+ * Ghostery's copies of uBlock Origin's lists, EasyList and EasyPrivacy, kept current and prepared for
+ * its engine (the ones in its GitHub repository, which the library reads, stopped updating).
  */
-const RECENT_YEARS = ['2025', '2026']
+const CDN = 'https://cdn.ghostery.com/adblocker/resources'
+const UBO = 'https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters'
+const BRAVE = 'https://raw.githubusercontent.com/brave/adblock-lists/master'
+const BRAVE_RESOURCES = 'https://raw.githubusercontent.com/brave/adblock-resources/master'
 
-function withRecentFilters(lists: string[]): string[] {
-  const last = lists.find((url) => url.endsWith('/ublock-origin/filters-2024.txt'))
-  if (!last) return lists
-  const recent = RECENT_YEARS.map((year) => last.replace('2024', year)).filter((url) => !lists.includes(url))
-  const at = lists.indexOf(last) + 1
-  return [...lists.slice(0, at), ...recent, ...lists.slice(at)]
+/** A list from Ghostery's CDN (by name; it must be there), or from where its authors publish it. */
+type ListSource = { cdn: string } | { url: string }
+
+/** uBlock Origin keeps each year's new filters in a file of its own; a year with none yet is skipped. */
+const UBO_YEARS = Array.from({ length: new Date().getFullYear() - 2019 }, (_, i) => ({ cdn: `ublock-filters-${2020 + i}`, optional: true }))
+
+/**
+ * Brave's default lists, as Brave Shields has them (brave/adblock-resources, filter_lists/list_catalog.json):
+ * uBlock Origin's and EasyList's ad lists with Brave's own fixes, the privacy lists, Brave's first-party
+ * ads, and app promos.
+ */
+const LISTS: (ListSource & { optional?: boolean })[] = [
+  { cdn: 'ublock-filters' },
+  ...UBO_YEARS,
+  { url: `${UBO}/filters-general.txt` },
+  { cdn: 'ublock-badware' },
+  { cdn: 'ublock-abuse' },
+  { cdn: 'ublock-unbreak' },
+  { cdn: 'ublock-quick-fixes' },
+  { url: `${UBO}/ubo-link-shorteners.txt` },
+  { cdn: 'easylist' },
+  { url: 'https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-agh-online.txt' },
+  { url: `${BRAVE}/brave-unbreak.txt` },
+  { url: `${BRAVE}/brave-lists/brave-specific.txt` },
+  { url: `${BRAVE}/brave-lists/brave-social.txt` },
+  { url: `${BRAVE}/brave-lists/brave-unbreak.txt` },
+  { url: `${BRAVE}/brave-lists/brave-sugarcoat.txt` },
+  { cdn: 'easyprivacy' },
+  { cdn: 'ublock-privacy' },
+  { url: `${BRAVE}/brave-lists/brave-firstparty.txt` },
+  { url: `${BRAVE}/brave-lists/brave-firstparty-regional.txt` },
+  { url: 'https://secure.fanboy.co.nz/fanboy-mobile-notifications.txt' }
+]
+
+/** Brave's cookie notice blocker. */
+const COOKIE_LISTS: ListSource[] = [
+  { url: 'https://secure.fanboy.co.nz/fanboy-cookiemonster_ubo.txt' },
+  { cdn: 'ublock-annoyances-cookies' },
+  { url: `${BRAVE}/brave-lists/brave-cookie-specific.txt` }
+]
+
+async function fetchText(url: string): Promise<string> {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`${url}: ${response.status}`)
+  return response.text()
+}
+
+/** The latest revision of something on Ghostery's CDN. */
+async function fromCdn(name: string): Promise<string> {
+  const { revisions } = JSON.parse(await fetchText(`${CDN}/${name}/metadata.json`)) as { revisions: string[] }
+  return fetchText(`${CDN}/${name}/${revisions.at(-1)}/list.txt`)
+}
+
+/**
+ * Every list's text. Ghostery's copies are what everything else rests on, so if one of them can't be
+ * had, nothing is built (the last engine is kept); one of the others missing just goes without it.
+ */
+async function fetchLists(sources: (ListSource & { optional?: boolean })[]): Promise<string[]> {
+  return Promise.all(
+    sources.map(async (source) => {
+      try {
+        return 'cdn' in source ? await fromCdn(source.cdn) : await fetchText(source.url)
+      } catch (error) {
+        if ('cdn' in source && !source.optional) throw error
+        if (!source.optional) console.warn('[adblock] skipped a filter list', error)
+        return ''
+      }
+    })
+  )
+}
+
+/**
+ * uBlock Origin's scriptlets and redirects (Ghostery's current build of them), with Brave's own scripts
+ * (its YouTube fixes among them), which take no arguments and so run as they are, as in Brave.
+ */
+async function fetchResources(): Promise<string> {
+  const resources = JSON.parse(await fromCdn('ublock-resources-json')) as { redirects: unknown[] }
+  try {
+    const metadata = JSON.parse(await fetchText(`${BRAVE_RESOURCES}/metadata.json`)) as {
+      name: string
+      aliases?: string[]
+      kind?: { mime?: string }
+      resourcePath: string
+    }[]
+    const scripts = await Promise.all(
+      metadata
+        .filter((resource) => resource.kind?.mime === 'application/javascript')
+        .map(async (resource) => {
+          const body = await fetchText(`${BRAVE_RESOURCES}/resources/${resource.resourcePath}`)
+          const aliases = [...(resource.aliases ?? []), ...[...body.matchAll(/^\/\/\/ alias (\S+)/gm)].map((m) => m[1])]
+          return { name: resource.name, aliases, body, contentType: 'application/javascript' }
+        })
+    )
+    resources.redirects.push(...scripts)
+  } catch (error) {
+    console.warn("[adblock] couldn't add Brave's scripts", error)
+  }
+  return JSON.stringify(resources)
 }
 
 export const COSMETICS_CHANNEL = 'zepper:cosmetics'
@@ -84,11 +178,10 @@ function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): str
 }
 
 /**
- * Built-in ad and tracker blocking, uBlock Origin–style.
+ * Built-in ad and tracker blocking, as Brave Shields does it.
  *
- * - Network requests are matched by Ghostery's engine against uBlock Origin's
- *   default lists (EasyList, EasyPrivacy, Peter Lowe, uBO filters of every
- *   year/badware/privacy/quick-fixes/unbreak).
+ * - Network requests are matched by Ghostery's engine against Brave's default
+ *   lists (see LISTS), refreshed daily.
  * - Cosmetic filters and scriptlets are handed to our page preload
  *   synchronously, so they apply at document start, before any page script
  *   runs. That is what defeats YouTube's player ads; the stock Electron
@@ -98,12 +191,12 @@ function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): str
 const MAX_DOM_TOKENS = 2000
 
 export class AdBlock {
-  /** uBlock Origin's ad and tracker lists. */
+  /** Brave's ad and tracker lists. */
   private base: ElectronBlocker | null = null
-  /** The same plus the annoyance lists (cookie banners), loaded while that's turned on. */
+  /** The same plus its cookie notice blocker, loaded while that's turned on. */
   private full: ElectronBlocker | null = null
   private enabled = true
-  /** Also hide cookie banners and other annoyances (uBlock Origin's annoyance lists). */
+  /** Also hide cookie banners (Brave's cookie notice blocker). */
   private annoyances = false
   private started = false
   /** The other protections (see shields.ts), each switchable in Settings › Privacy. */
@@ -132,35 +225,47 @@ export class AdBlock {
   }
 
   private cachePath(full: boolean): string {
-    return join(app.getPath('userData'), full ? 'adblock-engine-full.bin' : 'adblock-engine.bin')
+    return join(app.getPath('userData'), full ? 'adblock-brave-cookies.bin' : 'adblock-brave.bin')
   }
 
   async start(): Promise<void> {
     this.started = true
+    // The engines built from the lists Zepper had before Brave's.
+    for (const old of ['adblock-engine.bin', 'adblock-engine-full.bin']) void unlink(join(app.getPath('userData'), old)).catch(() => {})
     this.base ??= await this.load(false)
     if (this.annoyances && !this.full) this.full = await this.load(true)
   }
 
-  /** Loads an engine from its cache (refreshed daily) or the lists. */
+  /**
+   * An engine from its cache, or built from the lists when that's a day old (or from another version of
+   * the engine). If they can't be had, the old one does until they can.
+   */
   private async load(full: boolean): Promise<ElectronBlocker | null> {
     const path = this.cachePath(full)
-    if (await this.cacheIsStale(path)) await unlink(path).catch(() => {})
-    try {
-      const cache = {
-        path,
-        read: async (file: string) => new Uint8Array(await readFile(file)),
-        write: (file: string, buffer: Uint8Array) => writeFile(file, buffer)
+    const cached = async (): Promise<ElectronBlocker | null> => {
+      try {
+        return ElectronBlocker.deserialize(new Uint8Array(await readFile(path)))
+      } catch {
+        return null
       }
-      const blocker = await ElectronBlocker.fromLists(fetch, withRecentFilters(full ? fullLists : adsAndTrackingLists), {}, cache)
-      blocker.on('request-blocked', (request) => this.onBlocked(request.tabId))
-      return blocker
-    } catch (error) {
-      console.error('[adblock] failed to load filter lists', error)
-      return null
     }
+    let blocker = (await this.cacheIsStale(path)) ? null : await cached()
+    if (!blocker) {
+      try {
+        const [lists, resources] = await Promise.all([fetchLists(full ? [...LISTS, ...COOKIE_LISTS] : LISTS), fetchResources()])
+        blocker = ElectronBlocker.parse(lists.join('\n'))
+        blocker.updateResources(resources, String(resources.length))
+        await writeFile(path, blocker.serialize())
+      } catch (error) {
+        console.error('[adblock] failed to load filter lists', error)
+        blocker = await cached()
+      }
+    }
+    blocker?.on('request-blocked', (request) => this.onBlocked(request.tabId))
+    return blocker
   }
 
-  /** The engine for a page: with the annoyance lists, unless cookie banners are allowed there. */
+  /** The engine for a page: with the cookie notice lists, unless cookie banners are allowed there. */
   private blockerFor(pageUrl: string | undefined): ElectronBlocker | null {
     if (this.annoyances && this.full && this.protects(pageUrl, 'cookieBanners')) return this.full
     return this.base

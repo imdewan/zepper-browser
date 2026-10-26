@@ -111,6 +111,10 @@ const textId = (text) => {
 // Licenses' own texts, for what doesn't come with its license's text: the GPL is Zepper's own.
 const GPL = textId(readFileSync(join(root, 'LICENSE'), 'utf8').trim())
 const APACHE = textId(readFileSync(join(root, 'node_modules', 'typescript', 'LICENSE.txt'), 'utf8').trim())
+const MPL = (() => {
+  const ghostery = readFileSync(join(root, 'node_modules', '@ghostery', 'adblocker', 'LICENSE'), 'utf8')
+  return textId(ghostery.slice(ghostery.indexOf('Mozilla Public License')).trim())
+})()
 const MIT = (holder) => `MIT License
 
 Copyright (c) ${holder}
@@ -223,29 +227,58 @@ const projects = [
   },
   {
     group: 'Filter lists and data',
+    name: 'Brave’s filter lists',
+    license: 'MPL-2.0',
+    author: 'Brave Software and contributors',
+    url: 'https://github.com/brave/adblock-lists',
+    detail:
+      'Zepper blocks with the lists Brave Shields uses, Brave’s own among them: its fixes, first-party ads and cookie notices. Downloaded daily.',
+    text: MPL
+  },
+  {
+    group: 'Filter lists and data',
+    name: 'Brave’s scripts',
+    license: 'MPL-2.0',
+    author: 'Brave Software and contributors',
+    url: 'https://github.com/brave/adblock-resources',
+    detail: 'The scripts Brave runs on some sites, its YouTube fixes among them. Downloaded daily.',
+    text: MPL
+  },
+  {
+    group: 'Filter lists and data',
     name: 'uBlock Origin filter lists and scriptlets',
     license: 'GPL-3.0',
     author: 'Raymond Hill and the uBlock Origin contributors',
     url: 'https://github.com/uBlockOrigin/uAssets',
-    detail: "Ads, trackers, badware, YouTube's ads and cookie banners. Downloaded daily, through Ghostery's copy of them.",
+    detail: "Ads, trackers, badware, link shorteners, YouTube's ads and cookie notices. Downloaded daily, most through Ghostery's copies.",
     text: GPL
   },
   {
     group: 'Filter lists and data',
-    name: 'EasyList, EasyPrivacy and EasyList Cookie List',
+    name: 'EasyList and EasyPrivacy',
     license: 'GPL-3.0 OR CC-BY-SA-3.0',
     author: 'The EasyList authors',
     url: 'https://easylist.to/',
-    detail: 'Ads, trackers and cookie notices. Downloaded daily.',
+    detail: 'Ads and trackers. Downloaded daily.',
     text: GPL
   },
   {
     group: 'Filter lists and data',
-    name: "Peter Lowe's ad and tracking server list",
-    license: "Peter Lowe's terms",
-    author: 'Peter Lowe',
-    url: 'https://pgl.yoyo.org/adservers/',
-    detail: 'Ad and tracking servers. Downloaded daily.'
+    name: 'Fanboy’s Cookiemonster and Mobile Notifications lists',
+    license: 'CC-BY-3.0',
+    author: 'Fanboy and the EasyList authors',
+    url: 'https://easylist.to/',
+    detail: 'Cookie notices and app promotions. Downloaded daily.',
+    licenseUrl: 'https://creativecommons.org/licenses/by/3.0/'
+  },
+  {
+    group: 'Filter lists and data',
+    name: 'Malicious URL Blocklist (URLhaus)',
+    license: 'CC0-1.0 AND MIT',
+    author: 'curben (malware-filter), from abuse.ch’s URLhaus',
+    url: 'https://gitlab.com/malware-filter/urlhaus-filter',
+    detail: 'Sites spreading malware. Downloaded daily.',
+    licenseUrl: 'https://gitlab.com/malware-filter/urlhaus-filter#license'
   },
   {
     group: 'Filter lists and data',
