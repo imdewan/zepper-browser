@@ -4,9 +4,19 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-10-26
+
 ### Added
 
-- **Sync with Zepper for iPhone** (Settings › Sync): your spaces, with their colours, Essentials, pinned tabs and folders, the same on your Mac and your phone, and each device's open tabs for the others to see. No account: your phone scans a code on your Mac. Everything is encrypted on your devices before it leaves them, so the server can't read it ([how it works](docs/SYNC.md)). Each device keeps its own sign-ins and history. Sync needs a build with its service set up.
+- **Sync with Zepper for iPhone** (Settings › Sync): your spaces, with their colours, Essentials, pinned tabs and folders, the same on your Mac and your phone, and each device's open tabs for the others to see. No account: your phone scans a code on your Mac. Everything is encrypted on your devices before it leaves them, so the server can't read it ([how it works](docs/SYNC.md)). Each device keeps its own sign-ins and history. Like Brave Sync, it runs through a server, Zepper's own (on Cloudflare, `sync-server/`), which only ever holds what your devices encrypted.
+
+### Changed
+
+- **Ad blocking works as Brave Shields does:** the same lists, current, and Brave's scripts.
+  - The lists: uBlock Origin's (quick fixes, link shorteners and every year's filters), EasyList and EasyPrivacy, Brave's own (its fixes, first-party ads, social), URLhaus's malware list and Fanboy's app-promo list. Hide Cookie Banners uses Brave's cookie notice blocker.
+  - Zepper had been reading Ghostery's GitHub copy of uBlock Origin's lists, which stopped updating on August 14, so its YouTube rules were ten weeks old. It now reads Ghostery's CDN, which is current, and the other lists from where their authors publish them. If a day's download fails, the last lists are kept.
+  - YouTube videos start in about two seconds; most load twice as they start, which is uBlock Origin's way of getting one without the ad, as in Brave.
+  - After loading a stuck YouTube video's page again, Zepper keeps all of uBlock Origin's rules on it, as Brave does: 0.1.17 left one out, which YouTube could notice.
 
 ## [0.1.17] - 2026-10-26
 
@@ -305,7 +315,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.17...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.18...HEAD
+[0.1.18]: https://github.com/imdewan/zepper-browser/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/imdewan/zepper-browser/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/imdewan/zepper-browser/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/imdewan/zepper-browser/compare/v0.1.14...v0.1.15
