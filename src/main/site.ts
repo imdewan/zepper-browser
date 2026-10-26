@@ -1,6 +1,7 @@
 import { app, type Certificate, type Session } from 'electron'
 import { X509Certificate } from 'node:crypto'
 import type { CertificateChain, CertificateEntry, CertificateInfo, NameField, PermissionState, SiteDecisions } from '@shared/types'
+import { CrlSet } from './crlset'
 import { JsonFile } from './persist'
 
 /** Permissions granted silently; everything else sensitive asks first. */
@@ -217,21 +218,29 @@ interface CapturedCert {
 
 const MAX_CERTIFICATES = 256
 
-/** Remembers the certificate each host presented, for the site info panel. */
+/** net::ERR_CERT_REVOKED: refused as Chrome refuses what its CRLSet lists. */
+const CERT_REVOKED = -206
+
+/**
+ * Checks every certificate against Chrome's CRLSet (crlset.ts) on top of Chromium's own checks, and
+ * remembers the certificate each host presented, for the site info panel.
+ */
 export class CertificateStore {
   private readonly certs = new Map<string, CapturedCert>()
+  readonly crlset = new CrlSet()
 
   attach(session: Session): void {
     session.setCertificateVerifyProc((request, callback) => {
+      const refused = request.verificationResult === 'net::OK' && this.crlset.refuses(request.certificate)
       // Most recent hosts only (every ad and CDN host checks one): kept in order of last use, capped.
       this.certs.delete(request.hostname)
       this.certs.set(request.hostname, {
         certificate: request.certificate,
-        trusted: request.verificationResult === 'net::OK'
+        trusted: request.verificationResult === 'net::OK' && !refused
       })
       if (this.certs.size > MAX_CERTIFICATES) this.certs.delete(this.certs.keys().next().value!)
       // -3: use Chromium's own verification result.
-      callback(-3)
+      callback(refused ? CERT_REVOKED : -3)
     })
   }
 

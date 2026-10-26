@@ -99,6 +99,8 @@ if (!app.requestSingleInstanceLock()) {
     })
     // Development: the debugger (--inspect) can reach the app's state.
     if (process.env['ZEPPER_DEBUG_PORT'] && !app.isPackaged) Object.assign(globalThis, { zepperHub: hub })
+    // The certificates Chrome blocks, before the first page loads.
+    await hub.services.certificates.crlset.start(app.getPath('userData'))
     await hub.widevineSettled(15_000)
     hub.openWindow('main')
     hub.restoreWindows()

@@ -6195,7 +6195,8 @@ export class Browser {
       node: process.versions.node,
       v8: process.versions.v8,
       widevine: this.hub.widevine,
-      filtersUpdatedAt: await this.adblock.filtersUpdatedAt()
+      filtersUpdatedAt: await this.adblock.filtersUpdatedAt(),
+      crlset: this.hub.services.certificates.crlset.status()
     }
     this.setOverlayMode('full')
     this.overlay.webContents.focus()

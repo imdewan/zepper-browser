@@ -7,6 +7,7 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 ### Security
 
 - **Certificates from eMudhra's compromised CAs are refused.** On October 17, the keys of eight of eMudhra's intermediate CAs were found to be guessable (one was the number 4), so anyone could make a certificate for any site that browsers would trust. Chrome and Firefox blocked them that day, through updates Electron apps don't get. Zepper now runs Electron 44.9.3 (Chromium 152.0.7977.167), which refuses them.
+- **Chrome's certificate blocks reach Zepper within hours, without an update.** Zepper fetches Chrome's CRLSet itself (the certificates Google blocks or revokes when a CA's keys leak or it misissues), at launch and every 6 hours, from Google's update server as Chrome does, and refuses connections through anything in it. Until now they only came with a new Electron, as this one did. About Zepper shows which CRLSet it has.
 
 ## [0.1.18] - 2026-10-26
 

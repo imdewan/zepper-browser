@@ -864,6 +864,8 @@ export interface AboutInfo {
   widevine: WidevineStatus
   /** When the ad-block filter lists were last downloaded (0 if never). */
   filtersUpdatedAt: number
+  /** Chrome's CRLSet (the certificates it blocks): which one, and when it came. */
+  crlset: { sequence: number; updatedAt: number } | null
 }
 
 export interface HistoryEntry {

@@ -106,6 +106,11 @@ export function AboutPanel({ info, update, onClose }: { info: AboutInfo; update:
       info.filtersUpdatedAt ? `Brave’s lists · ${dayFormat.format(info.filtersUpdatedAt)}` : 'Brave’s lists',
       info.filtersUpdatedAt ? `Filter lists updated ${dateFormat.format(info.filtersUpdatedAt)}` : undefined
     ],
+    [
+      'Revoked certificates',
+      info.crlset ? `Chrome’s CRLSet · ${info.crlset.sequence}` : 'Chrome’s CRLSet',
+      info.crlset ? `Updated ${dateFormat.format(info.crlset.updatedAt)}` : 'Not downloaded yet'
+    ],
     ['V8 · Node', `${info.v8} · ${info.node}`]
   ]
 
