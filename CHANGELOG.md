@@ -4,6 +4,10 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- **Google Meet joins calls again**, instead of "Sorry, we encountered a problem joining this video call". Since 0.1.18, Zepper runs Brave's scripts, and one of them, brave-fix, reads every list in the browser's version details when a site asks for them. It runs on Google's sites, YouTube, Zoom, WhatsApp, Spotify and others. Zepper's answer, made to match Chrome's, had one list left empty where Chrome leaves it out, so brave-fix failed, and Meet with it.
+
 ## [0.1.19] - 2026-10-27
 
 ### Security

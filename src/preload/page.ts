@@ -71,12 +71,15 @@ function chromeIdentityShim(name: string, major: string, full: string): void {
       if (typeof high?.value === 'function') {
         Object.defineProperty(proto, 'getHighEntropyValues', {
           ...high,
+          // Only the lists Chrome returned (fullVersionList only when asked for): pages read every key,
+          // and Brave's brave-fix, on Google's sites, maps each list, so an empty one broke Meet.
           value: wrap(high.value as object, (call) =>
-            (call() as Promise<Record<string, unknown>>).then((values) => ({
-              ...values,
-              brands: withBrand(values.brands, major),
-              fullVersionList: withBrand(values.fullVersionList, full)
-            }))
+            (call() as Promise<Record<string, unknown>>).then((values) => {
+              const next = { ...values }
+              if ('brands' in values) next.brands = withBrand(values.brands, major)
+              if ('fullVersionList' in values) next.fullVersionList = withBrand(values.fullVersionList, full)
+              return next
+            })
           )
         })
       }
