@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-10-28
+
 ### Fixed
 
 - **Google Meet joins calls again**, instead of "Sorry, we encountered a problem joining this video call". Since 0.1.18, Zepper runs Brave's scripts, and one of them, brave-fix, reads every list in the browser's version details when a site asks for them. It runs on Google's sites, YouTube, Zoom, WhatsApp, Spotify and others. Zepper's answer, made to match Chrome's, had one list left empty where Chrome leaves it out, so brave-fix failed, and Meet with it.
@@ -326,7 +328,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.19...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.20...HEAD
+[0.1.20]: https://github.com/imdewan/zepper-browser/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/imdewan/zepper-browser/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/imdewan/zepper-browser/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/imdewan/zepper-browser/compare/v0.1.16...v0.1.17
