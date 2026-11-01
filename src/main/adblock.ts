@@ -15,7 +15,10 @@ import { parse } from 'tldts-experimental'
 import type { Protection } from '@shared/settings'
 import { HttpsUpgrades, cleanLink } from './shields'
 
-const REFRESH_AFTER_MS = 24 * 60 * 60 * 1000
+/** As uBlock Origin's quick fixes, where its YouTube rules are, expire. */
+const REFRESH_AFTER_MS = 8 * 60 * 60 * 1000
+/** How often a running Zepper (it can stay open for days) looks whether its lists are due. */
+const CHECK_EVERY_MS = 60 * 60 * 1000
 
 /**
  * Ghostery's copies of uBlock Origin's lists, EasyList and EasyPrivacy, kept current and prepared for
@@ -181,7 +184,7 @@ function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): str
  * Built-in ad and tracker blocking, as Brave Shields does it.
  *
  * - Network requests are matched by Ghostery's engine against Brave's default
- *   lists (see LISTS), refreshed daily.
+ *   lists (see LISTS), refreshed every 8 hours, while Zepper's open too.
  * - Cosmetic filters and scriptlets are handed to our page preload
  *   synchronously, so they apply at document start, before any page script
  *   runs. That is what defeats YouTube's player ads; the stock Electron
@@ -199,6 +202,7 @@ export class AdBlock {
   /** Also hide cookie banners (Brave's cookie notice blocker). */
   private annoyances = false
   private started = false
+  private refreshing = false
   /** The other protections (see shields.ts), each switchable in Settings › Privacy. */
   private protections = { httpsUpgrade: true, cleanLinks: true, crossSiteCookies: true }
   readonly https = new HttpsUpgrades()
@@ -234,34 +238,66 @@ export class AdBlock {
     for (const old of ['adblock-engine.bin', 'adblock-engine-full.bin']) void unlink(join(app.getPath('userData'), old)).catch(() => {})
     this.base ??= await this.load(false)
     if (this.annoyances && !this.full) this.full = await this.load(true)
+    setInterval(() => void this.refresh(), CHECK_EVERY_MS).unref()
   }
 
   /**
-   * An engine from its cache, or built from the lists when that's a day old (or from another version of
-   * the engine). If they can't be had, the old one does until they can.
+   * An engine from its cache, or built from the lists when they're due (or the cache is from another
+   * version of the engine). If they can't be had, the old one does until they can.
    */
   private async load(full: boolean): Promise<ElectronBlocker | null> {
-    const path = this.cachePath(full)
-    const cached = async (): Promise<ElectronBlocker | null> => {
-      try {
-        return ElectronBlocker.deserialize(new Uint8Array(await readFile(path)))
-      } catch {
-        return null
-      }
+    if (!(await this.cacheIsStale(this.cachePath(full)))) {
+      const blocker = await this.cached(full)
+      if (blocker) return blocker
     }
-    let blocker = (await this.cacheIsStale(path)) ? null : await cached()
-    if (!blocker) {
-      try {
-        const [lists, resources] = await Promise.all([fetchLists(full ? [...LISTS, ...COOKIE_LISTS] : LISTS), fetchResources()])
-        blocker = ElectronBlocker.parse(lists.join('\n'))
-        blocker.updateResources(resources, String(resources.length))
-        await writeFile(path, blocker.serialize())
-      } catch (error) {
-        console.error('[adblock] failed to load filter lists', error)
-        blocker = await cached()
+    return (await this.build(full)) ?? (await this.cached(full))
+  }
+
+  /**
+   * Newer lists while Zepper stays open: YouTube's rules change every few days, and a page that's
+   * missing one can be told it has an ad blocker. Each engine in use is swapped once its lists are
+   * due; if they can't be had, it's kept and tried again next time.
+   */
+  private async refresh(): Promise<void> {
+    if (this.refreshing) return
+    this.refreshing = true
+    try {
+      if (await this.cacheIsStale(this.cachePath(false))) this.base = (await this.build(false)) ?? this.base
+      if (this.annoyances && (await this.cacheIsStale(this.cachePath(true)))) {
+        const full = await this.build(true)
+        // Unless cookie banners were allowed again meanwhile.
+        if (full && this.annoyances) this.full = full
       }
+    } finally {
+      this.refreshing = false
     }
-    blocker?.on('request-blocked', (request) => this.onBlocked(request.tabId))
+  }
+
+  private async cached(full: boolean): Promise<ElectronBlocker | null> {
+    try {
+      return this.counting(ElectronBlocker.deserialize(new Uint8Array(await readFile(this.cachePath(full)))))
+    } catch {
+      return null
+    }
+  }
+
+  /** An engine from the lists as they are now, saved for next time (null if they can't be had). */
+  private async build(full: boolean): Promise<ElectronBlocker | null> {
+    try {
+      const [lists, resources] = await Promise.all([fetchLists(full ? [...LISTS, ...COOKIE_LISTS] : LISTS), fetchResources()])
+      const blocker = ElectronBlocker.parse(lists.join('\n'))
+      blocker.updateResources(resources, String(resources.length))
+      await writeFile(this.cachePath(full), blocker.serialize())
+      return this.counting(blocker)
+    } catch (error) {
+      console.error('[adblock] failed to load filter lists', error)
+      return null
+    }
+  }
+
+  /** What an engine blocks is counted on its tab. */
+  private counting(blocker: ElectronBlocker): ElectronBlocker {
+    blocker.on('request-blocked', (request) => this.onBlocked(request.tabId))
     return blocker
   }
 
@@ -426,12 +462,13 @@ export class AdBlock {
     return { styles: result.styles, scripts: [] }
   }
 
+  /** Whether the lists are due: saved too long ago, or never (a first download that failed is retried). */
   private async cacheIsStale(path: string): Promise<boolean> {
     try {
       const info = await stat(path)
       return Date.now() - info.mtimeMs > REFRESH_AFTER_MS
     } catch {
-      return false
+      return true
     }
   }
 }
