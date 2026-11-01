@@ -4,6 +4,18 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-11-01
+
+### Changed
+
+- **A site's requests to itself are left alone, as Brave does by default** (its Standard mode). Ads and trackers from other sites are blocked as before; on a site's own requests, only Brave's first-party ad list, the app promo list and the cookie notice blocker apply.
+
+### Fixed
+
+- **YouTube's "Ad blockers violate YouTube's Terms of Service" wall.** It checks for an ad blocker in ways Zepper gave away, where uBlock Origin and Brave don't:
+  - Some rules block a request by giving the page a harmless stand-in, such as the `ad_status.js` YouTube loads to look for an ad blocker. In Zepper the stand-in never arrived (Chromium refused how it was sent), so the page saw the request fail. Zepper now serves stand-ins itself, on every site.
+  - uBlock Origin's rules for one kind of request only (`method=`), among them the one for the decoy video requests YouTube makes, were thrown away. They work now.
+
 ## [0.1.21] - 2026-11-01
 
 ### Fixed
@@ -334,7 +346,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.21...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.22...HEAD
+[0.1.22]: https://github.com/imdewan/zepper-browser/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/imdewan/zepper-browser/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/imdewan/zepper-browser/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/imdewan/zepper-browser/compare/v0.1.18...v0.1.19
