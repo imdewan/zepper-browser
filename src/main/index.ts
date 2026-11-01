@@ -2,7 +2,7 @@ import { Menu, app, protocol } from 'electron'
 import { statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { AdBlock } from './adblock'
+import { AdBlock, RESOURCE_SCHEME } from './adblock'
 import { bangs } from './bangs'
 import { Hub } from './hub'
 import { buildMenu } from './menu'
@@ -30,7 +30,9 @@ protocol.registerSchemesAsPrivileged([
   {
     scheme: 'chrome-extension',
     privileges: { standard: true, secure: true, allowServiceWorkers: true, supportFetchAPI: true, corsEnabled: true, stream: true }
-  }
+  },
+  // The ad blocker's stand-ins for what it blocks: fetchable by pages, whatever their CSP says.
+  { scheme: RESOURCE_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: true } }
 ])
 
 // A second, isolated instance with its own profile (for automated checks, and trying an update).

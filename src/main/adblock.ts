@@ -1,4 +1,4 @@
-import { ElectronBlocker } from '@ghostery/adblocker-electron'
+import { ElectronBlocker, FiltersEngine, fromElectronDetails } from '@ghostery/adblocker-electron'
 import {
   app,
   ipcMain,
@@ -9,6 +9,7 @@ import {
   type Session,
   type WebFrameMain
 } from 'electron'
+import { randomBytes } from 'node:crypto'
 import { readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse } from 'tldts-experimental'
@@ -35,6 +36,13 @@ type ListSource = { cdn: string } | { url: string }
 /** uBlock Origin keeps each year's new filters in a file of its own; a year with none yet is skipped. */
 const UBO_YEARS = Array.from({ length: new Date().getFullYear() - 2019 }, (_, i) => ({ cdn: `ublock-filters-${2020 + i}`, optional: true }))
 
+/** Brave's first-party ads and app promos: the default lists Brave lets block a site's requests to itself. */
+const FIRST_PARTY_LISTS: ListSource[] = [
+  { url: `${BRAVE}/brave-lists/brave-firstparty.txt` },
+  { url: `${BRAVE}/brave-lists/brave-firstparty-regional.txt` },
+  { url: 'https://secure.fanboy.co.nz/fanboy-mobile-notifications.txt' }
+]
+
 /**
  * Brave's default lists, as Brave Shields has them (brave/adblock-resources, filter_lists/list_catalog.json):
  * uBlock Origin's and EasyList's ad lists with Brave's own fixes, the privacy lists, Brave's first-party
@@ -58,9 +66,7 @@ const LISTS: (ListSource & { optional?: boolean })[] = [
   { url: `${BRAVE}/brave-lists/brave-sugarcoat.txt` },
   { cdn: 'easyprivacy' },
   { cdn: 'ublock-privacy' },
-  { url: `${BRAVE}/brave-lists/brave-firstparty.txt` },
-  { url: `${BRAVE}/brave-lists/brave-firstparty-regional.txt` },
-  { url: 'https://secure.fanboy.co.nz/fanboy-mobile-notifications.txt' }
+  ...FIRST_PARTY_LISTS
 ]
 
 /** Brave's cookie notice blocker. */
@@ -70,10 +76,34 @@ const COOKIE_LISTS: ListSource[] = [
   { url: `${BRAVE}/brave-lists/brave-cookie-specific.txt` }
 ]
 
-async function fetchText(url: string): Promise<string> {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`${url}: ${response.status}`)
-  return response.text()
+/**
+ * Each engine Zepper keeps, and its lists. A site's requests to itself only go through the first-party
+ * ones, as in Brave's Standard mode: Brave's first-party ads and app promos, and the cookie notice
+ * blocker.
+ */
+type EngineKind = 'base' | 'full' | 'firstParty' | 'firstPartyFull'
+const ENGINES: Record<EngineKind, { lists: (ListSource & { optional?: boolean })[]; file: string }> = {
+  base: { lists: LISTS, file: 'adblock-brave.bin' },
+  full: { lists: [...LISTS, ...COOKIE_LISTS], file: 'adblock-brave-cookies.bin' },
+  firstParty: { lists: FIRST_PARTY_LISTS, file: 'adblock-brave-1p.bin' },
+  firstPartyFull: { lists: [...FIRST_PARTY_LISTS, ...COOKIE_LISTS], file: 'adblock-brave-1p-cookies.bin' }
+}
+
+/** Downloads under way or just done: engines built one after another share their lists. */
+const downloads = new Map<string, Promise<string>>()
+const DOWNLOADS_SHARED_MS = 5 * 60 * 1000
+
+function fetchText(url: string): Promise<string> {
+  let download = downloads.get(url)
+  if (!download) {
+    download = fetch(url).then((response) => {
+      if (!response.ok) throw new Error(`${url}: ${response.status}`)
+      return response.text()
+    })
+    downloads.set(url, download)
+    setTimeout(() => downloads.delete(url), DOWNLOADS_SHARED_MS).unref()
+  }
+  return download
 }
 
 /** The latest revision of something on Ghostery's CDN. */
@@ -129,6 +159,49 @@ async function fetchResources(): Promise<string> {
   return JSON.stringify(resources)
 }
 
+const METHODS = ['CONNECT', 'DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT']
+/** A network rule's `method=` option (as the last of its options or not), e.g. `$xhr,method=get|post`. */
+const METHOD_OPTION = /^([^#]*?\$(?:[^$]*,)?)method=([~a-z|]+)(,[^$]*)?$/i
+
+/**
+ * The rules for some request methods only (`method=`, which uBlock Origin's YouTube rules use), taken
+ * out of the lists: Ghostery's engine can't read the option and drops the whole rule.
+ */
+function splitMethodRules(text: string): { text: string; methodRules: string[] } {
+  const methodRules: string[] = []
+  const rest = text.split('\n').filter((line) => {
+    if (line.startsWith('!') || !line.includes('method=') || !METHOD_OPTION.test(line)) return true
+    methodRules.push(line)
+    return false
+  })
+  return { text: rest.join('\n'), methodRules }
+}
+
+/** Each request method's own engine, of the rules for it with the option taken off. */
+function compileMethodRules(methodRules: string[]): Map<string, FiltersEngine> {
+  const byMethod = new Map<string, string[]>()
+  for (const rule of methodRules) {
+    const [, head, spec, tail = ''] = METHOD_OPTION.exec(rule) ?? []
+    if (!head || !spec) continue
+    const listed = spec.toUpperCase().split('|')
+    const negated = listed.filter((m) => m.startsWith('~')).map((m) => m.slice(1))
+    const methods = negated.length > 0 ? METHODS.filter((m) => !negated.includes(m)) : listed.filter((m) => METHODS.includes(m))
+    // `$method=get` alone leaves `$`; `$xhr,method=get` leaves `$xhr,`.
+    const stripped = (head + tail.slice(1)).replace(/[$,]$/, '')
+    for (const method of methods) byMethod.set(method, [...(byMethod.get(method) ?? []), stripped])
+  }
+  return new Map([...byMethod].map(([method, rules]) => [method, FiltersEngine.parse(rules.join('\n'))]))
+}
+
+/** An engine, with its rules for some request methods only. */
+interface Engine {
+  blocker: ElectronBlocker
+  byMethod: Map<string, FiltersEngine>
+}
+
+/** Where the ad blocker's stand-ins for what it blocks are served from (see AdBlock.resourceUrl). */
+export const RESOURCE_SCHEME = 'zepper-resource'
+
 export const COSMETICS_CHANNEL = 'zepper:cosmetics'
 export const COSMETICS_DOM_CHANNEL = 'zepper:cosmetics-dom'
 
@@ -172,6 +245,23 @@ function pageUrlOf(details: RequestDetails): string | undefined {
   }
 }
 
+/**
+ * Whether a request is to the site that made it (Brave's SameDomainOrHost, against the frame making
+ * it; for a frame, the page it's in). A page itself loading never is.
+ */
+function isFirstParty(details: RequestDetails): boolean {
+  if (details.resourceType === 'mainFrame') return false
+  let initiator: string | undefined
+  try {
+    initiator = (details.resourceType === 'subFrame' ? details.frame?.parent : details.frame)?.url
+  } catch {
+    // The frame went away mid-request.
+  }
+  initiator ||= pageUrlOf(details)
+  const site = siteOf(details.url)
+  return !!initiator && !!site && site === siteOf(initiator)
+}
+
 function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): string {
   try {
     return frame?.top?.url || fallback
@@ -184,7 +274,10 @@ function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): str
  * Built-in ad and tracker blocking, as Brave Shields does it.
  *
  * - Network requests are matched by Ghostery's engine against Brave's default
- *   lists (see LISTS), refreshed every 8 hours, while Zepper's open too.
+ *   lists (see LISTS), refreshed every 8 hours, while Zepper's open too. As in
+ *   Brave's Standard mode, a site's requests to itself only go through the
+ *   first-party ones (see ENGINES). What's blocked with a stand-in gets it from
+ *   Zepper (see resourceUrl), as from uBlock Origin or Brave.
  * - Cosmetic filters and scriptlets are handed to our page preload
  *   synchronously, so they apply at document start, before any page script
  *   runs. That is what defeats YouTube's player ads; the stock Electron
@@ -194,10 +287,15 @@ function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): str
 const MAX_DOM_TOKENS = 2000
 
 export class AdBlock {
-  /** Brave's ad and tracker lists. */
-  private base: ElectronBlocker | null = null
-  /** The same plus its cookie notice blocker, loaded while that's turned on. */
-  private full: ElectronBlocker | null = null
+  /**
+   * The engines in use (see ENGINES): the ones with the cookie notice blocker are loaded while that's
+   * turned on.
+   */
+  private engines: Partial<Record<EngineKind, Engine | null>> = {}
+  /** The stand-ins handed out (see resourceUrl), by name. */
+  private readonly resources = new Map<string, { type: string; body: Buffer }>()
+  /** In each stand-in's address, so a page can't look for Zepper's without having been given one. */
+  private readonly resourceSecret = randomBytes(8).toString('hex')
   private enabled = true
   /** Also hide cookie banners (Brave's cookie notice blocker). */
   private annoyances = false
@@ -228,16 +326,20 @@ export class AdBlock {
     })
   }
 
-  private cachePath(full: boolean): string {
-    return join(app.getPath('userData'), full ? 'adblock-brave-cookies.bin' : 'adblock-brave.bin')
+  private cachePath(kind: EngineKind): string {
+    return join(app.getPath('userData'), ENGINES[kind].file)
+  }
+
+  /** The engines needed now: the cookie notice blocker's only while it's turned on. */
+  private kinds(): EngineKind[] {
+    return this.annoyances ? ['base', 'firstParty', 'full', 'firstPartyFull'] : ['base', 'firstParty']
   }
 
   async start(): Promise<void> {
     this.started = true
     // The engines built from the lists Zepper had before Brave's.
     for (const old of ['adblock-engine.bin', 'adblock-engine-full.bin']) void unlink(join(app.getPath('userData'), old)).catch(() => {})
-    this.base ??= await this.load(false)
-    if (this.annoyances && !this.full) this.full = await this.load(true)
+    for (const kind of this.kinds()) this.engines[kind] ??= await this.load(kind)
     setInterval(() => void this.refresh(), CHECK_EVERY_MS).unref()
   }
 
@@ -245,12 +347,12 @@ export class AdBlock {
    * An engine from its cache, or built from the lists when they're due (or the cache is from another
    * version of the engine). If they can't be had, the old one does until they can.
    */
-  private async load(full: boolean): Promise<ElectronBlocker | null> {
-    if (!(await this.cacheIsStale(this.cachePath(full)))) {
-      const blocker = await this.cached(full)
-      if (blocker) return blocker
+  private async load(kind: EngineKind): Promise<Engine | null> {
+    if (!(await this.cacheIsStale(this.cachePath(kind)))) {
+      const engine = await this.cached(kind)
+      if (engine) return engine
     }
-    return (await this.build(full)) ?? (await this.cached(full))
+    return (await this.build(kind)) ?? (await this.cached(kind))
   }
 
   /**
@@ -262,55 +364,71 @@ export class AdBlock {
     if (this.refreshing) return
     this.refreshing = true
     try {
-      if (await this.cacheIsStale(this.cachePath(false))) this.base = (await this.build(false)) ?? this.base
-      if (this.annoyances && (await this.cacheIsStale(this.cachePath(true)))) {
-        const full = await this.build(true)
+      for (const kind of this.kinds()) {
+        if (!(await this.cacheIsStale(this.cachePath(kind)))) continue
+        const engine = await this.build(kind)
         // Unless cookie banners were allowed again meanwhile.
-        if (full && this.annoyances) this.full = full
+        if (engine && this.kinds().includes(kind)) this.engines[kind] = engine
       }
     } finally {
       this.refreshing = false
     }
   }
 
-  private async cached(full: boolean): Promise<ElectronBlocker | null> {
+  /**
+   * The engine saved last time: its rules for some request methods (their length first), then Ghostery's
+   * serialized engine. One saved another way (by an earlier Zepper, or another version of the engine)
+   * doesn't read, and is built again.
+   */
+  private async cached(kind: EngineKind): Promise<Engine | null> {
     try {
-      return this.counting(ElectronBlocker.deserialize(new Uint8Array(await readFile(this.cachePath(full)))))
+      const file = await readFile(this.cachePath(kind))
+      const length = file.readUInt32LE(0)
+      const methodRules = JSON.parse(file.subarray(4, 4 + length).toString()) as string[]
+      return this.engine(ElectronBlocker.deserialize(new Uint8Array(file.subarray(4 + length))), methodRules)
     } catch {
       return null
     }
   }
 
   /** An engine from the lists as they are now, saved for next time (null if they can't be had). */
-  private async build(full: boolean): Promise<ElectronBlocker | null> {
+  private async build(kind: EngineKind): Promise<Engine | null> {
     try {
-      const [lists, resources] = await Promise.all([fetchLists(full ? [...LISTS, ...COOKIE_LISTS] : LISTS), fetchResources()])
-      const blocker = ElectronBlocker.parse(lists.join('\n'))
+      const [lists, resources] = await Promise.all([fetchLists(ENGINES[kind].lists), fetchResources()])
+      const { text, methodRules } = splitMethodRules(lists.join('\n'))
+      const blocker = ElectronBlocker.parse(text)
       blocker.updateResources(resources, String(resources.length))
-      await writeFile(this.cachePath(full), blocker.serialize())
-      return this.counting(blocker)
+      const header = Buffer.from(JSON.stringify(methodRules))
+      const length = Buffer.alloc(4)
+      length.writeUInt32LE(header.length)
+      await writeFile(this.cachePath(kind), Buffer.concat([length, header, blocker.serialize()]))
+      return this.engine(blocker, methodRules)
     } catch (error) {
       console.error('[adblock] failed to load filter lists', error)
       return null
     }
   }
 
-  /** What an engine blocks is counted on its tab. */
-  private counting(blocker: ElectronBlocker): ElectronBlocker {
+  /** An engine ready for use: its rules for some methods compiled, and what it blocks counted on its tab. */
+  private engine(blocker: ElectronBlocker, methodRules: string[]): Engine {
     blocker.on('request-blocked', (request) => this.onBlocked(request.tabId))
-    return blocker
+    return { blocker, byMethod: compileMethodRules(methodRules) }
   }
 
-  /** The engine for a page: with the cookie notice lists, unless cookie banners are allowed there. */
-  private blockerFor(pageUrl: string | undefined): ElectronBlocker | null {
-    if (this.annoyances && this.full && this.protects(pageUrl, 'cookieBanners')) return this.full
-    return this.base
+  /**
+   * The engine for a page (or for its requests to its own site): with the cookie notice lists, unless
+   * cookie banners are allowed there.
+   */
+  private engineFor(pageUrl: string | undefined, firstParty = false): Engine | null {
+    const cookies = this.annoyances && this.protects(pageUrl, 'cookieBanners')
+    const plain = this.engines[firstParty ? 'firstParty' : 'base'] ?? null
+    return (cookies && this.engines[firstParty ? 'firstPartyFull' : 'full']) || plain
   }
 
   /** When the filter lists on disk were last downloaded (0 if never). */
   async filtersUpdatedAt(): Promise<number> {
     try {
-      return (await stat(this.cachePath(false))).mtimeMs
+      return (await stat(this.cachePath('base'))).mtimeMs
     } catch {
       return 0
     }
@@ -328,11 +446,13 @@ export class AdBlock {
   setAnnoyances(on: boolean): void {
     if (on === this.annoyances) return
     this.annoyances = on
-    if (!on) this.full = null
+    const kinds = ['full', 'firstPartyFull'] as const
+    if (!on) for (const kind of kinds) delete this.engines[kind]
     else if (this.started)
-      void this.load(true).then((blocker) => {
-        if (this.annoyances) this.full = blocker
-      })
+      for (const kind of kinds)
+        void this.load(kind).then((engine) => {
+          if (this.annoyances) this.engines[kind] = engine
+        })
   }
 
   setProtections(protections: { httpsUpgrade: boolean; cleanLinks: boolean; crossSiteCookies: boolean }): void {
@@ -376,6 +496,7 @@ export class AdBlock {
   attachSession(session: Session): void {
     if (this.sessions.has(session)) return
     this.sessions.add(session)
+    session.protocol.handle(RESOURCE_SCHEME, this.serveResource)
     session.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, this.onBeforeRequest)
     session.webRequest.onHeadersReceived({ urls: ['<all_urls>'] }, this.onHeadersReceived)
   }
@@ -383,8 +504,37 @@ export class AdBlock {
   /** A private window's session is done with: let it go. */
   detachSession(session: Session): void {
     if (!this.sessions.delete(session)) return
+    session.protocol.unhandle(RESOURCE_SCHEME)
     session.webRequest.onBeforeRequest(null)
     session.webRequest.onHeadersReceived(null)
+  }
+
+  /**
+   * Where a stand-in is served. Ghostery's engine hands it out as a data: URL, and Chromium won't send
+   * a page's request there (ERR_UNSAFE_REDIRECT), so the page saw it fail where uBlock Origin and
+   * Brave give it the stand-in: on YouTube, the ad_status.js it checks for an ad blocker with.
+   */
+  private resourceUrl(redirect: { filename: string; body: string; contentType: string }): string {
+    const name = encodeURIComponent(redirect.filename)
+    if (!this.resources.has(name)) {
+      // Binary ones (images, media) come base64-encoded, and say so in their type.
+      const base64 = redirect.contentType.endsWith(';base64')
+      this.resources.set(name, {
+        type: base64 ? redirect.contentType.slice(0, -';base64'.length) : redirect.contentType,
+        body: Buffer.from(redirect.body, base64 ? 'base64' : 'utf8')
+      })
+    }
+    return `${RESOURCE_SCHEME}://stand-in/${name}?${this.resourceSecret}`
+  }
+
+  private readonly serveResource = (request: Request): Response => {
+    const url = new URL(request.url)
+    const resource = url.search === `?${this.resourceSecret}` ? this.resources.get(url.pathname.slice(1)) : undefined
+    if (!resource) return new Response(null, { status: 404 })
+    // Fetched across sites (a page's request for an ad script, sent here): allowed, with its cookies.
+    const origin = request.headers.get('origin')
+    const cors: Record<string, string> = origin ? { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true' } : {}
+    return new Response(new Uint8Array(resource.body), { headers: { 'content-type': resource.type, ...cors } })
   }
 
   private readonly onBeforeRequest = (details: OnBeforeRequestListenerDetails, callback: (response: CallbackResponse) => void): void => {
@@ -396,9 +546,16 @@ export class AdBlock {
       if (upgraded || cleaned) return callback({ redirectURL: upgraded ?? cleaned! })
     }
     const page = pageUrlOf(details)
-    const blocker = this.blockerFor(page)
-    if (!blocker || !this.blocksOn(page)) return callback({})
-    blocker.onBeforeRequest(details, callback)
+    const engine = this.engineFor(page, isFirstParty(details))
+    if (!engine || !this.blocksOn(page) || details.resourceType === 'mainFrame') return callback({})
+    const request = fromElectronDetails(details)
+    const { redirect, match, exception } = engine.blocker.match(request)
+    if (redirect) return callback({ redirectURL: this.resourceUrl(redirect) })
+    if (match) return callback({ cancel: true })
+    // The rules for this method only, unless the lists made an exception for the request.
+    if (exception || !engine.byMethod.get(details.method)?.match(request).match) return callback({})
+    if (details.webContentsId !== undefined) this.onBlocked(details.webContentsId)
+    callback({ cancel: true })
   }
 
   private readonly onHeadersReceived = (
@@ -414,7 +571,7 @@ export class AdBlock {
       callback({ ...response, responseHeaders: headers })
     }
     const page = pageUrlOf(details)
-    const blocker = this.blockerFor(page)
+    const blocker = this.engineFor(page)?.blocker
     if (!blocker || !this.blocksOn(page)) return done({})
     blocker.onHeadersReceived(details, done)
   }
@@ -422,7 +579,7 @@ export class AdBlock {
   /** Hostname-specific hiding rules, generic base rules and scriptlets for a page. */
   private cosmetics(url: string, pageUrl: string): CosmeticsResponse {
     const empty = { styles: '', scripts: [] }
-    const blocker = this.blockerFor(pageUrl)
+    const blocker = this.engineFor(pageUrl)?.blocker
     if (!blocker || !this.enabled || !/^https?:/.test(url)) return empty
     const { hostname, domain } = parse(url)
     if (!hostname) return empty
@@ -442,7 +599,7 @@ export class AdBlock {
   /** Generic class/id/href hiding rules for what the page actually contains. */
   private domCosmetics(payload: { url: string; classes: string[]; ids: string[]; hrefs: string[] }, pageUrl: string): CosmeticsResponse {
     const empty = { styles: '', scripts: [] }
-    const blocker = this.blockerFor(pageUrl)
+    const blocker = this.engineFor(pageUrl)?.blocker
     if (!blocker || !this.enabled) return empty
     const { hostname, domain } = parse(payload.url)
     if (!hostname) return empty
