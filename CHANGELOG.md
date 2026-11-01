@@ -4,6 +4,12 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-11-01
+
+### Fixed
+
+- **YouTube no longer says you're using an ad blocker** ("Video player will be blocked after 3 videos") when Zepper has been open for days. Zepper only downloaded new filter lists when it started, so one left open kept the YouTube rules it started with, while YouTube changes its ads every few days and uBlock Origin answers with new rules. Zepper now checks every hour while it's open and gets new lists once they're 8 hours old, the expiry uBlock Origin sets on the list its YouTube rules are in. Pages opened after that get the new rules.
+
 ## [0.1.20] - 2026-10-28
 
 ### Fixed
@@ -328,7 +334,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.20...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.21...HEAD
+[0.1.21]: https://github.com/imdewan/zepper-browser/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/imdewan/zepper-browser/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/imdewan/zepper-browser/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/imdewan/zepper-browser/compare/v0.1.17...v0.1.18
