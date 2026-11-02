@@ -83,7 +83,7 @@ const COOKIE_LISTS: ListSource[] = [
  */
 type EngineKind = 'base' | 'full' | 'firstParty' | 'firstPartyFull'
 /** Raised when what goes into an engine changes, so the ones saved before are built again. */
-const ENGINE_REVISION = 2
+const ENGINE_REVISION = 3
 const ENGINES: Record<EngineKind, { lists: (ListSource & { optional?: boolean })[]; file: string }> = {
   base: { lists: LISTS, file: `adblock-r${ENGINE_REVISION}.bin` },
   full: { lists: [...LISTS, ...COOKIE_LISTS], file: `adblock-r${ENGINE_REVISION}-cookies.bin` },
@@ -216,6 +216,33 @@ function compileMethodRules(methodRules: string[]): Map<string, FiltersEngine> {
     for (const method of methods) byMethod.set(method, [...(byMethod.get(method) ?? []), stripped])
   }
   return new Map([...byMethod].map(([method, rules]) => [method, FiltersEngine.parse(rules.join('\n'))]))
+}
+
+/** A rule taking something out of whatever a page parses (json-prune wraps JSON.parse). */
+const JSON_PRUNE_RULE = /^([^#]+)##\+js\(json-prune,(.*)\)$/
+
+/**
+ * uBlock Origin's rules taking ads out of whatever YouTube's page parses, kept off www.youtube.com.
+ * YouTube keeps its own copy of each video's data, and samples like `{"adPlacements":true,…}`, and
+ * checks that JSON.parse gives them back whole; when it doesn't, a session it has flagged gets the
+ * "Ad blockers violate YouTube's Terms of Service" wall. The ads still come out where the data
+ * arrives: the first video's by uBlock Origin's `set ytInitialPlayerResponse…` rules, the next ones'
+ * by its json-prune-fetch-response and -xhr-response rules.
+ */
+function sparingYouTubesParse(text: string): string {
+  return text
+    .split('\n')
+    .flatMap((line) => {
+      const [, list, args] = JSON_PRUNE_RULE.exec(line) ?? []
+      if (!list || !args || !/adPlacements|playerAds|adSlots/.test(args)) return [line]
+      const domains = list.split(',')
+      if (!domains.includes('youtube.com') && !domains.includes('www.youtube.com')) return [line]
+      const rest = domains.filter((domain) => domain !== 'www.youtube.com')
+      if (rest.includes('youtube.com')) rest.push('~www.youtube.com')
+      // With no domain left it would apply everywhere.
+      return rest.some((domain) => !domain.startsWith('~')) ? [`${rest.join(',')}##+js(json-prune,${args})`] : []
+    })
+    .join('\n')
 }
 
 /** An engine, with its rules for some request methods only. */
@@ -429,7 +456,7 @@ export class AdBlock {
   private async build(kind: EngineKind): Promise<Engine | null> {
     try {
       const [lists, resources] = await Promise.all([fetchLists(ENGINES[kind].lists), fetchResources()])
-      const { text, methodRules } = splitMethodRules(lists.join('\n'))
+      const { text, methodRules } = splitMethodRules(sparingYouTubesParse(lists.join('\n')))
       const blocker = ElectronBlocker.parse(text)
       blocker.updateResources(resources, String(resources.length))
       const header = Buffer.from(JSON.stringify(methodRules))
