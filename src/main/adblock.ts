@@ -10,7 +10,7 @@ import {
   type WebFrameMain
 } from 'electron'
 import { randomBytes } from 'node:crypto'
-import { readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import { readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse } from 'tldts-experimental'
 import type { Protection } from '@shared/settings'
@@ -82,12 +82,21 @@ const COOKIE_LISTS: ListSource[] = [
  * blocker.
  */
 type EngineKind = 'base' | 'full' | 'firstParty' | 'firstPartyFull'
+/** Raised when what goes into an engine changes, so the ones saved before are built again. */
+const ENGINE_REVISION = 2
 const ENGINES: Record<EngineKind, { lists: (ListSource & { optional?: boolean })[]; file: string }> = {
-  base: { lists: LISTS, file: 'adblock-brave.bin' },
-  full: { lists: [...LISTS, ...COOKIE_LISTS], file: 'adblock-brave-cookies.bin' },
-  firstParty: { lists: FIRST_PARTY_LISTS, file: 'adblock-brave-1p.bin' },
-  firstPartyFull: { lists: [...FIRST_PARTY_LISTS, ...COOKIE_LISTS], file: 'adblock-brave-1p-cookies.bin' }
+  base: { lists: LISTS, file: `adblock-r${ENGINE_REVISION}.bin` },
+  full: { lists: [...LISTS, ...COOKIE_LISTS], file: `adblock-r${ENGINE_REVISION}-cookies.bin` },
+  firstParty: { lists: FIRST_PARTY_LISTS, file: `adblock-r${ENGINE_REVISION}-1p.bin` },
+  firstPartyFull: { lists: [...FIRST_PARTY_LISTS, ...COOKIE_LISTS], file: `adblock-r${ENGINE_REVISION}-1p-cookies.bin` }
 }
+
+/**
+ * Sites whose requests to themselves go through every list, as with uBlock Origin, not just the first-party
+ * ones: YouTube's rules are written for uBlock Origin, which blocks YouTube's own ad and tracking requests
+ * (its ad breaks, ad pings, log_event).
+ */
+const FULL_BLOCKING_SITES = new Set(['youtube.com', 'youtube-nocookie.com'])
 
 /** Downloads under way or just done: engines built one after another share their lists. */
 const downloads = new Map<string, Promise<string>>()
@@ -131,8 +140,24 @@ async function fetchLists(sources: (ListSource & { optional?: boolean })[]): Pro
 }
 
 /**
+ * Brave's scripts for Brave itself: hiding that it's Brave (from sites that turn it away), its background
+ * play, and its fixes on YouTube for its own storage and timers. Zepper isn't Brave, and on YouTube they
+ * rewrite what the page checks the browser by (performance.now, navigator.userAgentData), which uBlock
+ * Origin leaves alone; with them, YouTube took Zepper for an ad blocker and stopped its videos.
+ */
+const BRAVE_ONLY_SCRIPTS = new Set([
+  'brave-fix.js',
+  'brave-video-bg-play.js',
+  'brave-video-bg-play-update.js',
+  'brave-youtube-navigation-fix.js',
+  'brave-youtube-playback-speed-fix.js',
+  'brave-youtube-theater-fix.js'
+])
+
+/**
  * uBlock Origin's scriptlets and redirects (Ghostery's current build of them), with Brave's own scripts
- * (its YouTube fixes among them), which take no arguments and so run as they are, as in Brave.
+ * (but those only Brave needs, see BRAVE_ONLY_SCRIPTS), which take no arguments and so run as they are,
+ * as in Brave.
  */
 async function fetchResources(): Promise<string> {
   const resources = JSON.parse(await fromCdn('ublock-resources-json')) as { redirects: unknown[] }
@@ -145,7 +170,7 @@ async function fetchResources(): Promise<string> {
     }[]
     const scripts = await Promise.all(
       metadata
-        .filter((resource) => resource.kind?.mime === 'application/javascript')
+        .filter((resource) => resource.kind?.mime === 'application/javascript' && !BRAVE_ONLY_SCRIPTS.has(resource.name))
         .map(async (resource) => {
           const body = await fetchText(`${BRAVE_RESOURCES}/resources/${resource.resourcePath}`)
           const aliases = [...(resource.aliases ?? []), ...[...body.matchAll(/^\/\/\/ alias (\S+)/gm)].map((m) => m[1])]
@@ -247,7 +272,8 @@ function pageUrlOf(details: RequestDetails): string | undefined {
 
 /**
  * Whether a request is to the site that made it (Brave's SameDomainOrHost, against the frame making
- * it; for a frame, the page it's in). A page itself loading never is.
+ * it; for a frame, the page it's in), and so only goes through the first-party lists. A page itself
+ * loading never is, nor are YouTube's requests (see FULL_BLOCKING_SITES).
  */
 function isFirstParty(details: RequestDetails): boolean {
   if (details.resourceType === 'mainFrame') return false
@@ -259,7 +285,7 @@ function isFirstParty(details: RequestDetails): boolean {
   }
   initiator ||= pageUrlOf(details)
   const site = siteOf(details.url)
-  return !!initiator && !!site && site === siteOf(initiator)
+  return !!initiator && !!site && site === siteOf(initiator) && !FULL_BLOCKING_SITES.has(site)
 }
 
 function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): string {
@@ -276,7 +302,8 @@ function topUrlOf(frame: WebFrameMain | null | undefined, fallback: string): str
  * - Network requests are matched by Ghostery's engine against Brave's default
  *   lists (see LISTS), refreshed every 8 hours, while Zepper's open too. As in
  *   Brave's Standard mode, a site's requests to itself only go through the
- *   first-party ones (see ENGINES). What's blocked with a stand-in gets it from
+ *   first-party ones (see ENGINES), YouTube's apart (see FULL_BLOCKING_SITES).
+ *   What's blocked with a stand-in gets it from
  *   Zepper (see resourceUrl), as from uBlock Origin or Brave.
  * - Cosmetic filters and scriptlets are handed to our page preload
  *   synchronously, so they apply at document start, before any page script
@@ -337,8 +364,15 @@ export class AdBlock {
 
   async start(): Promise<void> {
     this.started = true
-    // The engines built from the lists Zepper had before Brave's.
-    for (const old of ['adblock-engine.bin', 'adblock-engine-full.bin']) void unlink(join(app.getPath('userData'), old)).catch(() => {})
+    // The engines an earlier Zepper saved (see ENGINE_REVISION).
+    const current = new Set(Object.values(ENGINES).map((engine) => engine.file))
+    void readdir(app.getPath('userData'))
+      .then((names) => {
+        for (const name of names) {
+          if (/^adblock-.*\.bin$/.test(name) && !current.has(name)) void unlink(join(app.getPath('userData'), name)).catch(() => {})
+        }
+      })
+      .catch(() => {})
     for (const kind of this.kinds()) this.engines[kind] ??= await this.load(kind)
     setInterval(() => void this.refresh(), CHECK_EVERY_MS).unref()
   }
