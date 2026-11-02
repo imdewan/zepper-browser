@@ -4,6 +4,12 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-11-03
+
+### Fixed
+
+- **YouTube's "Ad blockers violate YouTube's Terms of Service" wall, at its cause.** 0.1.23's changes weren't it. Once YouTube flags a session, every video comes with the wall attached, and the page shows it when one of its checks finds an ad blocker. One check reads its own samples and copies of each video's data with `JSON.parse` and compares the results with what they should be. One of uBlock Origin's rules takes ads out of everything the page parses, so the two never matched. On www.youtube.com that rule is left out; the ads still come out where each video's data arrives, by uBlock Origin's other rules.
+
 ## [0.1.23] - 2026-11-03
 
 ### Fixed
@@ -355,7 +361,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.23...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.24...HEAD
+[0.1.24]: https://github.com/imdewan/zepper-browser/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/imdewan/zepper-browser/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/imdewan/zepper-browser/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/imdewan/zepper-browser/compare/v0.1.20...v0.1.21
