@@ -4,6 +4,15 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-11-03
+
+### Fixed
+
+- **YouTube's "Ad blockers violate YouTube's Terms of Service" wall, which came back.** YouTube looks at the browser it runs in, and Zepper ran scripts there that uBlock Origin doesn't, which it could see:
+  - Brave's scripts for Brave itself are left out: the one that hides Brave from sites (it rewrote the browser's brand details), its background play, and its fixes on YouTube for its own timers and storage (one replaced `performance.now`). Zepper isn't Brave, so they only changed what pages see, on YouTube and on the sites brave-fix ran on.
+  - YouTube's requests to itself (its ad breaks, ad pings and reporting) are blocked again, as uBlock Origin does, since YouTube's rules are written for it. Other sites keep Brave's Standard mode.
+  - Zepper gets its filter lists afresh after updating, so this applies at once, not within 8 hours.
+
 ## [0.1.22] - 2026-11-01
 
 ### Changed
@@ -346,7 +355,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.22...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.23...HEAD
+[0.1.23]: https://github.com/imdewan/zepper-browser/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/imdewan/zepper-browser/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/imdewan/zepper-browser/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/imdewan/zepper-browser/compare/v0.1.19...v0.1.20
