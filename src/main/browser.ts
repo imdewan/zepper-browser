@@ -279,6 +279,18 @@ const EXIT_AUTO_PIP_SCRIPT = `(() => {
 
 /** Finger travel (trackpad px, momentum excluded) that navigates back or forward. */
 const SWIPE_DISTANCE = 170
+/** Closes auto-started picture-in-picture if its video has paused. */
+const EXIT_PAUSED_PIP_SCRIPT = `(() => {
+  const video = document.pictureInPictureElement
+  if (!window.__zepperAutoPip || !video || !video.paused) return false
+  window.__zepperAutoPip = false
+  document.exitPictureInPicture()
+  return true
+})()`
+
+/** Whether the video in Zepper's floating player has paused. */
+const PLAYER_PAUSED_SCRIPT = `!!document.querySelector('video[data-zepper-pip]')?.paused`
+
 /** A quick flick navigates with less travel. */
 const FLICK_DISTANCE = 70
 const FLICK_SPEED = 24
@@ -317,6 +329,8 @@ const MIN_REVEAL_EDGE = 4
 const PIP_DELAY_MS = 250
 /** How often Memory Saver looks for tabs to unload. */
 const MEMORY_SAVER_CHECK_MS = 60_000
+/** A video that pauses within this long of floating was paused by its site, for leaving its tab. */
+const PIP_SITE_PAUSE_MS = 1000
 /**
  * Chrome's Memory Saver modes (Brave's too): how long a tab stays out of sight before it unloads, and
  * how many times you can come back to a tab before it counts as one you use and always stays.
@@ -2179,6 +2193,20 @@ export class Browser {
   }
 
   private pauseTab(tabId: string): void {
+    if (!entered) return
+    // A site that pauses its video when its tab is hidden, but later than PIP_DELAY_MS, meant it to
+    // stop, so nothing should stay floating.
+    await new Promise((resolve) => setTimeout(resolve, PIP_SITE_PAUSE_MS))
+    if (this.windowClosed || wc.isDestroyed()) return
+    if (this.nativePipTabs.has(tabId)) {
+      if (await this.runInFrames(wc, EXIT_PAUSED_PIP_SCRIPT, false, true)) this.nativePipTabs.delete(tabId)
+    } else if (this.pip.activeTabId === tabId) {
+      const paused = await wc.executeJavaScript(PLAYER_PAUSED_SCRIPT).catch(() => false)
+      if (paused && this.pip.activeTabId === tabId) {
+        this.pip.exit()
+        this.broadcast()
+      }
+    }
     const wc = this.views.get(tabId)?.webContents
     if (wc) void this.runInFrames(wc, MEDIA_PAUSE_SCRIPT, false)
   }

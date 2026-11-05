@@ -12,6 +12,11 @@ const MARK_SCRIPT = `(() => {
   const area = (v) => v.getBoundingClientRect().width * v.getBoundingClientRect().height
   const video = playing.sort((a, b) => area(b) - area(a))[0]
   if (!video) return null
+  // A feed that snaps to each video (Shorts) works out the current one from its layout, so
+  // shrinking the page would move it to another video. Chromium's player leaves the page as it is.
+  for (let el = video.parentElement; el; el = el.parentElement) {
+    if (getComputedStyle(el).scrollSnapType !== 'none') return null
+  }
   video.setAttribute('data-zepper-pip', '')
   for (let el = video.parentElement; el; el = el.parentElement) el.setAttribute('data-zepper-pip-ancestor', '')
   document.documentElement.setAttribute('data-zepper-pip-active', '')
@@ -94,7 +99,7 @@ export class PipPlayer {
     return this.controls && !this.controls.webContents.isDestroyed() ? this.controls.webContents : null
   }
 
-  /** Floats the tab's playing video. Returns false when the main frame has no playing video. */
+  /** Floats the tab's playing video. Returns false when the main frame has none that can float here. */
   async enter(tabId: string, view: WebContentsView): Promise<boolean> {
     const wc = view.webContents
     let size: { width: number; height: number } | null
