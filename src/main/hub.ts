@@ -486,6 +486,7 @@ export class Hub {
       }
       callback({ requestHeaders: headers })
     })
+    ses.registerPreloadScript({ type: 'service-worker', filePath: join(__dirname, '../preload/service-worker.js') })
     ses.setPermissionRequestHandler((wc, permission, callback, details) => {
       const browser = this.owner(wc)
       if (!browser) return callback(false)

@@ -17,7 +17,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/preload/index.ts'),
-          page: resolve(__dirname, 'src/preload/page.ts')
+          page: resolve(__dirname, 'src/preload/page.ts'),
+          'service-worker': resolve(__dirname, 'src/preload/service-worker.ts')
         }
       }
     }

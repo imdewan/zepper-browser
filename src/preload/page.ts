@@ -471,6 +471,20 @@ function privacyControlShim(): void {
 }
 
 /**
+ * Keeps a site's number off Zepper's icon (runs in the page's world; service-worker.ts does the same
+ * for service workers). Electron puts whatever a site passes to setAppBadge on the whole app's icon,
+ * where it stays until that site clears it, even after its tab is closed. Chrome and Brave only show
+ * one on a web app you've installed. The call stays and succeeds, so sites carry on as usual.
+ */
+function badgeShim(): void {
+  if (!Navigator.prototype.setAppBadge) return
+  const silent = (): Promise<void> => Promise.resolve()
+  Object.defineProperty(silent, 'name', { value: 'setAppBadge' })
+  Object.defineProperty(silent, 'toString', { value: () => 'function setAppBadge() { [native code] }' })
+  Navigator.prototype.setAppBadge = silent
+}
+
+/**
  * Which of the camera, microphone and screen the page is using (runs in the page's world), for the
  * tab's indicators. Tracks from getUserMedia and getDisplayMedia (and their clones) count while live;
  * stop() and "ended" end them. Changes go out as an event only our side knows the name of, sent
@@ -799,6 +813,7 @@ function applyCompat(): void {
   try {
     const config = ipcRenderer.sendSync(PAGE_CONFIG_CHANNEL) as PageConfig
     contextBridge.executeInMainWorld({ func: permissionsShim, args: [config.blockedPermissions ?? []] })
+    contextBridge.executeInMainWorld({ func: badgeShim })
     if (config.shiftRightClick) forceMenuOnShift()
     // Camera, microphone and screen use, for the tab's indicators (the event name is this page's secret).
     const captureEvent = `zepper-capture-${crypto.randomUUID()}`
