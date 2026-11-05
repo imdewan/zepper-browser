@@ -104,6 +104,7 @@ if (!app.requestSingleInstanceLock()) {
     // The certificates Chrome blocks, before the first page loads.
     await hub.services.certificates.crlset.start(app.getPath('userData'))
     await hub.widevineSettled(15_000)
+    hub.replaceClosedMain()
     hub.openWindow('main')
     hub.restoreWindows()
     for (const url of pendingUrls.splice(0)) hub.openUrl(url)

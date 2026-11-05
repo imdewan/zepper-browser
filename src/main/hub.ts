@@ -27,7 +27,7 @@ import {
   type WidevineStatus
 } from '@shared/types'
 import type { AdBlock } from './adblock'
-import { Browser, WINDOWS_DIR, declineShare, type BrowserKind, type WindowSeed } from './browser'
+import { Browser, WINDOWS_DIR, declineShare, type BrowserKind, type PersistedState, type WindowSeed } from './browser'
 import { clientHintHeaders, servePageConfig, userAgentFor } from './compat'
 import { bangs } from './bangs'
 import { buildMenu } from './menu'
@@ -45,6 +45,8 @@ import { DEFAULT_PROFILE, Profiles } from './profiles'
 import { locationAccess } from './native'
 import { RELEASES_PAGE, Updater } from './updater'
 import { SyncService } from './sync'
+import { WINDOW_FILE, mergeNewestWindow, newestWindowId } from './window-restore'
+import { JsonFile } from './persist'
 
 /** Zepper's desktop entry on Linux (package.json's desktopName, which the .deb, .rpm and AppImage install). */
 const LINUX_DESKTOP_FILE = 'zepper.desktop'
@@ -86,6 +88,8 @@ export class Hub {
   quitWithoutAsking = false
   /** Zepper is quitting: windows closing now come back next time (rather than being forgotten). */
   quitting = false
+  /** The last normal window you closed, with only private ones left: it's forgotten if you open another, as in Chrome. */
+  lastClosedWindow: JsonFile<PersistedState> | null = null
   /** The browser window you used last (clicking Zepper in the Dock brings it back). */
   private lastFocused: Browser | null = null
   private secureDns: string | null = null
@@ -287,6 +291,10 @@ export class Hub {
   openWindow(kind: BrowserKind, url?: string): Browser {
     // With the main window closed, ⌘N brings it back (your spaces and tabs) rather than a blank one.
     if (kind === 'blank' && !this.main) kind = 'main'
+    if (kind !== 'private') {
+      this.lastClosedWindow?.remove()
+      this.lastClosedWindow = null
+    }
     const ses = kind === 'private' ? session.fromPartition(`zepper-private-${++this.privateCount}`) : session.defaultSession
     this.attachSession(ses)
     // A new window opens on the space you're in, at your window's size.
@@ -346,6 +354,11 @@ export class Hub {
     this.browsers.add(browser)
     browser.start()
     browser.adoptTab(moving, (space && seed.spaceIds?.[space]) || browser.currentSpaceId(), null)
+  }
+
+  /** Whether another window would come back next time; private ones don't count, as in Chrome. */
+  hasOtherWindows(browser: Browser): boolean {
+    return [...this.browsers].some((other) => other !== browser && other.kind !== 'private')
   }
 
   windowClosed(browser: Browser): void {
@@ -473,6 +486,7 @@ export class Hub {
     certificates.attach(ses)
     adblock.attachSession(ses)
     ses.registerPreloadScript({ type: 'frame', filePath: join(__dirname, '../preload/page.js') })
+    ses.registerPreloadScript({ type: 'service-worker', filePath: join(__dirname, '../preload/service-worker.js') })
     ses.webRequest.onBeforeSendHeaders((details, callback) => {
       const headers: Record<string, string> = clientHintHeaders(details.requestHeaders, this.userAgent)
       // Global Privacy Control; not Do Not Track, which is retired, and which Chrome and Brave don't send
@@ -486,7 +500,6 @@ export class Hub {
       }
       callback({ requestHeaders: headers })
     })
-    ses.registerPreloadScript({ type: 'service-worker', filePath: join(__dirname, '../preload/service-worker.js') })
     ses.setPermissionRequestHandler((wc, permission, callback, details) => {
       const browser = this.owner(wc)
       if (!browser) return callback(false)
@@ -512,6 +525,31 @@ export class Hub {
   }
 
   /**
+   * Before the first window opens: if you closed the main window and carried on in others, it isn't
+   * coming back as it was. The newest of them does, in its place, with the main window's spaces, pinned
+   * tabs and Essentials (which only that window keeps and syncs).
+   */
+  replaceClosedMain(): void {
+    if (!this.services.settings.get().restoreTabs) return
+    try {
+      const mainFile = new JsonFile<PersistedState>('zepper-state.json')
+      const main = mainFile.read()
+      if (!main?.closedWithOthersOpen) return
+      const id = newestWindowId(join(app.getPath('userData'), WINDOWS_DIR))
+      if (!id) return
+      const windowFile = new JsonFile<PersistedState>(`${WINDOWS_DIR}/${id}.json`)
+      const newest = windowFile.read()
+      if (newest?.version !== 1 || newest.spaces.length === 0) return
+      // In this order, so nothing's lost if it stops halfway.
+      mainFile.schedule(mergeNewestWindow(main, newest))
+      mainFile.flush()
+      windowFile.remove()
+    } catch {
+      // Zepper still opens, with its windows as they were saved.
+    }
+  }
+
+  /**
    * Brings back the windows that were open when Zepper last quit (besides the main one), each where
    * it was with its spaces and tabs, as in Chrome. With Settings › Tabs › Restore tabs off, they don't
    * come back, and are forgotten.
@@ -520,7 +558,7 @@ export class Hub {
     const dir = join(app.getPath('userData'), WINDOWS_DIR)
     let files: string[]
     try {
-      files = readdirSync(dir).filter((file) => /^[0-9a-f-]{36}\.json$/.test(file))
+      files = readdirSync(dir).filter((file) => WINDOW_FILE.test(file))
     } catch {
       return
     }

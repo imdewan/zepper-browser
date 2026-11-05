@@ -146,7 +146,7 @@ const HISTORY_FORWARD = 5
 /** A page's saved state (scroll position, form contents) larger than this is left out. */
 const MAX_PAGE_STATE = 64 * 1024
 
-interface PersistedState {
+export interface PersistedState {
   version: 1
   spaces: Space[]
   tabs: PersistedTab[]
@@ -159,6 +159,8 @@ interface PersistedState {
   folders?: Folder[]
   /** The main window's size and place (its normal, un-maximized bounds). */
   window?: { bounds: Rectangle; maximized: boolean }
+  /** You closed the main window with others still open (see Hub.replaceClosedMain). */
+  closedWithOthersOpen?: boolean
 }
 
 const MAX_SPLIT_PANES = 4
@@ -277,8 +279,6 @@ const EXIT_AUTO_PIP_SCRIPT = `(() => {
   return true
 })()`
 
-/** Finger travel (trackpad px, momentum excluded) that navigates back or forward. */
-const SWIPE_DISTANCE = 170
 /** Closes auto-started picture-in-picture if its video has paused. */
 const EXIT_PAUSED_PIP_SCRIPT = `(() => {
   const video = document.pictureInPictureElement
@@ -291,6 +291,8 @@ const EXIT_PAUSED_PIP_SCRIPT = `(() => {
 /** Whether the video in Zepper's floating player has paused. */
 const PLAYER_PAUSED_SCRIPT = `!!document.querySelector('video[data-zepper-pip]')?.paused`
 
+/** Finger travel (trackpad px, momentum excluded) that navigates back or forward. */
+const SWIPE_DISTANCE = 170
 /** A quick flick navigates with less travel. */
 const FLICK_DISTANCE = 70
 const FLICK_SPEED = 24
@@ -327,10 +329,10 @@ const MIN_REVEAL_EDGE = 4
 
 /** How long a playing tab must stay out of view before its video floats. */
 const PIP_DELAY_MS = 250
-/** How often Memory Saver looks for tabs to unload. */
-const MEMORY_SAVER_CHECK_MS = 60_000
 /** A video that pauses within this long of floating was paused by its site, for leaving its tab. */
 const PIP_SITE_PAUSE_MS = 1000
+/** How often Memory Saver looks for tabs to unload. */
+const MEMORY_SAVER_CHECK_MS = 60_000
 /**
  * Chrome's Memory Saver modes (Brave's too): how long a tab stays out of sight before it unloads, and
  * how many times you can come back to a tab before it counts as one you use and always stays.
@@ -772,6 +774,7 @@ export class Browser {
   private readonly widevineAsked = new Set<string>()
   /** Set once the window has closed; late events from dying pages are ignored. */
   private windowClosed = false
+  private closedWithOthersOpen = false
   private splits: Split[] = []
   /** Tabs whose views are currently attached to the window (one, or a split's panes). */
   private readonly attached = new Set<string>()
@@ -1524,9 +1527,15 @@ export class Browser {
   /** Window closed: release every page, and for private windows wipe the session. */
   private destroy(): void {
     this.windowClosed = true
-    // A window you close is forgotten (as in Chrome); one closing because Zepper quits comes back.
-    if (this.kind === 'blank' && !this.hub.quitting) this.stateFile?.remove()
-    else this.persistNow()
+    // A window you close is forgotten (as in Chrome); one closing because Zepper quits comes back, and
+    // so does the last one you close, which Zepper quits with.
+    const others = !this.hub.quitting && this.hub.hasOtherWindows(this)
+    if (this.kind === 'blank' && others) this.stateFile?.remove()
+    else {
+      this.closedWithOthersOpen = this.kind === 'main' && others
+      this.persistNow()
+      if (this.kind === 'blank' && !this.hub.quitting) this.hub.lastClosedWindow = this.stateFile
+    }
     this.pip?.exit()
     this.autofill?.destroy()
     this.clearLinkStatusTimers()
@@ -2184,15 +2193,6 @@ export class Browser {
       if (entered) this.nativePipTabs.add(tabId)
     }
     if (!app.isPackaged) console.info(`[pip] picture-in-picture for ${tab.title}: ${entered ? 'entered' : 'no playing video'}`)
-  }
-
-  /** "Back to tab" from the floating player: show the tab and bring the window forward. */
-  private pipBack(tabId: string): void {
-    this.activateTab(tabId)
-    this.focusWindow()
-  }
-
-  private pauseTab(tabId: string): void {
     if (!entered) return
     // A site that pauses its video when its tab is hidden, but later than PIP_DELAY_MS, meant it to
     // stop, so nothing should stay floating.
@@ -2207,6 +2207,15 @@ export class Browser {
         this.broadcast()
       }
     }
+  }
+
+  /** "Back to tab" from the floating player: show the tab and bring the window forward. */
+  private pipBack(tabId: string): void {
+    this.activateTab(tabId)
+    this.focusWindow()
+  }
+
+  private pauseTab(tabId: string): void {
     const wc = this.views.get(tabId)?.webContents
     if (wc) void this.runInFrames(wc, MEDIA_PAUSE_SCRIPT, false)
   }
@@ -6801,7 +6810,8 @@ export class Browser {
       splits: this.splits,
       folders: this.folders,
       window:
-        this.win && !this.win.isDestroyed() ? { bounds: this.win.getNormalBounds(), maximized: this.win.isMaximized() } : this.savedWindow
+        this.win && !this.win.isDestroyed() ? { bounds: this.win.getNormalBounds(), maximized: this.win.isMaximized() } : this.savedWindow,
+      ...(this.closedWithOthersOpen ? { closedWithOthersOpen: true } : {})
     }
   }
 }
