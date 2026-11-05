@@ -4,6 +4,15 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-11-05
+
+### Fixed
+
+- **Sites can't put a number on Zepper's icon any more.** A site's unread count showed on the Dock icon, without saying which site it was from, and stayed after its tab was closed. As in Chrome and Brave, sites' numbers no longer show on the browser's icon.
+- **Picture-in-picture on YouTube Shorts played the wrong video.** Shorts works out which video is current from the page's layout, so shrinking the page into Zepper's floating player sent it back to an earlier one, from the start. Feeds that snap to each video, as Shorts does, now use Chromium's own floating window, which leaves the page as it is.
+- **Reopening Zepper brought back a window you'd closed.** Close your first window and then a later one, or quit with only the later one open, and the first came back. Now only the last window does, where it was with its tabs, along with your spaces, pinned tabs and Essentials. Quitting with several windows open still brings them all back.
+- **A site that pauses its video when you switch tabs no longer leaves it floating.** Picture-in-picture stayed open on the paused video if the site paused it a moment late. It now closes.
+
 ## [0.1.24] - 2026-11-03
 
 ### Fixed
@@ -361,7 +370,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.24...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.25...HEAD
+[0.1.25]: https://github.com/imdewan/zepper-browser/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/imdewan/zepper-browser/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/imdewan/zepper-browser/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/imdewan/zepper-browser/compare/v0.1.21...v0.1.22
