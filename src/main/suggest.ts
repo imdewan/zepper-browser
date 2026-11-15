@@ -2,7 +2,8 @@ import type { Suggestion, Tab } from '@shared/types'
 import type { History } from './history'
 import { bangs } from './bangs'
 import { popularByAddress, popularMatches } from './popular-sites'
-import { hostOf, looksLikeUrl, resolveInput, searchUrl, stripHash, suggestUrl } from './url'
+import { hostOf, resolveInput, searchUrl, stripHash, suggestUrl } from './url'
+import { looksLikeUrl } from './url-input'
 
 /** The search engine gets this long; its suggestions hold nothing up, so a slow answer is still worth waiting for. */
 const PROVIDER_TIMEOUT_MS = 1500

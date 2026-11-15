@@ -1,5 +1,6 @@
 import { SEARCH_ENGINES, type SearchEngineId } from '@shared/settings'
 import { bangs } from './bangs'
+import { escapeSpaces, hasScheme, looksLikeUrl } from './url-input'
 
 let engine: SearchEngineId = 'google'
 
@@ -16,21 +17,8 @@ export function suggestUrl(query: string): string | null {
   return template ? template.replace('%s', encodeURIComponent(query)) : null
 }
 
-const SCHEME = /^[a-z][a-z0-9+.-]*:/i
-const HOST_LIKE = /^(localhost|(\d{1,3}\.){3}\d{1,3}|([a-z0-9-]+\.)+[a-z]{2,})(:\d+)?(\/.*)?$/i
-
 export function searchUrl(query: string): string {
   return SEARCH_ENGINES[engine].search.replace('%s', encodeURIComponent(query))
-}
-
-/** Whether typed text should be treated as a URL rather than a search. */
-export function looksLikeUrl(input: string): boolean {
-  const text = input.trim()
-  if (!text || /\s/.test(text)) return false
-  if (SCHEME.test(text) && !/^[a-z0-9-]+:\d+/i.test(text)) {
-    return /^(https?|file|about|data|chrome|view-source):/i.test(text)
-  }
-  return HOST_LIKE.test(text)
 }
 
 /**
@@ -42,7 +30,7 @@ export function resolveInput(input: string): string {
   const bang = bangs.resolve(text)
   if (bang) return bang.url
   if (!looksLikeUrl(text)) return searchUrl(text)
-  if (SCHEME.test(text) && !/^[a-z0-9-]+:\d+/i.test(text)) return text
+  if (hasScheme(text)) return escapeSpaces(text)
   const isLocal = /^(localhost|127\.|\d{1,3}(\.\d{1,3}){3})/i.test(text)
   return `${isLocal ? 'http' : 'https'}://${text}`
 }
