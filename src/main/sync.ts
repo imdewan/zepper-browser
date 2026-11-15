@@ -60,6 +60,8 @@ const SERVER = process.env.ZEPPER_SYNC_SERVER || config.server
 export class SyncService {
   private readonly file = new JsonFile<Saved>('sync.json', 500)
   private saved: Saved
+  /** The chain's secret, once decrypted (see secret()). */
+  private secretValue: Uint8Array | undefined
   private orders = new Map<string, string>()
   private window: SyncedWindow | null = null
   private keys: ChainKeys | null = null
@@ -110,7 +112,9 @@ export class SyncService {
   /** The window that syncs (the main window), once it's open. */
   attach(window: SyncedWindow): void {
     this.window = window
-    if (this.secret()) void this.begin()
+    void this.secret().then((secret) => {
+      if (secret && this.window === window) void this.begin()
+    })
   }
 
   detach(window: SyncedWindow): void {
@@ -135,7 +139,7 @@ export class SyncService {
   /** Starts a chain on this computer; its code goes in Settings for your phone to scan. */
   async start(): Promise<void> {
     const secret = newSecret()
-    this.saveSecret(secret)
+    await this.saveSecret(secret)
     this.shownCode = encodeCode(secret)
     await this.begin()
   }
@@ -144,7 +148,7 @@ export class SyncService {
   async join(code: string): Promise<boolean> {
     const secret = decodeCode(code)
     if (!secret) return false
-    this.saveSecret(secret)
+    await this.saveSecret(secret)
     this.shownCode = null
     // What's on this computer joins what's there: nothing is dropped.
     await this.begin()
@@ -152,9 +156,10 @@ export class SyncService {
   }
 
   showCode(show: boolean): void {
-    const secret = this.secret()
-    this.shownCode = show && secret ? encodeCode(secret) : null
-    this.changed()
+    void this.secret().then((secret) => {
+      this.shownCode = show && secret ? encodeCode(secret) : null
+      this.changed()
+    })
   }
 
   async leave(): Promise<void> {
@@ -164,6 +169,7 @@ export class SyncService {
     }
     this.stop()
     this.saved = { deviceId: this.saved.deviceId, deviceName: this.saved.deviceName }
+    this.secretValue = undefined
     this.orders.clear()
     this.file.schedule(this.saved)
     this.shownCode = null
@@ -208,28 +214,48 @@ export class SyncService {
 
   // ---- The chain ---------------------------------------------------------------------------------
 
-  private secret(): Uint8Array | null {
-    if (!this.saved.secret) return null
+  /** The chain's secret, decrypted once (the Keychain is asked again only if that failed). */
+  private async secret(): Promise<Uint8Array | null> {
+    if (this.secretValue) return this.secretValue
+    const saved = this.saved.secret
+    if (!saved) return null
     try {
-      const text = safeStorage.isEncryptionAvailable()
-        ? safeStorage.decryptString(Buffer.from(this.saved.secret, 'base64'))
-        : this.saved.secret
-      return fromBase64url(text)
+      let text = saved
+      let reEncrypt = false
+      if (await safeStorage.isAsyncEncryptionAvailable()) {
+        const decrypted = await safeStorage.decryptStringAsync(Buffer.from(saved, 'base64'))
+        text = decrypted.result
+        reEncrypt = decrypted.shouldReEncrypt
+      }
+      // Left the chain, or joined another, while the Keychain answered.
+      if (this.saved.secret !== saved) return this.secretValue ?? null
+      this.secretValue = fromBase64url(text)
+      // The key changed (macOS rotated it, say): saved again with the new one.
+      if (reEncrypt) void this.storeSecret(text)
+      return this.secretValue
     } catch {
       return null
     }
   }
 
-  private saveSecret(secret: Uint8Array): void {
-    const text = base64url(secret)
-    this.saved.secret = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text).toString('base64') : text
+  private async saveSecret(secret: Uint8Array): Promise<void> {
+    this.secretValue = secret
     this.orders.clear()
     this.saved.orders = {}
+    await this.storeSecret(base64url(secret))
+  }
+
+  /** Saves the secret, encrypted with the Keychain's key where there is one. */
+  private async storeSecret(text: string): Promise<void> {
+    const encrypted = (await safeStorage.isAsyncEncryptionAvailable())
+      ? (await safeStorage.encryptStringAsync(text)).toString('base64')
+      : text
+    this.saved.secret = encrypted
     this.file.schedule(this.saved)
   }
 
   private async begin(): Promise<void> {
-    const secret = this.secret()
+    const secret = await this.secret()
     if (!secret || !this.available) return
     this.stop()
     this.status = { kind: 'connecting' }

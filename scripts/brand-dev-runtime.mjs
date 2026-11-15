@@ -18,6 +18,10 @@ const original = join(dist, 'Electron.app')
 const app = join(dist, 'Zepper.app')
 const plist = join(app, 'Contents/Info.plist')
 
+// Since Electron 45, npm install doesn't download the runtime; it comes when first asked for (as here).
+if (process.platform === 'darwin' && !existsSync(original) && !existsSync(app)) {
+  execFileSync(process.execPath, [join(root, 'node_modules/electron/install.js')], { stdio: 'inherit' })
+}
 if (process.platform !== 'darwin' || (!existsSync(original) && !existsSync(app))) {
   console.log('brand:dev: nothing to do (macOS development runtime not found)')
   process.exit(0)

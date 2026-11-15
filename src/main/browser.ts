@@ -1187,6 +1187,11 @@ export class Browser {
     if (permissions.isAlwaysAllowed(permission)) return callback(true)
     // A prompt for a popup would show in the window behind it; popups don't get permissions.
     if (this.popupWindow(wc.id) || this.callWindow(wc.id)?.page === wc) return callback(false)
+    // Sharing your screen asks here first (since Electron 45). As in Chrome, Zepper's picker, which comes
+    // next, is where you agree to it; only a site you've blocked from it is turned away here.
+    if (permission === 'display-capture') {
+      return callback(permissions.get(originOf(details.requestingUrl ?? wc.getURL()), 'display-capture') !== 'block')
+    }
     const mediaTypes = 'mediaTypes' in details ? (details.mediaTypes as string[] | undefined) : undefined
     const externalURL = 'externalURL' in details ? details.externalURL : undefined
     const keys = settingKeys(permission, mediaTypes, externalURL)
@@ -1265,6 +1270,7 @@ export class Browser {
   checkPermission(ses: Session, permission: string, requestingOrigin: string, details: PermissionCheckHandlerHandlerDetails): boolean {
     const permissions = this.permissionsOf(ses)
     if (permissions.isAlwaysAllowed(permission)) return true
+    if (permission === 'display-capture') return permissions.get(originOf(requestingOrigin), 'display-capture') !== 'block'
     const mediaType = 'mediaType' in details ? (details.mediaType as string | undefined) : undefined
     const keys = settingKeys(permission, mediaType && mediaType !== 'unknown' ? [mediaType] : undefined)
     if (!keys) return true

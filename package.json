@@ -51,7 +51,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
-    "electron": "github:castlabs/electron-releases#v44.9.3+wvcus",
+    "electron": "github:castlabs/electron-releases#v45.2.1+wvcus",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "eslint": "^10.12.0",
@@ -70,8 +70,7 @@
   },
   "allowScripts": {
     "esbuild@0.25.12": true,
-    "esbuild@0.28.2": true,
-    "github:castlabs/electron-releases#9b90904e4fe174122b99eca5b7b967aa79681cc6": true
+    "esbuild@0.28.2": true
   },
   "build": {
     "appId": "app.zepper.browser",

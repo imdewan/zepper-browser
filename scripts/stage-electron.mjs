@@ -50,9 +50,12 @@ if (process.argv[2] === 'linux') {
   process.exit(0)
 }
 
-// Apple silicon: the runtime in node_modules, laid out as in Electron's own zips.
-const app = ['Electron.app', 'Zepper.app'].map((name) => join(dist, name)).find((path) => existsSync(path))
-if (!app) throw new Error('No Electron runtime in node_modules/electron/dist (run npm install)')
+// Apple silicon: the runtime in node_modules, laid out as in Electron's own zips. Since Electron 45, npm
+// install doesn't download it; it comes when first asked for (as here).
+const runtime = () => ['Electron.app', 'Zepper.app'].map((name) => join(dist, name)).find((path) => existsSync(path))
+if (!runtime()) execFileSync(process.execPath, [join(root, 'node_modules', 'electron', 'install.js')], { stdio: 'inherit' })
+const app = runtime()
+if (!app) throw new Error('No Electron runtime in node_modules/electron/dist (run npx install-electron)')
 const layout = join(cache, 'zepper-electron-arm64')
 rmSync(layout, { recursive: true, force: true })
 mkdirSync(layout, { recursive: true })
