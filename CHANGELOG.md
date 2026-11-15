@@ -4,6 +4,22 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-16
+
+### Added
+
+- **Print preview, as in Chrome.** ⌘P, or a page's own Print button, shows the page as it will print and where it goes: Save as PDF, or a printer on your Mac. Choose the pages, copies, layout, colour, paper size, margins and scale, and turn headers and footers or background graphics on or off. Zepper keeps your choices for next time; which pages and how many copies start over, as in Chrome. A page that sets its own size, like an invoice set to A4, prints on it unless you choose other paper, which scales it to fit. Save as PDF names the file after the title the page gives itself for printing. Print Using System Dialog (⌥⌘P) still opens the Mac's own.
+- **Error pages that say what went wrong, as Chrome's do.** A page that doesn't load now says why: the site's address couldn't be found, it refused to connect or took too long, you're not connected to the internet, it redirected you too many times or sent nothing back, its certificate has expired or isn't trusted, or a file has moved. Each has a picture, what to try, the error's code and a Reload button, and a page that failed for want of a connection loads by itself once you're back online.
+
+### Changed
+
+- **Electron 45, with Chromium 156** (castLabs' build, for protected video). A site asking to share your screen still goes to Zepper's picker, which is where you agree to it, as in Chrome.
+
+### Fixed
+
+- **A pasted link with a space in it was searched for instead of opened.** As in Chrome, a link starting with `https://` can have spaces after the site's name; they're sent as `%20`. A space in the name itself still means a search.
+- **The address bar put a site you'd barely visited ahead of the one you meant.** Typing "maps" completed to a few Google Maps links you'd been sent, not Google Maps. A popular site now comes first when you use it more, counting your visits where it really lives (Google Maps at google.com/maps; Office, Zoom, Notion and others at their new addresses), or when the other site is one you've visited fewer than 4 times and not in the last 3 days. Sites you use keep completing as before.
+
 ## [0.1.25] - 2026-11-05
 
 ### Fixed
@@ -370,7 +386,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.1.25...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/imdewan/zepper-browser/compare/v0.1.25...v0.2.0
 [0.1.25]: https://github.com/imdewan/zepper-browser/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/imdewan/zepper-browser/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/imdewan/zepper-browser/compare/v0.1.22...v0.1.23
