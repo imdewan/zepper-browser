@@ -82,6 +82,7 @@ import {
   type UiEvent
 } from '@shared/types'
 import type { Hub } from './hub'
+import { ERROR_TITLES, crashError, describeError, errorPage } from './error-pages'
 import { PipPlayer } from './pip'
 import { PrintPreview, type PrintHost } from './print-preview'
 import { CallWindow, type CallWindowHost } from './call-window'
@@ -4544,7 +4545,8 @@ export class Browser {
         wc.loadURL(http).catch(() => {})
         return
       }
-      const page = errorPage(url, description, code <= -200 && code > -300 ? 'certificate' : 'network')
+      // What went wrong, said as Chrome says it (refused, not found, no internet, an expired certificate…).
+      const page = errorPage(url, describeError(code), description || `ERR ${code}`)
       this.errorPages.set(page, url)
       update({ title: safeHost(url) || url })
       if (this.errorPages.size > 100) this.errorPages.delete(this.errorPages.keys().next().value!)
@@ -4565,7 +4567,7 @@ export class Browser {
         return this.broadcast()
       }
       // The tab you're on stays, with a page explaining what happened; reloading brings the page back.
-      const page = errorPage(tab.url, details.reason === 'oom' ? 'Out of memory' : `Reason: ${details.reason}`, 'crash')
+      const page = errorPage(tab.url, crashError(), details.reason === 'oom' ? 'Out of memory' : `Error code: ${details.reason}`)
       this.errorPages.set(page, tab.url)
       wc.loadURL(page).catch(() => {})
     })
@@ -6990,17 +6992,6 @@ function safeHost(url: string): string {
   }
 }
 
-const ERROR_PAGES = {
-  network: { title: 'Can’t reach this page', text: '' },
-  certificate: {
-    title: 'Your connection isn’t private',
-    text: 'Zepper couldn’t confirm this site’s identity, so it didn’t load the page. Someone could be trying to intercept your connection, or the site is set up incorrectly.'
-  },
-  crash: { title: 'This page crashed', text: `Reload the page (${process.platform === 'darwin' ? '⌘R' : 'Ctrl+R'}) to try again.` }
-}
-/** The error pages' titles, which tabs used to take on and keep. */
-const ERROR_TITLES = new Set(Object.values(ERROR_PAGES).map((page) => page.title))
-
 /** A URL in its canonical form (so typed and loaded addresses compare equal). */
 function normalizedUrl(url: string): string {
   try {
@@ -7018,23 +7009,6 @@ function fileNameFor(title: string): string {
       .trim()
       .slice(0, 100) || 'Page'
   )
-}
-
-function errorPage(url: string, description: string, kind: keyof typeof ERROR_PAGES = 'network'): string {
-  const escape = (s: string): string => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
-  const { title, text } = ERROR_PAGES[kind]
-  const html = `<!doctype html><meta charset="utf-8"><title>${title}</title>
-<style>
-  :root { color-scheme: light dark; font-family: -apple-system, system-ui, sans-serif; }
-  body { margin: 0; height: 100vh; display: grid; place-items: center; background: light-dark(#fafafa, #1c1c1e); color: light-dark(#333, #ddd); }
-  main { max-width: 440px; padding: 24px; }
-  h1 { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
-  p { margin: 0 0 6px; opacity: .7; line-height: 1.5; word-break: break-all; }
-  p.text { opacity: .85; word-break: normal; margin-bottom: 12px; }
-  code { font-size: 12px; opacity: .6; }
-</style>
-<main><h1>${title}</h1>${text ? `<p class="text">${text}</p>` : ''}<p>${escape(url)}</p><code>${escape(description)}</code></main>`
-  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
 }
 
 /**
