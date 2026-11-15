@@ -17,6 +17,12 @@ interface EntryIndex {
 }
 
 const MAX_ENTRIES = 10_000
+
+/** How much a site is used, from its pages' visits: often, and lately. */
+function useScore(visits: number, lastVisit: number, now: number): number {
+  return Math.log2(1 + visits) * 10 - Math.min((now - lastVisit) / 86_400_000, 90) * 0.3
+}
+
 /** How long after a visit the page's title is still recorded. */
 const TITLE_SETTLE_MS = 60_000
 
@@ -85,7 +91,7 @@ export class History {
    * The site you most likely mean by the start of an address ("you" → youtube.com), for completing
    * it as you type: sites are scored by how often and how recently you visited any of their pages.
    */
-  topHit(text: string): { url: string; title: string; completion: string } | null {
+  topHit(text: string): { url: string; title: string; completion: string; use: number; visits: number; lastVisit: number } | null {
     const typed = text.trim().toLowerCase()
     const query = typed.replace(/^https?:\/\//, '').replace(/^www\./, '')
     if (!query || /\s/.test(query)) return null
@@ -116,17 +122,48 @@ export class History {
         })
       }
     }
-    let best: { completion: string; url: string; title: string; score: number } | null = null
+    let best: { completion: string; url: string; title: string; score: number; use: number; visits: number; lastVisit: number } | null =
+      null
     for (const [completion, entry] of candidates) {
-      const ageDays = (now - entry.lastVisit) / 86_400_000
+      const use = useScore(entry.visits, entry.lastVisit, now)
       // Shorter completions win ties: the site before one of its pages.
-      const score = Math.log2(1 + entry.visits) * 10 - Math.min(ageDays, 90) * 0.3 - completion.length * 0.05
-      if (!best || score > best.score) best = { completion, url: entry.url, title: entry.title || completion, score }
+      const score = use - completion.length * 0.05
+      if (!best || score > best.score) {
+        best = {
+          completion,
+          url: entry.url,
+          title: entry.title || completion,
+          score,
+          use,
+          visits: entry.visits,
+          lastVisit: entry.lastVisit
+        }
+      }
     }
     // A single old visit isn't enough to take over what you type.
     if (!best || (best.score < 4 && query.length < 3)) return null
     const prefix = typed.startsWith('www.') ? 'www.' : ''
-    return { url: best.url, title: best.title, completion: prefix + best.completion }
+    const { url, title, use, visits, lastVisit } = best
+    return { url, title, completion: prefix + best.completion, use, visits, lastVisit }
+  }
+
+  /**
+   * How much you use a site, as topHit's `use` (-Infinity: never visited). `addresses`: its host, or a
+   * host and path where it lives ("google.com/maps").
+   */
+  siteScore(addresses: string[]): number {
+    let visits = 0
+    let lastVisit = 0
+    for (const visit of this.entries.values()) {
+      const { host, path } = this.indexOf(visit)
+      const on = addresses.some((address) =>
+        address.includes('/') ? path.startsWith(address) && /^($|[/?#@])/.test(path.slice(address.length)) : host === address
+      )
+      if (!on) continue
+      visits += visit.visits
+      lastVisit = Math.max(lastVisit, visit.lastVisit)
+    }
+    return visits ? useScore(visits, lastVisit, Date.now()) : -Infinity
   }
 
   /** The sites you visit most (one page per site, its most visited), by frequency and recency. */

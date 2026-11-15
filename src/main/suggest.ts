@@ -5,6 +5,18 @@ import { popularByAddress, popularMatches } from './popular-sites'
 import { hostOf, resolveInput, searchUrl, stripHash, suggestUrl } from './url'
 import { looksLikeUrl } from './url-input'
 
+/**
+ * Chrome's bar for a page to complete what you type: typed before, 4 visits, or a visit in the last 3
+ * days. Zepper doesn't record what you typed, so a site below the bar still completes what you type,
+ * but a popular site with that address comes first.
+ */
+const SIGNIFICANT_VISITS = 4
+const SIGNIFICANT_DAYS = 3
+
+function barelyVisited(site: { visits: number; lastVisit: number }): boolean {
+  return site.visits < SIGNIFICANT_VISITS && Date.now() - site.lastVisit > SIGNIFICANT_DAYS * 86_400_000
+}
+
 /** The search engine gets this long; its suggestions hold nothing up, so a slow answer is still worth waiting for. */
 const PROVIDER_TIMEOUT_MS = 1500
 
@@ -66,8 +78,18 @@ export function suggest(text: string, tabs: Tab[], history: History, skipHistory
   // The site you're typing the address of comes first, completed in the field (Return goes there).
   // From your history; failing that, the most popular site with that address ("yout" → youtube.com).
   const visited = skipHistory ? null : history.topHit(query)
-  const popular = visited ? undefined : popularByAddress(query)
-  const top = visited ?? (popular ? { url: `https://${popular.domain}/`, title: popular.name, completion: popular.domain } : null)
+  const match = popularByAddress(query)
+  // A popular site comes first when you use it more than the site your history completes to ("maps"
+  // is Google Maps, which lives at google.com/maps), or when that site is one you've barely been to:
+  // a few links you were sent, a page you opened once.
+  const popular =
+    match &&
+    (!visited ||
+      (hostOf(visited.url) !== match.domain &&
+        (barelyVisited(visited) || history.siteScore([match.domain, ...(match.homes ?? [])]) > visited.use)))
+      ? match
+      : undefined
+  const top = popular ? { url: `https://${popular.domain}/`, title: popular.name, completion: popular.domain } : visited
   // Already open: the top hit switches to that tab instead.
   const topTab = top ? tabs.find((t) => stripHash(t.url) === stripHash(top.url)) : undefined
   if (top && topTab) {

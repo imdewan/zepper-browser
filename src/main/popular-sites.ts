@@ -4,9 +4,10 @@
  * per service (no youtu.be, t.co or country copies), no infrastructure domains (CDNs, APIs, ad
  * servers). Nothing a browser shouldn't be recommending: no adult, gambling or piracy sites, and none
  * known for scams, malware or adware. Most popular first, which is the order matches are offered in. A name can
- * carry other words people type for the site ("X (Twitter)").
+ * carry other words people type for the site ("X (Twitter)"). A site that has moved or lives at a path
+ * lists where it lives now (Office at m365.cloud.microsoft), so your visits there count for it.
  */
-const SITES: [domain: string, name: string][] = [
+const SITES: [domain: string, name: string, homes?: string[]][] = [
   ['google.com', 'Google'],
   ['youtube.com', 'YouTube'],
   ['facebook.com', 'Facebook'],
@@ -28,7 +29,7 @@ const SITES: [domain: string, name: string][] = [
   ['microsoft.com', 'Microsoft'],
   ['apple.com', 'Apple'],
   ['outlook.live.com', 'Outlook'],
-  ['office.com', 'Microsoft 365 (Office)'],
+  ['office.com', 'Microsoft 365 (Office)', ['m365.cloud.microsoft', 'microsoft365.com']],
   ['twitch.tv', 'Twitch'],
   ['pinterest.com', 'Pinterest'],
   ['claude.ai', 'Claude'],
@@ -36,24 +37,24 @@ const SITES: [domain: string, name: string][] = [
   ['duckduckgo.com', 'DuckDuckGo'],
   ['ebay.com', 'eBay'],
   ['discord.com', 'Discord'],
-  ['spotify.com', 'Spotify'],
+  ['spotify.com', 'Spotify', ['open.spotify.com']],
   ['open.spotify.com', 'Spotify Web Player'],
   ['drive.google.com', 'Google Drive'],
   ['docs.google.com', 'Google Docs'],
-  ['maps.google.com', 'Google Maps'],
+  ['maps.google.com', 'Google Maps', ['google.com/maps']],
   ['translate.google.com', 'Google Translate'],
   ['calendar.google.com', 'Google Calendar'],
   ['meet.google.com', 'Google Meet'],
   ['photos.google.com', 'Google Photos'],
   ['news.google.com', 'Google News'],
   ['scholar.google.com', 'Google Scholar'],
-  ['zoom.us', 'Zoom'],
+  ['zoom.us', 'Zoom', ['zoom.com']],
   ['stackoverflow.com', 'Stack Overflow'],
   ['quora.com', 'Quora'],
   ['imdb.com', 'IMDb'],
   ['paypal.com', 'PayPal'],
   ['walmart.com', 'Walmart'],
-  ['cnn.com', 'CNN'],
+  ['cnn.com', 'CNN', ['edition.cnn.com']],
   ['bbc.com', 'BBC'],
   ['nytimes.com', 'The New York Times'],
   ['espn.com', 'ESPN'],
@@ -62,11 +63,11 @@ const SITES: [domain: string, name: string][] = [
   ['airbnb.com', 'Airbnb'],
   ['canva.com', 'Canva'],
   ['figma.com', 'Figma'],
-  ['notion.so', 'Notion'],
+  ['notion.so', 'Notion', ['notion.com']],
   ['dropbox.com', 'Dropbox'],
   ['icloud.com', 'iCloud'],
   ['perplexity.ai', 'Perplexity'],
-  ['copilot.microsoft.com', 'Copilot'],
+  ['copilot.microsoft.com', 'Copilot', ['copilot.com']],
   ['telegram.org', 'Telegram'],
   ['web.telegram.org', 'Telegram Web'],
   ['snapchat.com', 'Snapchat'],
@@ -77,7 +78,7 @@ const SITES: [domain: string, name: string][] = [
   ['primevideo.com', 'Prime Video'],
   ['disneyplus.com', 'Disney+ (Disney Plus)'],
   ['hulu.com', 'Hulu'],
-  ['max.com', 'Max (HBO)'],
+  ['max.com', 'Max (HBO)', ['hbomax.com']],
   ['tv.apple.com', 'Apple TV'],
   ['music.apple.com', 'Apple Music'],
   ['music.youtube.com', 'YouTube Music'],
@@ -207,7 +208,7 @@ const SITES: [domain: string, name: string][] = [
   ['citi.com', 'Citi'],
   ['fidelity.com', 'Fidelity'],
   ['schwab.com', 'Charles Schwab'],
-  ['vanguard.com', 'Vanguard'],
+  ['vanguard.com', 'Vanguard', ['investor.vanguard.com']],
   ['robinhood.com', 'Robinhood'],
   ['coinbase.com', 'Coinbase'],
   ['venmo.com', 'Venmo'],
@@ -342,9 +343,11 @@ const SITES: [domain: string, name: string][] = [
 export interface PopularSite {
   domain: string
   name: string
+  /** Where the site lives when it's not at its own address: Google Maps is at google.com/maps. */
+  homes?: string[]
 }
 
-const POPULAR: PopularSite[] = SITES.map(([domain, name]) => ({ domain, name }))
+const POPULAR: PopularSite[] = SITES.map(([domain, name, homes]) => ({ domain, name, homes }))
 const words = new Map(
   POPULAR.map((site) => [
     site,
