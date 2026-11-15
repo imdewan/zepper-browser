@@ -619,6 +619,12 @@ export type Command =
   | { type: 'app.restartToUpdate' }
   /** Chromium's credits (every component it's made of, with its license) in a new tab. */
   | { type: 'app.openChromiumCredits' }
+  /** Print preview: new choices (the preview is made again), where on screen the preview goes, and its answer. */
+  | { type: 'print.update'; id: number; settings: PrintSettings }
+  | { type: 'print.previewArea'; id: number; rect: Rect | null }
+  | { type: 'print.submit'; id: number; settings: PrintSettings }
+  | { type: 'print.cancel'; id: number }
+  | { type: 'print.systemDialog'; id: number }
   /** The screen-share picker's answer: a tab, window or screen (null: cancelled), and whether to share audio. */
   | { type: 'share.choose'; id: number; sourceId: string | null; audio: boolean }
   /** Summarise the current page, or answer a question about it (with earlier questions and answers). */
@@ -753,6 +759,11 @@ export type UiEvent =
   | { type: 'onboarding.open'; step?: 'import' }
   /** Open the emoji picker for an Essential's icon (the sidebar knows where its tile is). */
   | { type: 'essential.pickIcon'; tabId: string }
+  /** Print preview, for the page that's printing; each new preview's page count (null: unknown), or why there isn't one. */
+  | { type: 'print.open'; request: PrintRequest }
+  | { type: 'print.rendered'; id: number; pages: number | null; error: 'range' | 'failed' | null }
+  /** Saved, sent to the printer, or the page went away. */
+  | { type: 'print.close'; id: number }
   /** A page wants to share your screen: choose a tab, window or screen. */
   | { type: 'share.open'; request: ShareRequest }
   /** The page went away before you chose. */
@@ -838,6 +849,37 @@ export interface ShareSource {
   icon: string | null
   /** The site, for tabs. */
   detail?: string
+}
+
+export type PaperSize = 'A3' | 'A4' | 'A5' | 'Legal' | 'Letter' | 'Tabloid'
+
+/** Print preview's choices, as in Chrome's. */
+export interface PrintSettings {
+  /** 'pdf' (Save as PDF), or a printer's name. */
+  destination: string
+  pages: 'all' | 'custom'
+  /** Custom pages, like "1-5, 8, 11-13". */
+  range: string
+  copies: number
+  landscape: boolean
+  color: boolean
+  /** 'page': the size the page sets for itself (CSS @page). */
+  paper: PaperSize | 'page'
+  margins: 'default' | 'none'
+  /** Percent: 100 is the page at its own size. */
+  scale: number
+  headersFooters: boolean
+  backgrounds: boolean
+}
+
+export interface PrintRequest {
+  id: number
+  printers: { name: string; displayName: string }[]
+  settings: PrintSettings
+  /** The size the page sets for itself (CSS @page), as it reads: "A4", "Letter landscape", "210mm × 297mm" (null: none). */
+  pageSize: string | null
+  /** The keys for printing with the system dialog instead (null: none set). */
+  systemShortcut: string | null
 }
 
 export interface ShareRequest {

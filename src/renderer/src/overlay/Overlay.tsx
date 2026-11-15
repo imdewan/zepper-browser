@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { PEEK_AREA_EXTRA, SEARCH_ENGINES } from '@shared/settings'
 import { prefersDarkUi, themeAccent } from '@shared/theme'
-import type { AboutInfo, FindResult, OverlayMode, PopoverSpec, ShareRequest, ToastSpec, UiEvent } from '@shared/types'
+import type { AboutInfo, FindResult, OverlayMode, PopoverSpec, PrintRequest, ShareRequest, ToastSpec, UiEvent } from '@shared/types'
 import { zepper } from '../bridge'
 import { useSnapshot, useSystemDark, useUiEvents } from '../useSnapshot'
 import { uiAttributes } from '../chrome/App'
@@ -21,6 +21,7 @@ import { AboutPanel } from './AboutPanel'
 import { DownloadsPanel } from './DownloadsPanel'
 import { HistoryPanel } from './HistoryPanel'
 import { Popover } from './Popovers'
+import { PrintPreview } from './PrintPreview'
 import { Toasts } from './Toasts'
 import { cx, setViewOffsetX } from '../util'
 
@@ -44,6 +45,9 @@ export function Overlay(): React.JSX.Element | null {
   // The open picker, for answering it when the overlay is dismissed some other way.
   const shareId = useRef<number | null>(null)
   shareId.current = share?.id ?? null
+  const [print, setPrint] = useState<PrintRequest | null>(null)
+  const printId = useRef<number | null>(null)
+  printId.current = print?.id ?? null
   const [historyOpen, setHistoryOpen] = useState(false)
   const [about, setAbout] = useState<AboutInfo | null>(null)
   const [downloadsOpen, setDownloadsOpen] = useState(false)
@@ -102,6 +106,19 @@ export function Overlay(): React.JSX.Element | null {
           setExiting(true)
           setShare(null)
         }
+      } else if (event.type === 'print.open') {
+        setPalette(null)
+        setPopover(null)
+        setSettingsOpen(false)
+        setHistoryOpen(false)
+        setDownloadsOpen(false)
+        setAbout(null)
+        setPrint(event.request)
+      } else if (event.type === 'print.close') {
+        if (printId.current === event.id) {
+          setExiting(true)
+          setPrint(null)
+        }
       } else if (event.type === 'space.startCreate') {
         setPalette(null)
         setPopover(null)
@@ -132,7 +149,9 @@ export function Overlay(): React.JSX.Element | null {
         setPeek('shown')
       } else if (event.type === 'overlay.dismiss') {
         if (shareId.current !== null) zepper.send({ type: 'share.choose', id: shareId.current, sourceId: null, audio: false })
+        if (printId.current !== null) zepper.send({ type: 'print.cancel', id: printId.current })
         setShare(null)
+        setPrint(null)
         setPalette(null)
         setPopover(null)
         setSettingsOpen(false)
@@ -153,6 +172,7 @@ export function Overlay(): React.JSX.Element | null {
     settingsOpen ||
     onboardingOpen ||
     share !== null ||
+    print !== null ||
     historyOpen ||
     downloadsOpen ||
     about !== null ||
@@ -217,6 +237,27 @@ export function Overlay(): React.JSX.Element | null {
     setShare(null)
     zepper.send({ type: 'ui.closePalette', refocus: true })
   }, [])
+  const closePrint = useCallback(() => {
+    if (printId.current !== null) zepper.send({ type: 'print.cancel', id: printId.current })
+    setExiting(true)
+    setPrint(null)
+    zepper.send({ type: 'ui.closePalette', refocus: true })
+  }, [])
+  // Something else opening over print preview (the command bar, settings…) ends it: its preview would sit on top.
+  const othersOpen =
+    palette !== null ||
+    popover !== null ||
+    settingsOpen ||
+    onboardingOpen ||
+    share !== null ||
+    historyOpen ||
+    downloadsOpen ||
+    about !== null ||
+    creatingSpace ||
+    capture !== null
+  useEffect(() => {
+    if (othersOpen && printId.current !== null) closePrint()
+  }, [othersOpen, closePrint])
   const closeOnboarding = useCallback(() => {
     setExiting(true)
     setOnboardingOpen(false)
@@ -288,6 +329,7 @@ export function Overlay(): React.JSX.Element | null {
         {share && (
           <SharePicker key={`share-${share.id}`} request={share} onDone={(sourceId, audio) => answerShare(share.id, sourceId, audio)} />
         )}
+        {print && <PrintPreview key={`print-${print.id}`} request={print} onCancel={closePrint} />}
         {historyOpen && (
           <HistoryPanel key="history" meaning={snapshot.intelligence.embeddings} scope={snapshot.profileScope} onClose={closeHistory} />
         )}

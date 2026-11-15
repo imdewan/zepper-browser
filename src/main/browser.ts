@@ -49,7 +49,7 @@ import {
   type Protection,
   type Settings
 } from '@shared/settings'
-import { linuxAccelerator } from '@shared/shortcuts'
+import { acceleratorFor, acceleratorLabel, linuxAccelerator } from '@shared/shortcuts'
 import { DEFAULT_THEME, themeAccent } from '@shared/theme'
 import {
   IPC,
@@ -83,6 +83,7 @@ import {
 } from '@shared/types'
 import type { Hub } from './hub'
 import { PipPlayer } from './pip'
+import { PrintPreview, type PrintHost } from './print-preview'
 import { CallWindow, type CallWindowHost } from './call-window'
 import { AutofillController, type PageMessage } from './autofill'
 import { startDebugServer } from './devtools-server'
@@ -734,6 +735,8 @@ export class Browser {
   private readonly promptWatched = new WeakSet<WebContents>()
   /** Pages showing the system print dialog (they're waiting on it, not hung). */
   private readonly printing = new Set<number>()
+  /** Print preview, for the page printing (one at a time). */
+  private printPreview: PrintPreview | null = null
   /** Tabs closing once their page agrees (a "Leave site?" question may be open). */
   private readonly closingTabs = new Set<string>()
   private readonly askingToLeave = new Set<string>()
@@ -1533,6 +1536,7 @@ export class Browser {
   /** Window closed: release every page, and for private windows wipe the session. */
   private destroy(): void {
     this.windowClosed = true
+    this.printPreview?.close()
     // A window you close is forgotten (as in Chrome); one closing because Zepper quits comes back, and
     // so does the last one you close, which Zepper quits with.
     const others = !this.hub.quitting && this.hub.hasOtherWindows(this)
@@ -1848,6 +1852,16 @@ export class Browser {
         return void this.openChromiumCredits()
       case 'share.choose':
         return this.answerShare(command.id, command.sourceId, command.audio)
+      case 'print.update':
+        return this.printPreview?.id === command.id ? this.printPreview.update(command.settings) : undefined
+      case 'print.previewArea':
+        return this.printPreview?.id === command.id ? this.printPreview.setArea(command.rect) : undefined
+      case 'print.submit':
+        return this.printPreview?.id === command.id ? void this.printPreview.submit(command.settings) : undefined
+      case 'print.cancel':
+        return this.printPreview?.id === command.id ? this.printPreview.cancel(true) : undefined
+      case 'print.systemDialog':
+        return this.printPreview?.id === command.id ? this.printPreview.systemDialog() : undefined
       case 'ui.openAssistant':
         return this.openAssistant(command.anchor)
       case 'assistant.run':
@@ -3856,11 +3870,63 @@ export class Browser {
     if (wc) this.printPage(wc)
   }
 
+  printActiveWithSystemDialog(): void {
+    const wc = this.activeWebContents()
+    if (!wc) return
+    this.printPreview?.close()
+    this.printWithSystemDialog(wc)
+  }
+
+  /** Print preview for a tab's page, as in Chrome (a page in some other window gets the system dialog). */
+  printPage(wc: WebContents): void {
+    if (this.printing.has(wc.id) || wc.isDestroyed() || this.windowClosed) return
+    const tabId = this.tabByWebContents.get(wc.id)
+    if (!tabId) return this.printWithSystemDialog(wc)
+    if (this.printPreview?.page === wc) return
+    this.printPreview?.close()
+    // A tab printing from the background comes forward to show its preview.
+    if (!this.attached.has(tabId)) this.activateTab(tabId)
+    const preview = new PrintPreview(wc, this.printHost())
+    this.printPreview = preview
+    this.setOverlayMode('full')
+    this.overlay.webContents.focus()
+    void preview.open()
+  }
+
+  private printHost(): PrintHost {
+    return {
+      win: this.win,
+      emit: (event) => this.emit(event, 'overlay'),
+      attach: (view) => this.win.contentView.addChildView(view),
+      detach: (view) => removeView(this.win, view),
+      closed: (preview, fromPanel) => {
+        if (this.printPreview !== preview) return
+        this.printPreview = null
+        if (!fromPanel && !this.windowClosed) this.closePalette(true)
+      },
+      pdfPath: (title) => join(this.settings.downloadPath || app.getPath('downloads'), `${fileNameFor(title)}.pdf`),
+      toast: (message, description) => this.toast({ id: 'print', message, description, timeout: 3000 }),
+      systemDialog: (page) => this.printWithSystemDialog(page),
+      print: (page, options) => {
+        if (this.printing.has(page.id)) return
+        this.printing.add(page.id)
+        page.print(options, (success, reason) => {
+          this.printing.delete(page.id)
+          if (!success && reason !== 'cancelled') this.toast({ id: 'print', message: 'Couldn’t print', description: reason, timeout: 4000 })
+        })
+      },
+      systemShortcut: () => {
+        const accelerator = acceleratorFor('printSystem', this.settings.shortcuts, process.platform)
+        return accelerator ? acceleratorLabel(accelerator, process.platform) : null
+      }
+    }
+  }
+
   /**
    * Prints a page with the system dialog. The page waits while the dialog is open, which isn't it
    * hanging, so the "not responding" prompt stays away until printing is done.
    */
-  printPage(wc: WebContents): void {
+  private printWithSystemDialog(wc: WebContents): void {
     if (this.printing.has(wc.id) || wc.isDestroyed()) return
     this.printing.add(wc.id)
     wc.print({}, () => this.printing.delete(wc.id))
@@ -6552,6 +6618,10 @@ export class Browser {
     if (this.linkStatus && !wanted.has(this.linkStatus.tabId)) this.hideLinkStatus(true)
     if (this.pageHints) this.win.contentView.addChildView(this.pageHints)
     this.win.contentView.addChildView(this.overlay)
+    // Print preview belongs to its tab: it goes when the tab's no longer on screen, and otherwise stays on top.
+    const printing = this.printPreview && this.tabByWebContents.get(this.printPreview.page.id)
+    if (this.printPreview && (!printing || !wanted.has(printing))) this.printPreview.close()
+    this.printPreview?.raise()
     this.layout()
   }
 

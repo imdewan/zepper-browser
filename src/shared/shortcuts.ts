@@ -72,6 +72,7 @@ export const SHORTCUT_COMMANDS: ShortcutCommand[] = [
   { id: 'reopenTab', label: 'Reopen Closed Tab', group: 'File', mac: '⇧⌘T' },
   { id: 'savePage', label: 'Save Page As', group: 'File', mac: '⇧⌘S' },
   { id: 'print', label: 'Print', group: 'File', mac: '⌘P' },
+  { id: 'printSystem', label: 'Print Using System Dialog', group: 'File', mac: '⌥⌘P' },
   { id: 'capture', label: 'Capture', group: 'File', mac: '⇧⌘2' },
   { id: 'copyUrl', label: 'Copy Current URL', group: 'File', mac: '⇧⌘C' },
   { id: 'copyMarkdown', label: 'Copy URL as Markdown', group: 'File', mac: '⌥⇧⌘C' },

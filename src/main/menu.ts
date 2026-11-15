@@ -142,6 +142,14 @@ export function buildMenu(hub: Hub): Menu {
             (popup) => popup.webContents.print({}, () => {})
           )
         },
+        {
+          label: 'Print Using System Dialog…',
+          accelerator: sc('printSystem'),
+          click: run(
+            (browser) => browser.printActiveWithSystemDialog(),
+            (popup) => popup.webContents.print({}, () => {})
+          )
+        },
         { type: 'separator' },
         { label: 'Capture…', accelerator: sc('capture'), click: run((browser) => void browser.startCapture()) },
         { type: 'separator' },
