@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-17
+
 ### Added
 
 - **Quick View.** Click a link to another site and it opens in a card over the page you're on, growing from the link. Round buttons beside the card close it, open it as a tab (⇧⌘↩) or open it beside the page in split view; Esc, ⌘W or a click outside close it too, and it shrinks back to its link. While it's open, the tab it's over shows its icon and the sidebar's address is its page's. A page opened as a tab carries on where it was, with its back and forward pages. ⌥-click (Alt-click on Linux) opens any link in Quick View, on the same site too. Settings › Tabs has Click (the default), ⌥-click only, or Off, and a link's right-click menu has Open Link in Quick View. A link the page handles itself, like a menu, isn't touched, and ⌘-, ⇧- and ⌃-clicks open as they always have.
@@ -390,7 +392,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/imdewan/zepper-browser/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/imdewan/zepper-browser/compare/v0.1.25...v0.2.0
 [0.1.25]: https://github.com/imdewan/zepper-browser/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/imdewan/zepper-browser/compare/v0.1.23...v0.1.24
