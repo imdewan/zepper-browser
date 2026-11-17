@@ -22,6 +22,7 @@ import {
   SEARCH_ENGINES,
   USER_AGENT_LABELS,
   type MemorySaverMode,
+  type QuickViewMode,
   type PinnedCloseBehavior,
   type SearchEngineId,
   type SecureDns,
@@ -54,6 +55,16 @@ const MEMORY_SAVER_HINTS: Record<MemorySaverMode, string> = {
   moderate: `Tabs unload after 6 hours out of sight, or sooner if ${YOUR_COMPUTER} runs short of memory.`,
   balanced: `Recommended. Tabs unload after 4 hours out of sight, or sooner if ${YOUR_COMPUTER} runs short of memory.`,
   maximum: `Tabs unload after 2 hours out of sight, or sooner if ${YOUR_COMPUTER} runs short of memory.`
+}
+
+/** The key held to open any link in Quick View: ⌥ on a Mac, Alt elsewhere. */
+const QUICK_VIEW_KEY = isMac ? '⌥' : 'Alt'
+
+/** What each Quick View choice does. */
+const QUICK_VIEW_HINTS: Record<QuickViewMode, string> = {
+  click: `A link to another site opens in a preview over the page you’re on, and so does any link you ${QUICK_VIEW_KEY}-click. Open it as a tab from there, or press Esc to close it.`,
+  modifier: `Links you ${QUICK_VIEW_KEY}-click open in a preview over the page you’re on. Open it as a tab from there, or press Esc to close it.`,
+  off: 'Links open as they always do. You can still open one in Quick View from its right-click menu.'
 }
 
 /** Languages Apple's on-device translation supports. */
@@ -497,6 +508,17 @@ export function SettingsPanel({
                         ['bottom', 'Bottom']
                       ]}
                       onChange={(newTabPosition) => set({ newTabPosition })}
+                    />
+                  </Row>
+                  <Row label="Quick View" hint={QUICK_VIEW_HINTS[settings.quickView]}>
+                    <Segmented
+                      value={settings.quickView}
+                      options={[
+                        ['click', 'Click'],
+                        ['modifier', `${QUICK_VIEW_KEY}-click`],
+                        ['off', 'Off']
+                      ]}
+                      onChange={(quickView) => set({ quickView })}
                     />
                   </Row>
                   <Row

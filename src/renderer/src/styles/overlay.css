@@ -4926,3 +4926,69 @@
   background: #ffffff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
+
+/* ---- Quick View: a link's page in a card over the page you're on ---------------------- */
+
+/* Catches a click outside the card (which closes it); the page behind stays as it is. */
+.quick-view-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+}
+
+/* The page goes here (main lays it over the card, with the same corners: QUICK_VIEW_RADIUS); white until it does. */
+.quick-view {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.38),
+    0 4px 16px rgba(0, 0, 0, 0.16),
+    0 0 0 0.5px rgba(0, 0, 0, 0.12);
+}
+
+/* Closing: a picture of the page, shrinking back to its link. */
+.quick-view-picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top left;
+}
+
+/* Round buttons beside the card: close, open as a tab, open in split view. */
+.quick-view-buttons {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+}
+
+.quick-view-button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  color: #3a3a3c;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.22),
+    0 0 0 0.5px rgba(0, 0, 0, 0.1);
+  transition:
+    transform 0.12s ease,
+    background-color 0.12s ease;
+}
+
+.quick-view-button:hover {
+  background: #f2f2f4;
+  color: #000;
+  transform: scale(1.06);
+}
+
+.quick-view-button:active {
+  background: #e5e5ea;
+  transform: scale(0.96);
+}

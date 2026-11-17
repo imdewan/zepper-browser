@@ -19,6 +19,8 @@ export interface Tab {
   url: string
   /** In snapshots only: its page is a site you're building (Developer Mode). */
   developing?: boolean
+  /** In snapshots only: the page open in Quick View over this tab (its icon shows on the tab). */
+  quickView?: { title: string; favicon: string | null }
   title: string
   favicon: string | null
   pinned: PinnedInfo | null
@@ -244,6 +246,15 @@ export interface Snapshot {
   panes: Pane[]
   /** Tabs with DevTools open, and the panel the developer bar last showed (for its buttons). */
   devtools: { tabId: string; panel: DevToolsPanel }[]
+  /** The page open in Quick View, if one is. */
+  quickView: QuickViewInfo | null
+}
+
+/** The page in Quick View: the tab it's open over, and its own (the sidebar's address and buttons follow it). */
+export interface QuickViewInfo {
+  id: number
+  openerId: string
+  tab: Tab
 }
 
 /** The DevTools panels the developer bar opens (inspect: Elements, picking an element on the page). */
@@ -627,6 +638,16 @@ export type Command =
   | { type: 'print.systemDialog'; id: number }
   /** The screen-share picker's answer: a tab, window or screen (null: cancelled), and whether to share audio. */
   | { type: 'share.choose'; id: number; sourceId: string | null; audio: boolean }
+  /**
+   * Quick View: where on screen its page goes (null: nowhere, while the card comes or goes), and what
+   * to do with it: close it (`animate`: shrinking back to its link), or open it as a tab or beside this
+   * one in split view. `covered`: the card shows the picture of the page it was sent, so the page can go.
+   */
+  | { type: 'quickView.area'; id: number; rect: Rect | null }
+  | { type: 'quickView.close'; id: number; animate: boolean }
+  | { type: 'quickView.expand'; id: number }
+  | { type: 'quickView.split'; id: number }
+  | { type: 'quickView.covered'; id: number }
   /** Summarise the current page, or answer a question about it (with earlier questions and answers). */
   | { type: 'ui.openAssistant'; anchor?: Rect }
   | { type: 'assistant.run'; requestId: string; question?: string; history?: [string, string][] }
@@ -768,6 +789,12 @@ export type UiEvent =
   | { type: 'share.open'; request: ShareRequest }
   /** The page went away before you chose. */
   | { type: 'share.close'; id: number }
+  /** A link opened in Quick View, with where the link is (window coordinates; null: unknown), for the card to grow from. */
+  | { type: 'quickView.open'; id: number; origin: Rect | null }
+  /** Quick View is closing: a picture of its page (null: none) for the card to shrink back with. */
+  | { type: 'quickView.closing'; id: number; image: string | null }
+  /** Quick View closed, or became a tab (`expanded`: the card makes way rather than leaving). */
+  | { type: 'quickView.close'; id: number; expanded: boolean }
   | { type: 'peek.show' }
   /** The pointer's still over the peek card where the card can't see it: the card stays. */
   | { type: 'peek.hold' }

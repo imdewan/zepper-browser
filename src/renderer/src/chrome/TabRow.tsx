@@ -75,7 +75,9 @@ function sameRow(a: TabRowProps, b: TabRowProps): boolean {
     x.capture?.call === y.capture?.call &&
     x.pinned?.url === y.pinned?.url &&
     x.pinned?.favicon === y.pinned?.favicon &&
-    x.developing === y.developing
+    x.developing === y.developing &&
+    x.quickView?.title === y.quickView?.title &&
+    x.quickView?.favicon === y.quickView?.favicon
   )
 }
 
@@ -156,6 +158,13 @@ export const TabRow = memo(function TabRow({ tab, active, place }: TabRowProps):
         </div>
 
         {tab.capture && (tab.capture.camera || tab.capture.microphone || tab.capture.screen) && <CaptureIndicator capture={tab.capture} />}
+
+        {/* The page open in Quick View over this tab. */}
+        {tab.quickView && (
+          <span className="tab-quick-view" title={`In Quick View: ${tab.quickView.title}`}>
+            <Favicon src={tab.quickView.favicon} size={14} />
+          </span>
+        )}
 
         {((tab.audible && !tab.capture) || tab.muted) && (
           <button

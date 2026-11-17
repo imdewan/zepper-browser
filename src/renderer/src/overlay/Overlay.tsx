@@ -2,7 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { PEEK_AREA_EXTRA, SEARCH_ENGINES } from '@shared/settings'
 import { prefersDarkUi, themeAccent } from '@shared/theme'
-import type { AboutInfo, FindResult, OverlayMode, PopoverSpec, PrintRequest, ShareRequest, ToastSpec, UiEvent } from '@shared/types'
+import type {
+  AboutInfo,
+  FindResult,
+  OverlayMode,
+  PopoverSpec,
+  PrintRequest,
+  Rect,
+  ShareRequest,
+  Snapshot,
+  ToastSpec,
+  UiEvent
+} from '@shared/types'
 import { zepper } from '../bridge'
 import { useSnapshot, useSystemDark, useUiEvents } from '../useSnapshot'
 import { uiAttributes } from '../chrome/App'
@@ -11,6 +22,9 @@ import { CreateSpaceDialog } from './CreateSpaceDialog'
 import { FindBar } from './FindBar'
 import { Palette } from './Palette'
 import { Peek } from './Peek'
+
+/** How long the page takes to grow into a tab when Quick View opens as one (main's QUICK_VIEW_EXPAND_MS), plus a frame. */
+const QUICK_VIEW_EXPAND_MS = 260
 
 /** Room around the corner's content: its offset from the window edge, plus its shadows. */
 const CORNER_MARGIN = { x: 18 + 32, y: 16 + 36 }
@@ -22,6 +36,7 @@ import { DownloadsPanel } from './DownloadsPanel'
 import { HistoryPanel } from './HistoryPanel'
 import { Popover } from './Popovers'
 import { PrintPreview } from './PrintPreview'
+import { QuickView, type QuickViewRequest } from './QuickView'
 import { Toasts } from './Toasts'
 import { cx, setViewOffsetX } from '../util'
 
@@ -48,6 +63,9 @@ export function Overlay(): React.JSX.Element | null {
   const [print, setPrint] = useState<PrintRequest | null>(null)
   const printId = useRef<number | null>(null)
   printId.current = print?.id ?? null
+  const [quickView, setQuickView] = useState<QuickViewRequest | null>(null)
+  const quickViewId = useRef<number | null>(null)
+  quickViewId.current = quickView?.id ?? null
   const [historyOpen, setHistoryOpen] = useState(false)
   const [about, setAbout] = useState<AboutInfo | null>(null)
   const [downloadsOpen, setDownloadsOpen] = useState(false)
@@ -119,6 +137,29 @@ export function Overlay(): React.JSX.Element | null {
           setExiting(true)
           setPrint(null)
         }
+      } else if (event.type === 'quickView.open') {
+        setPalette(null)
+        setPopover(null)
+        setQuickView({ id: event.id, origin: event.origin, phase: 'open' })
+      } else if (event.type === 'quickView.closing') {
+        // The picture of its page to shrink back with; main takes the page away once the card shows it.
+        setQuickView((q) => (q?.id === event.id ? { ...q, phase: 'closing', image: event.image } : q))
+      } else if (event.type === 'quickView.close') {
+        if (quickViewId.current !== event.id) return
+        if (event.expanded) {
+          // The page grows into a tab over the card; the card goes once it has, and the tab has the keyboard.
+          setQuickView((q) => (q?.id === event.id ? { ...q, phase: 'expanding' } : q))
+          setTimeout(() => {
+            if (quickViewId.current !== event.id) return
+            setQuickView(null)
+            zepper.send({ type: 'ui.closePalette', refocus: true })
+          }, QUICK_VIEW_EXPAND_MS)
+          return
+        }
+        // Closed (in the card, in the page with Esc, or its tab went): the card shrinks back to its link.
+        setExiting(true)
+        setQuickView(null)
+        zepper.send({ type: 'ui.closePalette', refocus: true })
       } else if (event.type === 'space.startCreate') {
         setPalette(null)
         setPopover(null)
@@ -150,8 +191,10 @@ export function Overlay(): React.JSX.Element | null {
       } else if (event.type === 'overlay.dismiss') {
         if (shareId.current !== null) zepper.send({ type: 'share.choose', id: shareId.current, sourceId: null, audio: false })
         if (printId.current !== null) zepper.send({ type: 'print.cancel', id: printId.current })
+        if (quickViewId.current !== null) zepper.send({ type: 'quickView.close', id: quickViewId.current, animate: false })
         setShare(null)
         setPrint(null)
+        setQuickView(null)
         setPalette(null)
         setPopover(null)
         setSettingsOpen(false)
@@ -173,6 +216,7 @@ export function Overlay(): React.JSX.Element | null {
     onboardingOpen ||
     share !== null ||
     print !== null ||
+    quickView !== null ||
     historyOpen ||
     downloadsOpen ||
     about !== null ||
@@ -258,6 +302,17 @@ export function Overlay(): React.JSX.Element | null {
   useEffect(() => {
     if (othersOpen && printId.current !== null) closePrint()
   }, [othersOpen, closePrint])
+  // Main shrinks the card back with a picture of the page, then says it's closed (see 'quickView.close').
+  const closeQuickView = useCallback(() => {
+    if (quickViewId.current !== null) zepper.send({ type: 'quickView.close', id: quickViewId.current, animate: true })
+  }, [])
+  // The same for Quick View, whose page is on top too: it goes at once, out of the way.
+  useEffect(() => {
+    if ((othersOpen || print !== null) && quickViewId.current !== null) {
+      zepper.send({ type: 'quickView.close', id: quickViewId.current, animate: false })
+      setQuickView(null)
+    }
+  }, [othersOpen, print])
   const closeOnboarding = useCallback(() => {
     setExiting(true)
     setOnboardingOpen(false)
@@ -330,6 +385,9 @@ export function Overlay(): React.JSX.Element | null {
           <SharePicker key={`share-${share.id}`} request={share} onDone={(sourceId, audio) => answerShare(share.id, sourceId, audio)} />
         )}
         {print && <PrintPreview key={`print-${print.id}`} request={print} onCancel={closePrint} />}
+        {quickView && (
+          <QuickView key={`quick-view-${quickView.id}`} request={quickView} pageArea={pageArea(snapshot)} onClose={closeQuickView} />
+        )}
         {historyOpen && (
           <HistoryPanel key="history" meaning={snapshot.intelligence.embeddings} scope={snapshot.profileScope} onClose={closeHistory} />
         )}
@@ -380,4 +438,20 @@ export function Overlay(): React.JSX.Element | null {
       </div>
     </div>
   )
+}
+
+/** Where the tab's page is (all of a split's panes), in the window; the window less the sidebar before it's known. */
+function pageArea(snapshot: Snapshot): Rect {
+  const rects = snapshot.panes.map((p) => p.rect)
+  if (rects.length > 0) {
+    const left = Math.min(...rects.map((r) => r.x))
+    const top = Math.min(...rects.map((r) => r.y))
+    const right = Math.max(...rects.map((r) => r.x + r.width))
+    const bottom = Math.max(...rects.map((r) => r.y + r.height))
+    return { x: left, y: top, width: right - left, height: bottom - top }
+  }
+  const { width, height } = snapshot.windowSize
+  const sidebar = snapshot.compact ? 0 : snapshot.sidebarWidth
+  const x = snapshot.settings.sidebarPosition === 'left' ? sidebar : 0
+  return { x, y: 0, width: Math.max(0, (width || window.innerWidth) - sidebar), height: height || window.innerHeight }
 }

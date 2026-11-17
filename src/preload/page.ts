@@ -1444,3 +1444,52 @@ function watchTyping(): void {
 }
 
 watchTyping()
+
+// ---------------------------------------------------------------------------
+// Quick View: a link you click can open in a preview over the page (main/quick-view.ts decides which).
+// The page has its say first: a link it handles itself (a menu, an app moving between its own views)
+// isn't touched, and nor is one you ⌘-, ⇧- or ⌃-click, which go where they always do.
+
+const QUICK_VIEW_CHANNEL = 'zepper:quick-view'
+
+function watchLinkClicks(): void {
+  if (!/^https?:/.test(location.href)) return
+  const top = window === window.top
+  const plain = (event: MouseEvent): boolean => event.isTrusted && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey
+  const decide = (event: MouseEvent): void => {
+    if (event.defaultPrevented || !plain(event)) return
+    const link = linkOf(event)
+    if (!link) return
+    // Where the link is, for the card to grow from (an embedded frame doesn't know where it is).
+    const box = top ? link.element.getBoundingClientRect() : null
+    const rect = box ? { x: box.x, y: box.y, width: box.width, height: box.height } : null
+    let open = false
+    try {
+      open = ipcRenderer.sendSync(QUICK_VIEW_CHANNEL, link.href, event.altKey, rect) === true
+    } catch {
+      // Zepper didn't answer: the link goes where it was going.
+    }
+    // Otherwise ⌥-click would download the link, and a click would follow it.
+    if (open) event.preventDefault()
+  }
+  window.addEventListener(
+    'click',
+    (event) => {
+      // Added now, it's the last to hear the click, after the page's own listeners (on window too).
+      if (plain(event)) window.addEventListener('click', decide, { once: true })
+    },
+    true
+  )
+}
+
+/** The link that was clicked, if it was one to a web page (not one that downloads a file). */
+function linkOf(event: MouseEvent): { href: string; element: Element } | null {
+  for (const node of event.composedPath()) {
+    if (!(node instanceof HTMLAnchorElement || node instanceof HTMLAreaElement)) continue
+    if (!node.href || node.hasAttribute('download')) return null
+    return /^https?:/i.test(node.href) ? { href: node.href, element: node } : null
+  }
+  return null
+}
+
+watchLinkClicks()

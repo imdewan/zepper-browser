@@ -85,6 +85,13 @@ import type { Hub } from './hub'
 import { ERROR_TITLES, crashError, describeError, errorPage } from './error-pages'
 import { PipPlayer } from './pip'
 import { PrintPreview, type PrintHost } from './print-preview'
+import { QUICK_VIEW_RADIUS, opensInQuickView } from './quick-view'
+
+/** Quick View: how long its page's picture may take (for the card to shrink back with), and to show. */
+const QUICK_VIEW_PICTURE_MS = 150
+const QUICK_VIEW_COVER_MS = 250
+/** How long the page takes to grow to a tab's size when it's opened as one. */
+const QUICK_VIEW_EXPAND_MS = 240
 import { CallWindow, type CallWindowHost } from './call-window'
 import { AutofillController, type PageMessage } from './autofill'
 import { startDebugServer } from './devtools-server'
@@ -203,6 +210,25 @@ interface ClosedTab {
   favicon: string | null
   spaceId: string | null
   batch: number
+}
+
+/** The page open in Quick View (see Browser.openQuickView). */
+interface QuickView {
+  id: number
+  /** Its tab, which isn't in the sidebar unless you open it as one. */
+  tab: Tab
+  view: WebContentsView
+  /** The tab it opened from, which it's shown over. */
+  openerId: string
+  /** Where the page goes, once the card has arrived (null: off screen). */
+  area: Rect | null
+  attached: boolean
+  /** Stops the listeners it has only while it's in Quick View. */
+  stop: () => void
+  /** Shrinking back to its link: the card has (or is getting) a picture of the page to do it with. */
+  closing: boolean
+  /** The card shows that picture now, so the page can go. */
+  covered: (() => void) | null
 }
 
 function makeTab(fields: Partial<Tab> & Pick<Tab, 'kind' | 'url'>): Tab {
@@ -561,6 +587,16 @@ function isDeadView(view: WebContentsView | undefined): boolean {
 }
 
 /** Takes a view out of the window (one whose page is gone included). */
+/** A rect the overlay sent: numbers, on screen-sized scales. */
+function validRect(rect: Rect): boolean {
+  const { x, y, width, height } = rect
+  return [x, y, width, height].every((n) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) < 100_000) && width > 0 && height > 0
+}
+
+function roundedRect({ x, y, width, height }: Rect): Rect {
+  return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) }
+}
+
 function removeView(win: BrowserWindow, view: WebContentsView): void {
   try {
     win.contentView.removeChildView(view)
@@ -738,6 +774,8 @@ export class Browser {
   private readonly printing = new Set<number>()
   /** Print preview, for the page printing (one at a time). */
   private printPreview: PrintPreview | null = null
+  private quickView: QuickView | null = null
+  private quickViews = 0
   /** Tabs closing once their page agrees (a "Leave site?" question may be open). */
   private readonly closingTabs = new Set<string>()
   private readonly askingToLeave = new Set<string>()
@@ -1538,6 +1576,7 @@ export class Browser {
   private destroy(): void {
     this.windowClosed = true
     this.printPreview?.close()
+    this.closeQuickView()
     // A window you close is forgotten (as in Chrome); one closing because Zepper quits comes back, and
     // so does the last one you close, which Zepper quits with.
     const others = !this.hub.quitting && this.hub.hasOtherWindows(this)
@@ -1676,11 +1715,11 @@ export class Browser {
       case 'tab.reopenClosed':
         return this.reopenClosed()
       case 'nav.back':
-        return this.activeWebContents()?.navigationHistory.goBack()
+        return this.pageInFront()?.navigationHistory.goBack()
       case 'nav.forward':
-        return this.activeWebContents()?.navigationHistory.goForward()
+        return this.pageInFront()?.navigationHistory.goForward()
       case 'nav.reload':
-        return this.reloadPage(this.activeWebContents())
+        return this.reloadPage(this.pageInFront())
       case 'space.switch':
         return this.switchSpace(command.spaceId)
       case 'space.switchRelative':
@@ -1777,6 +1816,7 @@ export class Browser {
         this.emit({ type: 'popover.open', popover: command.popover }, 'overlay')
         return this.checkPopoverShown()
       case 'ui.copyUrl':
+        if (this.quickView) return this.copyQuickViewUrl(command.markdown ?? false)
         return this.copyUrl(command.markdown ?? false)
       case 'developer.toggle':
         return this.toggleDeveloper(command.tabId ?? this.activeTabId ?? '')
@@ -1863,6 +1903,20 @@ export class Browser {
         return this.printPreview?.id === command.id ? this.printPreview.cancel(true) : undefined
       case 'print.systemDialog':
         return this.printPreview?.id === command.id ? this.printPreview.systemDialog() : undefined
+      case 'quickView.area':
+        if (this.quickView?.id !== command.id) return
+        this.quickView.area = command.rect && validRect(command.rect) ? roundedRect(command.rect) : null
+        return this.placeQuickView()
+      case 'quickView.close':
+        if (this.quickView?.id === command.id) return this.closeQuickView(command.animate)
+        // Gone already: the card goes too.
+        return this.emit({ type: 'quickView.close', id: command.id, expanded: false }, 'overlay')
+      case 'quickView.covered':
+        return this.quickView?.id === command.id ? this.quickView.covered?.() : undefined
+      case 'quickView.expand':
+        return this.quickView?.id === command.id ? this.expandQuickView(false) : undefined
+      case 'quickView.split':
+        return this.quickView?.id === command.id ? this.expandQuickView(true) : undefined
       case 'ui.openAssistant':
         return this.openAssistant(command.anchor)
       case 'assistant.run':
@@ -3646,6 +3700,7 @@ export class Browser {
   }
 
   closeActive(): void {
+    if (this.quickView) return this.closeQuickView(true)
     if (this.activeTabId) this.closeTab(this.activeTabId)
   }
 
@@ -3654,7 +3709,7 @@ export class Browser {
   }
 
   reloadActive(hard: boolean): void {
-    this.reloadPage(this.activeWebContents(), hard)
+    this.reloadPage(this.pageInFront(), hard)
   }
 
   /** Reloads a page; on Zepper's error page, tries the address that failed again. */
@@ -3867,12 +3922,12 @@ export class Browser {
   }
 
   printActive(): void {
-    const wc = this.activeWebContents()
+    const wc = this.pageInFront()
     if (wc) this.printPage(wc)
   }
 
   printActiveWithSystemDialog(): void {
-    const wc = this.activeWebContents()
+    const wc = this.pageInFront()
     if (!wc) return
     this.printPreview?.close()
     this.printWithSystemDialog(wc)
@@ -3881,6 +3936,8 @@ export class Browser {
   /** Print preview for a tab's page, as in Chrome (a page in some other window gets the system dialog). */
   printPage(wc: WebContents): void {
     if (this.printing.has(wc.id) || wc.isDestroyed() || this.windowClosed) return
+    // Quick View's page prints as a tab: the preview needs the room, and the page would sit on top of it.
+    if (this.quickView?.view.webContents === wc) this.expandQuickView(false)
     const tabId = this.tabByWebContents.get(wc.id)
     if (!tabId) return this.printWithSystemDialog(wc)
     if (this.printPreview?.page === wc) return
@@ -3931,6 +3988,228 @@ export class Browser {
     if (this.printing.has(wc.id) || wc.isDestroyed()) return
     this.printing.add(wc.id)
     wc.print({}, () => this.printing.delete(wc.id))
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quick View: a link in a preview over the page you're on (see quick-view.ts)
+
+  /** The page you're looking at: Quick View's while it's open, otherwise the tab's. */
+  private pageInFront(): WebContents | undefined {
+    const quick = this.quickView?.view.webContents
+    return quick && !quick.isDestroyed() ? quick : this.activeWebContents()
+  }
+
+  /** A link clicked on a page: true when it opens in Quick View instead of where it was going. */
+  onLinkClick(wc: WebContents, frame: WebFrameMain | null, link: string, modifier: boolean, box: unknown): boolean {
+    if (this.windowClosed) return false
+    const opener = this.tab(this.tabByWebContents.get(wc.id))
+    // Links in Quick View's own page (not a tab yet) go on in it, as do those in pop-ups.
+    if (!opener || !this.attached.has(opener.id)) return false
+    let page = wc.getURL()
+    try {
+      page = frame?.top?.url || page
+    } catch {
+      // The frame went away.
+    }
+    if (!opensInQuickView(this.settings.quickView, link, page, modifier)) return false
+    // Where the link is, in the window, for the card to grow from.
+    const bounds = this.views.get(opener.id)?.getBounds()
+    const place = box as Rect | null
+    const origin =
+      bounds && place && validRect(place)
+        ? roundedRect({ x: bounds.x + place.x, y: bounds.y + place.y, width: place.width, height: place.height })
+        : null
+    // After answering the page, which is waiting.
+    setImmediate(() => this.openQuickView(link, opener.id, origin))
+    return true
+  }
+
+  /**
+   * Opens a link in Quick View, over the tab it's from. Its page is a tab's (the tab's sign-ins, Zepper's
+   * protections, its history kept), out of the sidebar until you open it as a tab, which keeps it as it is.
+   */
+  openQuickView(url: string, openerId: string, origin: Rect | null): void {
+    const opener = this.tab(openerId)
+    if (!opener || this.windowClosed) return
+    this.closeQuickView()
+    this.printPreview?.close()
+    const tab = makeTab({ kind: 'normal', url, spaceId: opener.spaceId ?? this.activeSpaceId, loaded: true })
+    const view = this.pageView(this.sessionFor(tab))
+    view.setBorderRadius(QUICK_VIEW_RADIUS)
+    const wc = view.webContents
+    const id = ++this.quickViews
+    // Esc closes it, ⇧⌘↩ opens it as a tab, and so does full screen (a video's), which a card can't show.
+    const keys = (event: Electron.Event, input: Electron.Input): void => {
+      if (input.type !== 'keyDown') return
+      const primary = process.platform === 'darwin' ? input.meta : input.control
+      if (input.key === 'Escape' && !input.meta && !input.control && !input.alt && !input.shift) {
+        event.preventDefault()
+        this.closeQuickView(true)
+      } else if (input.key === 'Enter' && primary && input.shift && !input.alt) {
+        event.preventDefault()
+        this.expandQuickView(false)
+      }
+    }
+    const fullScreen = (): void => {
+      if (this.quickView?.id === id) this.expandQuickView(false)
+    }
+    // A page that closes itself takes the card with it.
+    const gone = (): void => {
+      if (this.quickView?.id === id) this.closeQuickView()
+    }
+    wc.on('before-input-event', keys)
+    wc.on('enter-html-full-screen', fullScreen)
+    wc.once('destroyed', gone)
+    this.quickView = {
+      id,
+      tab,
+      view,
+      openerId,
+      area: null,
+      attached: false,
+      closing: false,
+      covered: null,
+      stop: () => {
+        if (wc.isDestroyed()) return
+        wc.removeListener('before-input-event', keys)
+        wc.removeListener('enter-html-full-screen', fullScreen)
+        wc.removeListener('destroyed', gone)
+      }
+    }
+    this.views.set(tab.id, view)
+    this.tabByWebContents.set(wc.id, tab.id)
+    this.wire(tab.id, wc)
+    void wc.loadURL(url).catch(() => {})
+    // The link's address, shown while the pointer was on it, would sit under the card.
+    this.hideLinkStatus(true)
+    this.setOverlayMode('full')
+    this.overlay.webContents.focus()
+    this.emit({ type: 'quickView.open', id, origin }, 'overlay')
+    this.broadcast()
+  }
+
+  /** Puts Quick View's page where the card leaves room for it (above the overlay), or takes it off screen. */
+  private placeQuickView(): void {
+    const quick = this.quickView
+    if (!quick || this.win.isDestroyed()) return
+    if (quick.area) {
+      quick.view.setBounds(quick.area)
+      // Again on top, after the window's views were put in order.
+      this.win.contentView.addChildView(quick.view)
+      if (!quick.attached && !quick.view.webContents.isDestroyed()) quick.view.webContents.focus()
+      quick.attached = true
+    } else if (quick.attached) {
+      removeView(this.win, quick.view)
+      quick.attached = false
+    }
+  }
+
+  /**
+   * Closes Quick View and its page. `animate`: the card shrinks back to its link, with a picture of the
+   * page taken first (a page can't shrink); the page goes once the card shows it. Otherwise it goes now.
+   */
+  private closeQuickView(animate = false): void {
+    const quick = this.quickView
+    if (!quick) return
+    if (!animate || !quick.attached || this.settings.reduceMotion || this.windowClosed) return this.endQuickView(quick)
+    if (quick.closing) return
+    quick.closing = true
+    const wc = quick.view.webContents
+    const picture: Promise<string | null> = wc.isDestroyed()
+      ? Promise.resolve(null)
+      : Promise.race([
+          wc
+            .capturePage()
+            .then((image) => (image.isEmpty() ? null : `data:image/jpeg;base64,${image.toJPEG(80).toString('base64')}`))
+            .catch(() => null),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), QUICK_VIEW_PICTURE_MS))
+        ])
+    void picture.then((image) => {
+      if (this.quickView !== quick) return
+      // Until the card says it's showing the picture, or a moment if it doesn't.
+      const timer = setTimeout(() => this.endQuickView(quick), QUICK_VIEW_COVER_MS)
+      quick.covered = () => {
+        clearTimeout(timer)
+        this.endQuickView(quick)
+      }
+      this.emit({ type: 'quickView.closing', id: quick.id, image }, 'overlay')
+    })
+  }
+
+  private endQuickView(quick: QuickView): void {
+    if (this.quickView !== quick) return
+    this.quickView = null
+    quick.stop()
+    if (!this.win.isDestroyed()) removeView(this.win, quick.view)
+    this.views.delete(quick.tab.id)
+    this.unwire.delete(quick.tab.id)
+    for (const [wcId, id] of this.tabByWebContents) if (id === quick.tab.id) this.tabByWebContents.delete(wcId)
+    this.dropDialogs(quick.tab.id)
+    this.dropPrompts((prompt) => prompt.tabId === quick.tab.id)
+    const wc = quick.view.webContents
+    if (!wc.isDestroyed()) {
+      wc.setAudioMuted(true)
+      void this.closeGently(wc, true)
+    }
+    this.emit({ type: 'quickView.close', id: quick.id, expanded: false }, 'overlay')
+    this.broadcast()
+  }
+
+  /**
+   * Quick View's page becomes a tab, as it is (where it's got to, its back and forward pages): next to
+   * the tab it opened from, or beside it in split view (`split`).
+   */
+  private expandQuickView(split: boolean): void {
+    const quick = this.quickView
+    if (!quick || quick.closing) return
+    const wc = quick.view.webContents
+    if (wc.isDestroyed()) return this.closeQuickView()
+    this.quickView = null
+    quick.stop()
+    this.emit({ type: 'quickView.close', id: quick.id, expanded: true }, 'overlay')
+    const { tab, view } = quick
+    const opener = this.tab(quick.openerId)
+    const splitting = split && !!opener && this.activeTabId === opener.id
+    view.setBorderRadius(this.settings.cornerRadius)
+    const done = (): void => {
+      if (this.windowClosed || wc.isDestroyed()) return
+      this.insertNormalTab(tab, opener?.kind === 'normal' ? opener.id : undefined)
+      this.openers.set(tab.id, quick.openerId)
+      // It's on screen already: becoming the tab (or a pane) just puts it where tabs go.
+      if (splitting) this.addToSplit(tab.id)
+      else this.activateTab(tab.id)
+      // Extensions hear of the tab once it's in place: told sooner, they switch to it, and it would miss the split.
+      this.extensions?.apiFor(wc.session)?.addTab(wc, this.win)
+    }
+    if (splitting || !quick.attached || this.settings.reduceMotion) return done()
+    // Opened as a tab, the page grows from the card to the tab's size (the tab's page has no developer bar).
+    const from = view.getBounds()
+    const to = this.contentBounds()
+    const start = Date.now()
+    const ease = (t: number): number => 1 - Math.pow(1 - t, 3)
+    const tick = (): void => {
+      if (this.windowClosed || wc.isDestroyed()) return
+      const t = Math.min(1, (Date.now() - start) / QUICK_VIEW_EXPAND_MS)
+      const k = ease(t)
+      const lerp = (a: number, b: number): number => Math.round(a + (b - a) * k)
+      view.setBounds({
+        x: lerp(from.x, to.x),
+        y: lerp(from.y, to.y),
+        width: lerp(from.width, to.width),
+        height: lerp(from.height, to.height)
+      })
+      if (t < 1) setTimeout(tick, 8)
+      else done()
+    }
+    tick()
+  }
+
+  private copyQuickViewUrl(markdown: boolean): void {
+    const tab = this.quickView?.tab
+    if (!tab) return
+    const url = stripTracking(tab.url)
+    clipboard.writeText(markdown ? `[${tab.title}](${url})` : url)
+    this.toast({ id: 'copy-url', message: markdown ? 'Copied as Markdown!' : 'Copied the link', timeout: 2500 })
   }
 
   /** File › Save Page As… (complete, or HTML only). */
@@ -4160,31 +4439,8 @@ export class Browser {
     const existing = this.views.get(tab.id)
     if (existing && !this.forgetDeadView(tab.id)) return existing
     tab.discarded = false
-    const view = adopt
-      ? new WebContentsView({ webContents: adopt })
-      : new WebContentsView({
-          webPreferences: {
-            sandbox: true,
-            contextIsolation: true,
-            nodeIntegration: false,
-            session: this.sessionFor(tab),
-            scrollBounce: true,
-            spellcheck: true,
-            // Chromium's PDF viewer.
-            plugins: true,
-            // Zepper's page script runs in iframes too (still sandboxed and isolated): sign-in forms, ad
-            // filtering and privacy protections inside embedded frames.
-            nodeIntegrationInSubFrames: true,
-            // Frames Zepper's dialog shim doesn't reach get a "stop dialogs" option.
-            safeDialogs: true
-          }
-        })
+    const view = this.pageView(this.sessionFor(tab), adopt)
     view.setBorderRadius(this.settings.cornerRadius)
-    // Part of fingerprinting protection: WebRTC only uses the public interface, so pages can't learn local addresses.
-    view.webContents.setWebRTCIPHandlingPolicy(this.settings.blockFingerprinting ? 'default_public_interface_only' : 'default')
-    // Like Chrome: pages without a background of their own are white, in dark mode too
-    // (pages that support dark mode paint their own).
-    view.setBackgroundColor('#ffffff')
     this.views.set(tab.id, view)
     this.tabByWebContents.set(view.webContents.id, tab.id)
     this.wire(tab.id, view.webContents)
@@ -4197,6 +4453,35 @@ export class Browser {
       if (history && history.entries[history.index]?.url === tab.url) void view.webContents.navigationHistory.restore(history)
       else void view.webContents.loadURL(tab.url).catch(() => {})
     }
+    return view
+  }
+
+  /** A view for a web page, new or for a page that already exists (`adopt`), in a session. */
+  private pageView(ses: Session, adopt?: WebContents): WebContentsView {
+    const view = adopt
+      ? new WebContentsView({ webContents: adopt })
+      : new WebContentsView({
+          webPreferences: {
+            sandbox: true,
+            contextIsolation: true,
+            nodeIntegration: false,
+            session: ses,
+            scrollBounce: true,
+            spellcheck: true,
+            // Chromium's PDF viewer.
+            plugins: true,
+            // Zepper's page script runs in iframes too (still sandboxed and isolated): sign-in forms, ad
+            // filtering and privacy protections inside embedded frames.
+            nodeIntegrationInSubFrames: true,
+            // Frames Zepper's dialog shim doesn't reach get a "stop dialogs" option.
+            safeDialogs: true
+          }
+        })
+    // Part of fingerprinting protection: WebRTC only uses the public interface, so pages can't learn local addresses.
+    view.webContents.setWebRTCIPHandlingPolicy(this.settings.blockFingerprinting ? 'default_public_interface_only' : 'default')
+    // Like Chrome: pages without a background of their own are white, in dark mode too
+    // (pages that support dark mode paint their own).
+    view.setBackgroundColor('#ffffff')
     return view
   }
 
@@ -4333,7 +4618,8 @@ export class Browser {
       for (const [event, listener] of listening) wc.removeListener(event as never, listener as never)
     })
     const update = (patch: Partial<Tab>): void => {
-      const tab = this.tab(tabId)
+      // Quick View's tab isn't in the sidebar, but its card shows its title and icon.
+      const tab = this.tab(tabId) ?? (this.quickView?.tab.id === tabId ? this.quickView.tab : undefined)
       if (!tab) return
       Object.assign(tab, patch)
       this.broadcast()
@@ -5850,9 +6136,9 @@ export class Browser {
   onJsDialog(event: IpcMainEvent, kind: string, message: string, value: string): void {
     const type = kind === 'confirm' || kind === 'prompt' ? kind : 'alert'
     const cancelled = type === 'confirm' ? false : null
-    const popup = this.popupWindow(event.sender.id)
+    const popup = this.popupWindow(event.sender.id) ?? (this.quickView?.view.webContents.id === event.sender.id ? this.win : undefined)
     if (popup) {
-      // In a popup window, a sheet on that window (there's no text field for prompt()).
+      // In a popup window (or Quick View), a sheet on that window (there's no text field for prompt()).
       if (type === 'prompt') return void (event.returnValue = null)
       void dialog
         .showMessageBox(popup, {
@@ -5969,7 +6255,7 @@ export class Browser {
 
   openFind(): void {
     // Not over a page dialog or permission prompt, which need the whole overlay.
-    if (!this.activeWebContents() || this.showingDialog !== null || this.showingPrompt !== null) return
+    if (!this.activeWebContents() || this.showingDialog !== null || this.showingPrompt !== null || this.quickView) return
     this.emit({ type: 'find.open' }, 'overlay')
     this.setOverlayMode('corner')
     this.overlay.webContents.focus()
@@ -6408,6 +6694,10 @@ export class Browser {
             this.openInput(params.linkURL, 'split')
           }
         },
+        // Not from Quick View's own page, which isn't a tab of its own yet.
+        ...(tab && /^https?:/i.test(params.linkURL)
+          ? [{ label: 'Open Link in Quick View', click: () => this.openQuickView(params.linkURL, tabId, null) }]
+          : []),
         ...this.openInSpaceItems(params.linkURL, tab?.spaceId ?? null),
         // From a private window, links stay private.
         {
@@ -6624,6 +6914,9 @@ export class Browser {
     const printing = this.printPreview && this.tabByWebContents.get(this.printPreview.page.id)
     if (this.printPreview && (!printing || !wanted.has(printing))) this.printPreview.close()
     this.printPreview?.raise()
+    // So does Quick View, over the tab it opened from.
+    if (this.quickView && !wanted.has(this.quickView.openerId)) this.closeQuickView()
+    this.placeQuickView()
     this.layout()
   }
 
@@ -6729,7 +7022,17 @@ export class Browser {
   private snapshot(): Snapshot {
     return {
       spaces: this.spaces,
-      tabs: this.tabs.map((tab) => (this.isDeveloping(tab) ? { ...tab, developing: true } : tab)),
+      tabs: this.tabs.map((tab) => {
+        const developing = this.isDeveloping(tab)
+        // The tab Quick View is open over shows its page's icon.
+        const quick = this.quickView?.openerId === tab.id ? this.quickView.tab : null
+        if (!developing && !quick) return tab
+        return {
+          ...tab,
+          ...(developing ? { developing: true } : {}),
+          ...(quick ? { quickView: { title: quick.title, favicon: quick.favicon } } : {})
+        }
+      }),
       activeSpaceId: this.activeSpaceId,
       activeTabId: this.activeTabId,
       sidebarWidth: this.sidebarWidth,
@@ -6758,7 +7061,8 @@ export class Browser {
       windowSize: this.win && !this.win.isDestroyed() ? this.windowBounds() : { width: 0, height: 0, x: 0, y: 0 },
       splits: this.splits,
       panes: this.win && !this.win.isDestroyed() ? this.panes() : [],
-      devtools: [...this.devtools].map(([tabId, panel]) => ({ tabId, panel }))
+      devtools: [...this.devtools].map(([tabId, panel]) => ({ tabId, panel })),
+      quickView: this.quickView ? { id: this.quickView.id, openerId: this.quickView.openerId, tab: this.quickView.tab } : null
     }
   }
 

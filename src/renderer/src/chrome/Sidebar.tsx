@@ -39,6 +39,8 @@ interface SidebarProps {
 export function Sidebar({ snapshot, width, onResize, floating = false }: SidebarProps): React.JSX.Element {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const activeTab = snapshot.tabs.find((t) => t.id === snapshot.activeTabId) ?? null
+  // While Quick View is open, the address and the buttons beside it are its page's.
+  const frontTab = snapshot.quickView?.tab ?? activeTab
 
   useUiEvents(
     useCallback((event: UiEvent) => {
@@ -49,7 +51,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
   return (
     <aside className="sidebar" style={{ width }}>
       <TopRow
-        tab={activeTab}
+        tab={frontTab}
         isPrivate={snapshot.kind === 'private'}
         extensionsRow={snapshot.settings.extensionsRow}
         update={snapshot.update}
@@ -59,7 +61,7 @@ export function Sidebar({ snapshot, width, onResize, floating = false }: Sidebar
         sidebarButton={snapshot.fullScreenWindow || (isLinux && snapshot.systemTitleBar)}
         compact={snapshot.compact}
       />
-      <UrlPill tab={activeTab} />
+      <UrlPill tab={frontTab} />
       {snapshot.settings.extensionsRow && snapshot.kind !== 'private' && <ExtensionsRow />}
       <div className="sidebar-body">
         <SpacesViewport

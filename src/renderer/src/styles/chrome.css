@@ -2040,6 +2040,24 @@ button.site-button.insecure:hover {
 /* ---- Camera, microphone and screen in use ---------------------------------------------- */
 
 /* Solid dots in macOS's indicator colours with a white symbol: they read on any theme, light or dark. */
+/* The page open in Quick View over the tab: its icon, on a tile of its own at the end of the row. */
+.tab-quick-view {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.14);
+}
+
+/* Before the page's icon is known: the globe, dark on the white tile. */
+.tab-quick-view .favicon-fallback {
+  color: #6e6e73;
+}
+
 .tab-capture {
   flex: none;
   display: inline-flex;

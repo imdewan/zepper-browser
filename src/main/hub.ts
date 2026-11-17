@@ -40,6 +40,7 @@ import { SECURE_DNS_SERVERS } from '@shared/settings'
 import type { SettingsStore } from './settings-store'
 import { CertificateStore } from './site'
 import { PASSWORDS_CHANNEL, type PageMessage } from './autofill'
+import { QUICK_VIEW_CHANNEL } from './quick-view'
 import { handleVaultRequest } from './password-settings'
 import { DEFAULT_PROFILE, Profiles } from './profiles'
 import { locationAccess } from './native'
@@ -210,6 +211,16 @@ export class Hub {
     ipcMain.on('zepper:typing', (event, typing: unknown) =>
       this.owner(event.sender)?.onTyping(event.sender, event.senderFrame, typing === true)
     )
+    // A link clicked on a page: whether it opens in Quick View. The page waits for the answer, so there always is one.
+    ipcMain.on(QUICK_VIEW_CHANNEL, (event, link: unknown, modifier: unknown, box: unknown) => {
+      let open = false
+      try {
+        open = this.owner(event.sender)?.onLinkClick(event.sender, event.senderFrame, String(link), modifier === true, box) ?? false
+      } catch (error) {
+        console.warn('[quick view]', error)
+      }
+      event.returnValue = open
+    })
     // Settings › Passwords (Zepper's own UI only).
     ipcMain.handle(IPC.vault, async (event, request: VaultRequest) => {
       const browser = this.uiOwner(event.sender)

@@ -13,6 +13,12 @@ export const USER_AGENT_LABELS: Record<UserAgentChoice, string> = {
 export type PipSize = 'small' | 'medium' | 'large'
 
 /**
+ * Quick View: a link opens in a preview over the page you're on, which you can open as a tab. 'click':
+ * links to other sites do, and any link you ⌥-click; 'modifier': only links you ⌥-click; 'off': none.
+ */
+export type QuickViewMode = 'click' | 'modifier' | 'off'
+
+/**
  * How far the overlay reaches past the sidebar while it peeks in compact mode: room for the card's
  * 6px inset and its shadow to fade out (a shadow cut off at the overlay's edge shows as a hard line).
  */
@@ -97,6 +103,8 @@ export interface Settings {
   translateTo: string
   /** Show the Tidy button beside Clear. */
   showTidy: boolean
+  /** Which links open in Quick View (see QuickViewMode). */
+  quickView: QuickViewMode
   // Media
   autoPictureInPicture: boolean
   /** Floating player width as a share of the screen. */
@@ -216,6 +224,7 @@ export const DEFAULT_SETTINGS: Settings = {
   offerTranslation: true,
   translateTo: '',
   showTidy: true,
+  quickView: 'click',
   autoPictureInPicture: true,
   pipSize: 'medium',
   showMediaCard: true,
