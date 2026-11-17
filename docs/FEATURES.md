@@ -19,10 +19,12 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - New windows (⌘N) open with all your spaces (their sign-ins and Essentials, not their pinned or open tabs), starting on the one you're in, at your window's size; or empty, if you prefer (Settings → General)
 - New windows (⌘N) open on the space you're in, with no tabs, at your window's size
 - Default browser: links and files opened from other apps open in Zepper (Settings → General)
-- Print (⌘P), Save Page As (⇧⌘S), Export as PDF, Open File (⌘O), View Source (⌥⌘U), and Chromium's PDF viewer
+- **Print preview** (⌘P, or a page's own Print button), as in Chrome: the page as it will print, to Save as PDF or a printer on your Mac, with pages, copies, layout, colour, paper size, margins, scale, headers and footers, and background graphics. Your choices are kept for next time (pages and copies start over), a page that sets its own paper size prints on it, and Save as PDF names the file after the page's title. Print Using System Dialog (⌥⌘P) opens the Mac's own
+- Save Page As (⇧⌘S), Export as PDF, Open File (⌘O), View Source (⌥⌘U), and Chromium's PDF viewer
 - **Reader Mode** (⌥⌘R, or ⋯ in the address pill): the article on its own, found as Firefox's Reader View finds it, in a clean page with text size and light, sepia or dark (kept for the next one). Done, or Back, returns to the page
 - Zoom in Chrome's steps, remembered per site, with a notice to reset; pinch to zoom
 - Point at a link to see its address in the page's bottom corner, as in Chrome: the site stands out, the whole address shows if you keep pointing, and it moves to the other corner when the pointer comes near
+- **Error pages that say what went wrong,** as Chrome's do: the address couldn't be found, the site refused to connect or took too long, you're offline, too many redirects, an expired or untrusted certificate, a file that moved. Each has a picture, what to try, the error's code and Reload, and one that failed for want of a connection loads by itself once you're back online
 - A crashed page keeps its tab and offers Reload; a page that stops responding can be waited for or closed
 - Closing a tab with unsaved changes asks first ("Leave site?")
 - **Your own shortcuts** (Settings → Shortcuts): click one and press the new keys (⌫ takes it off, Esc keeps it). Keys another command has are offered to move over; the menus' own (Copy, Quit, tabs, Essentials, spaces) can't be given away, and the system's (Spotlight, screenshots) come with a warning that macOS may take them first. Each can go back to its own, or all at once
@@ -57,6 +59,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
   - add to (or reorder) Essentials;
   - move to another space by dropping on its dot.
 - **Split view:** up to four tabs side by side, stacked or in a grid, with resizable dividers.
+- **Quick View:** click a link to another site and it opens in a card over the page you're on, growing from the link; ⌥-click (Alt-click on Linux) opens any link there. Round buttons beside the card close it, open it as a tab (⇧⌘↩) or open it beside the page in split view; Esc, ⌘W or a click outside close it too, and it shrinks back to its link. While it's open, the tab it's over shows its icon and the address at the top of the sidebar is its page's. Opened as a tab, it keeps its page as it is, back and forward included. Settings → Tabs chooses Click, ⌥-click only, or Off, and a link's right-click menu has Open Link in Quick View.
 - **Tidy:** one click groups a space's tabs into named folders, with Undo. It uses Apple Intelligence on the Mac (macOS 26 and later), so nothing leaves your computer; elsewhere it groups tabs from the same site.
 - **Tabs you haven't opened lately:** a card above them offers to close them (one ⇧⌘T brings them back) or set them aside in a folder; after 3 days by default (Settings → Tabs).
 - Reopen closed tabs, unload tabs, clear unpinned tabs.

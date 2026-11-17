@@ -12,7 +12,7 @@ Fork it, change anything, and see it in a second. No Chromium to compile.
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-2f6fd6?style=flat-square)](LICENSE)
 [![Platform: macOS](https://img.shields.io/badge/platform-macOS-1d1d1f?style=flat-square&logo=apple&logoColor=white)](#download)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux-1d1d1f?style=flat-square&logo=linux&logoColor=white)](#linux)
-[![Electron](https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-45-47848f?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![CI](https://github.com/imdewan/zepper-browser/actions/workflows/ci.yml/badge.svg)](https://github.com/imdewan/zepper-browser/actions/workflows/ci.yml)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-34a853?style=flat-square)](CONTRIBUTING.md)
@@ -89,6 +89,7 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 - **Pinned tabs** per space that survive restarts, organised in nestable **folders**.
 - **Drag and drop** for everything: reorder, pin, add to Essentials, move to another space.
 - **Split view:** up to four tabs side by side, stacked or in a grid.
+- **Quick View:** a link to another site opens in a card over the page, to close or keep as a tab; ⌥-click opens any link there.
 - **Compact mode** hides the sidebar until you reach for the window edge.
 
 **Command bar.** ⌘T to search, enter an address or jump to an open tab. DuckDuckGo bangs (`!yt cats`, `!gh electron`) resolve locally, so they go straight to the site.
@@ -126,7 +127,7 @@ The whole UI is React and CSS. Fork it, restyle it, add features. Hot reload sho
 
 **Moving in is easy.** A short setup on first launch brings over your history and passwords from Chrome, Brave, Arc, Firefox, Safari and others.
 
-**Everything you expect from a browser.** Automatic updates, Chrome-style screen sharing with tab or system audio, default browser support, Chrome Web Store extensions, downloads and history, Print, Save Page As and Export as PDF, a built-in PDF viewer, per-site zoom, find in page, certificate details and site permissions, and trackpad swipes to go back and forward.
+**Everything you expect from a browser.** Automatic updates, Chrome-style screen sharing with tab or system audio, default browser support, Chrome Web Store extensions, downloads and history, print preview with Save as PDF (as in Chrome), Save Page As, a built-in PDF viewer, error pages that say what went wrong, per-site zoom, find in page, certificate details and site permissions, and trackpad swipes to go back and forward.
 
 See the [full feature list](docs/FEATURES.md).
 
