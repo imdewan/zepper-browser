@@ -1794,6 +1794,8 @@ export class Browser {
         return this.spaceContextMenu(command.spaceId, command.anchor)
       case 'space.clearTabs':
         return this.clearTabs(command.spaceId)
+      case 'space.clearMenu':
+        return this.clearMenu(command.spaceId, command.anchor)
       case 'ui.setSidebarWidth':
         this.sidebarWidth = Math.round(Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, command.width)))
         this.layout()
@@ -3468,7 +3470,50 @@ export class Browser {
   private clearTabs(spaceId: string): void {
     const inSpace = this.tabs.filter((t) => t.kind === 'normal' && t.spaceId === spaceId)
     const safe = inSpace.filter((t) => t.id !== this.activeTabId && !t.audible)
-    const closing = safe.length > 0 ? safe : inSpace
+    this.closeTogether(safe.length > 0 ? safe : inSpace)
+  }
+
+  /**
+   * The menu beside Clear: close all of a space's unpinned tabs, those above or below the one you're on,
+   * those you haven't opened in a day, 3 days or a week (each when there are some), or those unloaded to
+   * save memory. Tabs playing sound or in split view stay unless you pick them by where they are.
+   */
+  private clearMenu(spaceId: string, anchor: Rect): void {
+    const normal = this.tabs.filter((t) => t.kind === 'normal' && t.spaceId === spaceId)
+    const current = normal.findIndex((t) => t.id === this.activeTabId)
+    const above = current > 0 ? normal.slice(0, current) : []
+    const below = current >= 0 ? normal.slice(current + 1) : []
+    const idle = normal.filter((t) => t.id !== this.activeTabId && !t.audible && !this.splitOf(t.id))
+    const now = Date.now()
+    const unused = (days: number): Tab[] => idle.filter((t) => now - t.lastActiveAt > days * 86_400_000)
+    const unloaded = idle.filter((t) => t.discarded)
+    const item = (label: string, tabs: Tab[]): MenuItemConstructorOptions => ({
+      label: tabs.length ? `${label} (${tabs.length})` : label,
+      enabled: tabs.length > 0,
+      click: () => this.closeTogether(tabs)
+    })
+    const items: MenuItemConstructorOptions[] = [
+      { label: 'Close All Unpinned Tabs', enabled: normal.length > 0, click: () => this.clearTabs(spaceId) },
+      { type: 'separator' },
+      item('Close Tabs Above', above),
+      item('Close Tabs Below', below)
+    ]
+    const ages = (
+      [
+        [1, 'a Day'],
+        [3, '3 Days'],
+        [7, 'a Week']
+      ] as const
+    )
+      .map(([days, span]) => ({ span, tabs: unused(days) }))
+      .filter(({ tabs }) => tabs.length > 0)
+    if (ages.length) items.push({ type: 'separator' }, ...ages.map(({ span, tabs }) => item(`Close Tabs Not Opened in ${span}`, tabs)))
+    if (unloaded.length) items.push({ type: 'separator' }, item('Close Unloaded Tabs', unloaded))
+    this.popup(items, anchor)
+  }
+
+  /** Closes tabs together: ⇧⌘T, or the toast's Undo, brings them all back. */
+  private closeTogether(closing: Tab[]): void {
     if (closing.length === 0) return
     const batch = ++this.closeBatch
     for (const tab of closing) {

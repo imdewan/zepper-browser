@@ -568,6 +568,8 @@ export type Command =
     }
   | { type: 'space.contextMenu'; spaceId: string; anchor: Rect }
   | { type: 'space.clearTabs'; spaceId: string }
+  /** The menu beside Clear: other ways to close a space's unpinned tabs. */
+  | { type: 'space.clearMenu'; spaceId: string; anchor: Rect }
   | { type: 'ui.setSidebarWidth'; width: number }
   | { type: 'ui.openPalette'; mode: 'new' | 'current' | 'split' }
   | { type: 'ui.closePalette'; refocus: boolean }

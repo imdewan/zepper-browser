@@ -432,9 +432,21 @@ function SpaceView({
             className={cx('clear-button', canClear && 'can-clear')}
             title={`Close all unpinned tabs (${shortcut('⇧⌘K')})`}
             onClick={() => zepper.send({ type: 'space.clearTabs', spaceId: space.id })}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              zepper.send({ type: 'space.clearMenu', spaceId: space.id, anchor: rectOf(e.currentTarget) })
+            }}
           >
             Clear
             <IconArrowDown size={10} />
+          </button>
+          <button
+            className="clear-button clear-more"
+            title="More ways to clear: above or below this tab, not opened lately, unloaded"
+            aria-label="More ways to clear"
+            onClick={(e) => zepper.send({ type: 'space.clearMenu', spaceId: space.id, anchor: rectOf(e.currentTarget) })}
+          >
+            <IconChevronDown size={10} />
           </button>
         </div>
 

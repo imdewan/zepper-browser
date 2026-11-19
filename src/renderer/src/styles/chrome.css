@@ -1214,8 +1214,16 @@ button.site-button.insecure:hover {
 }
 
 .clear-button.can-clear svg,
-.tidy-button svg {
+.tidy-button svg,
+.clear-more svg {
   display: block;
+}
+
+/* The menu beside Clear: just its chevron, close to it. */
+.sidebar:hover .clear-more {
+  max-width: 18px;
+  padding: 2px 2px;
+  margin-left: -3px;
 }
 
 .new-tab-row {
