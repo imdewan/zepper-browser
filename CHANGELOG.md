@@ -4,6 +4,8 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-19
+
 ### Added
 
 - **More ways to clear tabs.** The chevron beside Clear (or a right-click on it) closes the tabs above or below the one you're on, the ones you haven't opened in a day, 3 days or a week (each when there are some), or the ones unloaded to save memory, and says how many each closes. ⇧⌘T or Undo brings them back. Clear itself still closes every unpinned tab.
@@ -408,7 +410,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/imdewan/zepper-browser/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/imdewan/zepper-browser/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/imdewan/zepper-browser/compare/v0.1.25...v0.2.0
 [0.1.25]: https://github.com/imdewan/zepper-browser/compare/v0.1.24...v0.1.25
