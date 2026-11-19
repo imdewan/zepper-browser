@@ -1,83 +1,114 @@
-/* Floating video player controls (drawn over the video, transparent elsewhere). */
+/* Floating video player controls, laid out as Chromium's (drawn over the video, transparent elsewhere). */
 
+/* Grab the player anywhere but its controls to move it. */
 .pip {
   position: fixed;
   inset: 0;
   color: #fff;
   cursor: default;
+  -webkit-app-region: drag;
 }
 
-.pip > :not(.pip-drag) {
+.pip button,
+.pip-progress {
+  -webkit-app-region: no-drag;
+}
+
+/* Hidden controls take no clicks: a click there moves the player. */
+.pip-scrim,
+.pip-shade,
+.pip-top,
+.pip-center,
+.pip-bottom {
   opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0s linear 0.2s;
+}
+
+.pip.show :is(.pip-scrim, .pip-shade, .pip-center, .pip-bottom),
+.pip.show-top :is(.pip-top, .pip-shade.top) {
+  opacity: 1;
+  visibility: visible;
   transition: opacity 0.2s ease;
 }
 
-.pip.show > :not(.pip-drag) {
-  opacity: 1;
-}
-
-/* Grab the top edge to move the player. */
-.pip-drag {
+.pip-scrim {
   position: absolute;
-  top: 0;
-  left: 44px;
-  right: 44px;
-  height: 34px;
-  -webkit-app-region: drag;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  pointer-events: none;
 }
 
 .pip-shade {
   position: absolute;
   left: 0;
   right: 0;
-  height: 64px;
+  height: 72px;
   pointer-events: none;
 }
 
 .pip-shade.top {
   top: 0;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent);
 }
 
 .pip-shade.bottom {
   bottom: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
 }
 
-.pip-button {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+/* Site, then back to tab and close. */
+.pip-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 5px 0 9px;
+}
+
+.pip-favicon {
+  flex: none;
+}
+
+.pip-site {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.pip-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   color: #fff;
-  background: rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(12px);
   transition:
     background-color 0.12s ease,
     transform 0.12s ease;
 }
 
-.pip-button:hover {
-  background: rgba(255, 255, 255, 0.26);
+.pip-icon:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
-.pip-button:active {
+.pip-icon:active {
   transform: scale(0.92);
 }
 
-.pip-button.back {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-}
-
-.pip-button.close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-}
-
+/* Back 10, play/pause, forward 10. */
 .pip-center {
   position: absolute;
   top: 50%;
@@ -85,133 +116,144 @@
   translate: -50% -50%;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 
-.pip-skip {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+.pip-seek,
+.pip-play {
   display: grid;
   place-items: center;
+  border-radius: 50%;
   color: #fff;
-  background: rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(14px);
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.35));
   transition:
-    transform 0.15s ease,
-    background-color 0.12s ease;
+    background-color 0.12s ease,
+    transform 0.12s ease;
 }
 
-.pip-skip:hover {
-  background: rgba(0, 0, 0, 0.45);
-  transform: scale(1.06);
-}
-
-.pip-skip:active {
-  transform: scale(0.9);
-}
-
-/* Brief "+10s" confirmation beside the controls; always visible, even after they hide. */
-.pip > .pip-skipped {
-  position: absolute;
-  top: 50%;
-  padding: 3px 8px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(10px);
-  opacity: 1;
-  pointer-events: none;
-  animation: pip-skipped 0.65s ease forwards;
-}
-
-.pip-skipped.back {
-  right: calc(50% + 100px);
-}
-
-.pip-skipped.forward {
-  left: calc(50% + 100px);
-}
-
-@keyframes pip-skipped {
-  0% {
-    opacity: 0;
-    translate: 0 -50%;
-  }
-  20% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    translate: 0 calc(-50% - 10px);
-  }
+.pip-seek {
+  width: 36px;
+  height: 36px;
 }
 
 .pip-play {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-  transition:
-    transform 0.15s ease,
-    background-color 0.12s ease;
+  width: 52px;
+  height: 52px;
 }
 
+.pip-seek:hover,
 .pip-play:hover {
-  background: rgba(0, 0, 0, 0.5);
-  transform: scale(1.06);
+  background: rgba(255, 255, 255, 0.16);
 }
 
-/* Small players: tighten so all three fit. */
-@media (max-width: 300px) {
+.pip-seek:active,
+.pip-play:active {
+  transform: scale(0.92);
+}
+
+/* The time and mute, then the progress bar (with previous and next beside it). */
+.pip-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 6px 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pip-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pip-time {
+  flex: 1;
+  padding-left: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.pip-live {
+  margin: 0 auto 0 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: #e5342b;
+}
+
+.pip-progress,
+.pip-progress-space {
+  position: relative;
+  flex: 1;
+  height: 22px;
+  margin: 0 6px;
+}
+
+.pip-progress {
+  cursor: pointer;
+  touch-action: none;
+}
+
+.pip-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 3px;
+  translate: 0 -50%;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+  transition: height 0.12s ease;
+}
+
+.pip-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.pip-knob {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  scale: 0;
+  transition: scale 0.12s ease;
+}
+
+.pip-progress:hover .pip-track,
+.pip-progress.scrubbing .pip-track {
+  height: 5px;
+}
+
+.pip-progress:hover .pip-knob,
+.pip-progress.scrubbing .pip-knob {
+  scale: 1;
+}
+
+/* Small players: tighten so the middle three fit. */
+@media (max-width: 240px) {
   .pip-center {
     gap: 8px;
   }
-  .pip-skip {
-    width: 34px;
-    height: 34px;
+  .pip-seek {
+    width: 30px;
+    height: 30px;
   }
   .pip-play {
-    width: 46px;
-    height: 46px;
+    width: 44px;
+    height: 44px;
   }
-  .pip-skipped.back {
-    right: calc(50% + 80px);
-  }
-  .pip-skipped.forward {
-    left: calc(50% + 80px);
-  }
-}
-
-.pip-play:active {
-  transform: scale(0.94);
-}
-
-.pip-bottom {
-  position: absolute;
-  left: 12px;
-  right: 8px;
-  bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pip-title {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 /* ---- A page's floating call window: its title bar (the call is drawn below it) --------- */

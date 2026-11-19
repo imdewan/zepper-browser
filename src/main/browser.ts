@@ -83,6 +83,7 @@ import {
 } from '@shared/types'
 import type { Hub } from './hub'
 import { ERROR_TITLES, crashError, describeError, errorPage } from './error-pages'
+import { FIND_IN_SHADOWS } from './page-media'
 import { PipPlayer } from './pip'
 import { PrintPreview, type PrintHost } from './print-preview'
 import { QUICK_VIEW_RADIUS, opensInQuickView } from './quick-view'
@@ -277,9 +278,10 @@ const PAUSED_SOUND_MS = 1000
  * playing with sound. Pings, ringtones and call audio are neither. null: no media here.
  */
 const MEDIA_METADATA_SCRIPT = `(() => {
+  ${FIND_IN_SHADOWS}
   const m = navigator.mediaSession && navigator.mediaSession.metadata
   // A call's streams (camera, screen, other people) aren't media.
-  const playing = Array.from(document.querySelectorAll('video, audio')).some(
+  const playing = zepperFind('video, audio').some(
     (el) => !el.srcObject && !el.paused && !el.ended && !el.muted && el.volume > 0 && el.readyState >= 2 && (!isFinite(el.duration) || el.duration >= 20)
   )
   if (!(m && m.title) && !playing) return null
@@ -315,9 +317,6 @@ const EXIT_PAUSED_PIP_SCRIPT = `(() => {
   document.exitPictureInPicture()
   return true
 })()`
-
-/** Whether the video in Zepper's floating player has paused. */
-const PLAYER_PAUSED_SCRIPT = `!!document.querySelector('video[data-zepper-pip]')?.paused`
 
 /** Finger travel (trackpad px, momentum excluded) that navigates back or forward. */
 const SWIPE_DISTANCE = 170
@@ -389,11 +388,12 @@ const DOCUMENT_PIP_FRAME = 'zepper-document-pip'
 /** Calls the page's "enterpictureinpicture" handler (Meet's own floating call window), as Chrome does on leaving a call. */
 const ENTER_PIP_SCRIPT = `(() => { const enter = window[Symbol.for('zepper.enterPictureInPicture')]; return enter ? enter() : false })()`
 
-/** Skips the floating (or playing, or first) video/audio element by some seconds; true when it found one. */
-function mediaSeekScript(seconds: number): string {
+/** Skips a frame's playing video or audio element by some seconds, or with `anyMedia` its first one; true when it found one. */
+function mediaSeekScript(seconds: number, anyMedia: boolean): string {
   return `(() => {
-  const media = Array.from(document.querySelectorAll('video, audio'))
-  const el = document.querySelector('video[data-zepper-pip]') || media.find((m) => !m.paused) || media[0]
+  ${FIND_IN_SHADOWS}
+  const media = zepperFind('video, audio')
+  const el = media.find((m) => !m.paused) || (${anyMedia} ? media[0] : null)
   if (!el) return false
   const end = Number.isFinite(el.duration) ? el.duration - 0.25 : Infinity
   el.currentTime = Math.max(0, Math.min(end, el.currentTime + ${seconds}))
@@ -559,12 +559,14 @@ const LANGUAGE_SCRIPT = `({ lang: document.documentElement.lang || '', sample: (
 
 /** Pauses every playing video and audio element. */
 const MEDIA_PAUSE_SCRIPT = `(() => {
-  document.querySelectorAll('video, audio').forEach((el) => { if (!el.paused) el.pause() })
+  ${FIND_IN_SHADOWS}
+  zepperFind('video, audio').forEach((el) => { if (!el.paused) el.pause() })
 })()`
 
 /** Pauses whatever is playing in a frame (remembering it); 'paused' if anything was. */
 const MEDIA_PAUSE_PLAYING_SCRIPT = `(() => {
-  const playing = Array.from(document.querySelectorAll('video, audio')).filter((el) => !el.paused)
+  ${FIND_IN_SHADOWS}
+  const playing = zepperFind('video, audio').filter((el) => !el.paused)
   if (!playing.length) return 'idle'
   playing.forEach((el) => el.pause())
   window.__zepperPaused = playing
@@ -573,7 +575,8 @@ const MEDIA_PAUSE_PLAYING_SCRIPT = `(() => {
 
 /** Resumes what we paused last time in a frame (or its first media element); 'playing' if it did. */
 const MEDIA_RESUME_SCRIPT = `(() => {
-  const media = Array.from(document.querySelectorAll('video, audio'))
+  ${FIND_IN_SHADOWS}
+  const media = zepperFind('video, audio')
   const resume = (window.__zepperPaused || media).filter((el) => el.isConnected)
   if (!resume[0]) return 'none'
   resume[0].play()
@@ -1960,7 +1963,7 @@ export class Browser {
       case 'media.seek': {
         const wc = this.views.get(command.tabId)?.webContents
         const seconds = Math.max(-600, Math.min(600, Number(command.seconds) || 0))
-        if (wc && seconds) void this.runInFrames(wc, mediaSeekScript(seconds), true, true)
+        if (wc && seconds) void this.seekMedia(command.tabId, wc, seconds)
         return
       }
       case 'media.pauseOthers':
@@ -1977,6 +1980,11 @@ export class Browser {
         this.pipBack(command.tabId)
         return call.close()
       }
+      case 'pip.seekTo':
+        return void this.pip.seekVideoTo(command.time)
+      case 'pip.track':
+        if (command.action === 'previoustrack' || command.action === 'nexttrack') void this.pip.track(command.action)
+        return
       case 'pip.close':
         // The video goes back to its tab and keeps playing there.
         this.pip.exit()
@@ -2256,7 +2264,8 @@ export class Browser {
     await new Promise((resolve) => setTimeout(resolve, PIP_DELAY_MS))
     if (this.windowClosed || this.attached.has(tabId) || this.activeTabId === tabId || !tab.audible || tab.muted) return
     if (this.views.get(tabId) !== view || this.pip.activeTabId === tabId) return
-    // Our floating player handles videos in the page itself; iframe videos fall back to Chromium's.
+    // Our floating player takes the video wherever it plays: in the page, an embedded player or a web
+    // component. Chromium's takes one it can't reach (in a web component that's closed to the page).
     let entered = await this.pip.enter(tabId, view)
     if (entered && (this.activeTabId === tabId || this.attached.has(tabId))) {
       this.pip.exit()
@@ -2276,7 +2285,7 @@ export class Browser {
     if (this.nativePipTabs.has(tabId)) {
       if (await this.runInFrames(wc, EXIT_PAUSED_PIP_SCRIPT, false, true)) this.nativePipTabs.delete(tabId)
     } else if (this.pip.activeTabId === tabId) {
-      const paused = await wc.executeJavaScript(PLAYER_PAUSED_SCRIPT).catch(() => false)
+      const paused = await this.pip.videoPaused()
       if (paused && this.pip.activeTabId === tabId) {
         this.pip.exit()
         this.broadcast()
@@ -2288,6 +2297,13 @@ export class Browser {
   private pipBack(tabId: string): void {
     this.activateTab(tabId)
     this.focusWindow()
+  }
+
+  /** Skips the floating video, else what's playing in whichever frame it's in, else the first media there is. */
+  private async seekMedia(tabId: string, wc: WebContents, seconds: number): Promise<void> {
+    if (this.pip.activeTabId === tabId && (await this.pip.seekVideo(seconds))) return
+    if (await this.runInFrames(wc, mediaSeekScript(seconds, false), true, true)) return
+    await this.runInFrames(wc, mediaSeekScript(seconds, true), true, true)
   }
 
   private pauseTab(tabId: string): void {
@@ -2352,6 +2368,7 @@ export class Browser {
   private async toggleMedia(tabId: string): Promise<void> {
     const wc = this.views.get(tabId)?.webContents
     if (!wc || wc.isDestroyed()) return
+    if (this.pip.activeTabId === tabId && (await this.pip.toggleVideo())) return
     let paused = false
     for (const frame of wc.mainFrame.framesInSubtree) {
       try {

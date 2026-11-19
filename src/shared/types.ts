@@ -729,6 +729,10 @@ export type Command =
   | { type: 'ui.createSpace' }
   | { type: 'pip.back' }
   | { type: 'pip.close' }
+  /** The floating player's progress bar: to this time in its video, in seconds. */
+  | { type: 'pip.seekTo'; time: number }
+  /** The floating player's previous and next buttons: the page's own (the Short before or after). */
+  | { type: 'pip.track'; action: 'previoustrack' | 'nexttrack' }
   /** Back to tab, from a page's floating call window: the tab comes forward and the window closes. */
   | { type: 'call.back'; tabId: string }
   | { type: 'split.add'; tabId: string }
@@ -738,7 +742,24 @@ export type Command =
   | { type: 'split.resize'; splitId: string; sizes: number[] }
 
 /** Events pushed from the main process to renderers. */
+/** Where the floating player's video is, for its controls; duration is null for a live stream. */
+export interface PipState {
+  time: number
+  duration: number | null
+  paused: boolean
+  /** The page has previous and next (Media Session), as for Shorts or a playlist. */
+  previous: boolean
+  next: boolean
+}
+
 export type UiEvent =
+  /** The floating player's video, a couple of times a second (to its controls). */
+  | { type: 'pip.state'; state: PipState }
+  /**
+   * The pointer moved over the floating player (inside), or left it. The player is a drag area, where a
+   * Mac doesn't pass the pointer's moves on to the page, so the main process watches for them.
+   */
+  | { type: 'pip.pointer'; inside: boolean }
   /**
    * A two-finger swipe back or forward, for the arrow at the page's edge: how far (0–1), whether
    * letting go now navigates (armed), and how it ended (commit: it navigates; cancel: it doesn't).

@@ -673,6 +673,42 @@ function documentPipShim(frameName: string, triggerKey: string): void {
   })
 }
 
+/** Where mediaActionsShim leaves its function, on the page's window (see STATE_SCRIPT in main/pip.ts). */
+const MEDIA_ACTIONS_KEY = 'zepper.mediaActions'
+
+/**
+ * Runs in the page's main world, in every frame: remembers the page's previous and next track handlers
+ * (Media Session: Shorts, a playlist), for the floating player's buttons, as Chromium's player shows them.
+ * window[Symbol.for(key)]() says which there are; with 'previoustrack' or 'nexttrack' it runs that one.
+ */
+function mediaActionsShim(key: string): void {
+  const sessionProto = navigator.mediaSession && (Object.getPrototypeOf(navigator.mediaSession) as object)
+  const setHandler = sessionProto && Object.getOwnPropertyDescriptor(sessionProto, 'setActionHandler')
+  if (!sessionProto || typeof setHandler?.value !== 'function') return
+  const handlers = new Map<string, (details: { action: string }) => void>()
+  Object.defineProperty(sessionProto, 'setActionHandler', {
+    ...setHandler,
+    value: new Proxy(setHandler.value as (action: string, handler: unknown) => void, {
+      apply(target, self, args: [string, unknown]) {
+        if (args[0] === 'previoustrack' || args[0] === 'nexttrack') {
+          if (typeof args[1] === 'function') handlers.set(args[0], args[1] as (details: { action: string }) => void)
+          else handlers.delete(args[0])
+        }
+        return Reflect.apply(target, self, args)
+      }
+    })
+  })
+  Object.defineProperty(window, Symbol.for(key), {
+    value: (action?: string) => {
+      if (!action) return { previous: handlers.has('previoustrack'), next: handlers.has('nexttrack') }
+      const handler = handlers.get(action)
+      if (!handler) return false
+      handler({ action })
+      return true
+    }
+  })
+}
+
 const DRM_NEEDED_CHANNEL = 'zepper:drm-needed'
 /** Fired on the document (shared by the page's world and ours) when the page asks for Widevine. */
 const DRM_NEEDED_EVENT = 'zepper-drm-needed'
@@ -820,6 +856,7 @@ function applyCompat(): void {
     document.addEventListener(captureEvent, (event) => ipcRenderer.send(CAPTURE_CHANNEL, String((event as CustomEvent).detail)))
     contextBridge.executeInMainWorld({ func: captureShim, args: [captureEvent] })
     if (window === window.top) contextBridge.executeInMainWorld({ func: documentPipShim, args: [DOCUMENT_PIP_FRAME, ENTER_PIP_KEY] })
+    contextBridge.executeInMainWorld({ func: mediaActionsShim, args: [MEDIA_ACTIONS_KEY] })
     if (config.hideChromium) contextBridge.executeInMainWorld({ func: hideChromiumShim, args: [config.vendor] })
     if (config.globalPrivacyControl) contextBridge.executeInMainWorld({ func: privacyControlShim })
     if (config.brand)
