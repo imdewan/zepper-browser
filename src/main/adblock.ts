@@ -154,13 +154,21 @@ const BRAVE_ONLY_SCRIPTS = new Set([
   'brave-youtube-theater-fix.js'
 ])
 
+interface Resource {
+  name: string
+  aliases?: string[]
+}
+
 /**
  * uBlock Origin's scriptlets and redirects (Ghostery's current build of them), with Brave's own scripts
  * (but those only Brave needs, see BRAVE_ONLY_SCRIPTS), which take no arguments and so run as they are,
- * as in Brave.
+ * as in Brave. A Brave script named as one of uBlock Origin's (optimizely.js, from November 2026) is
+ * left out, and an alias another already has dropped: the engine refuses a name twice, and then every
+ * list with it.
  */
-async function fetchResources(): Promise<string> {
-  const resources = JSON.parse(await fromCdn('ublock-resources-json')) as { redirects: unknown[] }
+async function fetchResources(withBrave = true): Promise<string> {
+  const resources = JSON.parse(await fromCdn('ublock-resources-json')) as { redirects: Resource[] }
+  if (!withBrave) return JSON.stringify(resources)
   try {
     const metadata = JSON.parse(await fetchText(`${BRAVE_RESOURCES}/metadata.json`)) as {
       name: string
@@ -177,7 +185,13 @@ async function fetchResources(): Promise<string> {
           return { name: resource.name, aliases, body, contentType: 'application/javascript' }
         })
     )
-    resources.redirects.push(...scripts)
+    const taken = new Set(resources.redirects.flatMap((resource) => [resource.name, ...(resource.aliases ?? [])]))
+    for (const script of scripts) {
+      if (taken.has(script.name)) continue
+      script.aliases = [...new Set(script.aliases)].filter((alias) => alias !== script.name && !taken.has(alias))
+      for (const name of [script.name, ...script.aliases]) taken.add(name)
+      resources.redirects.push(script)
+    }
   } catch (error) {
     console.warn("[adblock] couldn't add Brave's scripts", error)
   }
@@ -458,7 +472,14 @@ export class AdBlock {
       const [lists, resources] = await Promise.all([fetchLists(ENGINES[kind].lists), fetchResources()])
       const { text, methodRules } = splitMethodRules(sparingYouTubesParse(lists.join('\n')))
       const blocker = ElectronBlocker.parse(text)
-      blocker.updateResources(resources, String(resources.length))
+      try {
+        blocker.updateResources(resources, String(resources.length))
+      } catch (error) {
+        // Brave's scripts are extras: a clash among them mustn't leave the lists unused.
+        console.warn("[adblock] couldn't add Brave's scripts", error)
+        const plain = await fetchResources(false)
+        blocker.updateResources(plain, String(plain.length))
+      }
       const header = Buffer.from(JSON.stringify(methodRules))
       const length = Buffer.alloc(4)
       length.writeUInt32LE(header.length)
