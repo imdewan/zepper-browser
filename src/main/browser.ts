@@ -1443,6 +1443,7 @@ export class Browser {
       if (details.disposition === 'new-window' && details.features) {
         return {
           action: 'allow',
+          outlivesOpener: true,
           overrideBrowserWindowOptions: {
             width: 520,
             height: 700,
@@ -5023,9 +5024,11 @@ export class Browser {
       return { action: 'deny' }
     }
     // Real popups (OAuth, payment flows) keep their own window so window.opener keeps working.
+    // As in Chrome, a page's popups and tabs stay when it closes (Electron would close them with it).
     if (details.disposition === 'new-window' && details.features) {
       return {
         action: 'allow',
+        outlivesOpener: true,
         overrideBrowserWindowOptions: {
           width: 520,
           height: 700,
@@ -5048,6 +5051,7 @@ export class Browser {
     }
     return {
       action: 'allow',
+      outlivesOpener: true,
       createWindow: (options) => {
         const tab = makeTab({ kind: 'normal', url: details.url, spaceId })
         this.insertNormalTab(tab, opener?.kind === 'normal' ? opener.id : undefined)
