@@ -4,6 +4,22 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- **More ways to clear tabs.** The chevron beside Clear (or a right-click on it) closes the tabs above or below the one you're on, the ones you haven't opened in a day, 3 days or a week (each when there are some), or the ones unloaded to save memory, and says how many each closes. ⇧⌘T or Undo brings them back. Clear itself still closes every unpinned tab.
+
+### Changed
+
+- **The floating player is laid out as Chromium's.** The site's name and icon sit at the top left, with Back to tab and close at the top right; back 10 seconds, play/pause and forward 10 in the middle; and at the bottom the time, mute and a progress bar you can drag to any point, with previous and next when the site has them (Shorts, a playlist). The controls show while the pointer is over the player and hide when it leaves, over a light shade, and a live stream says LIVE instead of the time. It takes the video's shape too, so a Short floats upright.
+- **Move the floating player by dragging it anywhere**, not just its top edge. A click on the video no longer plays or pauses it, which got in the way of moving it; the play/pause button and Space still do.
+
+### Fixed
+
+- **Closing a tab closed the tabs opened from it.** A link that opened in a new tab, or a page's own new window, closed along with the tab it came from, and pop-ups (a sign-in, a payment) with their page. As in Chrome, they now stay.
+- **Ads got through on YouTube.** Since 18 November a clash between two of the blocker's scripts, both named optimizely.js, stopped its lists from updating. Zepper kept blocking with the lists it had, which fell behind YouTube's changes, and a new install blocked nothing. uBlock Origin's script now wins the clash, and a clash among Brave's extras can no longer stop the lists.
+- **YouTube Shorts float in Zepper's player.** They went to Chromium's plain window, because shrinking the page sent Shorts to another video. The page now keeps its size and is drawn smaller, so it stays on the Short you were watching, and the player follows it on to the next.
+- **Picture-in-picture works with embedded players.** A video playing in a frame (a YouTube or Vimeo video on another site, and the players many streaming and course sites use) or inside a web component now floats in Zepper's player, with its controls. Before, it went to Chromium's plain floating window, or didn't float at all. ±10s and play/pause now act on the floating video itself, not on another video on the page, like a muted ad.
+
 ## [0.2.1] - 2026-11-17
 
 ### Added

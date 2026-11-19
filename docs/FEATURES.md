@@ -62,7 +62,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 - **Quick View:** click a link to another site and it opens in a card over the page you're on, growing from the link; ⌥-click (Alt-click on Linux) opens any link there. Round buttons beside the card close it, open it as a tab (⇧⌘↩) or open it beside the page in split view; Esc, ⌘W or a click outside close it too, and it shrinks back to its link. While it's open, the tab it's over shows its icon and the address at the top of the sidebar is its page's. Opened as a tab, it keeps its page as it is, back and forward included. Settings → Tabs chooses Click, ⌥-click only, or Off, and a link's right-click menu has Open Link in Quick View.
 - **Tidy:** one click groups a space's tabs into named folders, with Undo. It uses Apple Intelligence on the Mac (macOS 26 and later), so nothing leaves your computer; elsewhere it groups tabs from the same site.
 - **Tabs you haven't opened lately:** a card above them offers to close them (one ⇧⌘T brings them back) or set them aside in a folder; after 3 days by default (Settings → Tabs).
-- Reopen closed tabs, unload tabs, clear unpinned tabs.
+- Reopen closed tabs, unload tabs, clear unpinned tabs: all of them, or (from the chevron beside Clear) those above or below the current tab, those not opened in a day, 3 days or a week, or those unloaded to save memory.
 - **Camera, microphone and screen indicators** on tabs using them, in macOS's colours (camera and microphone together show as one camera).
 
 ## Command bar and search
@@ -136,8 +136,8 @@ Everything here runs on your Mac with Apple's on-device models (macOS 26 and lat
 - **Now-playing card** for audio in other tabs: play/pause, mute, hide. It offers to pause other tabs when something new starts. Only media counts (a video or audio player, or a page that says what's playing), not notification sounds or call audio.
 - **Picture-in-picture:**
   - automatic when you leave a playing video; leaving a call (camera or microphone on) opens the site's own floating call window instead, as Chrome does (Google Meet), and it closes when you come back;
-  - a rounded, resizable floating player;
-  - ±10s, play/pause and mute controls, plus keyboard shortcuts.
+  - a rounded, resizable floating player that you drag from anywhere, shaped to the video (Shorts upright), for a video in the page, in an embedded player (another site's, in a frame) or in a web component; the page keeps its size, so Shorts stay on their video;
+  - controls laid out as Chromium's: the site, Back to tab and close; ±10s and play/pause; the time, mute and a progress bar to seek with, and previous and next when the site has them; plus keyboard shortcuts.
 - **Protected video:** opt-in Google Widevine, through castLabs' Electron, with VMP signing.
 - **Screen sharing** (Meet, Zoom, Teams…): a picker with your other tabs, windows and screens.
   - A tab can share its sound (and keeps playing for you).
