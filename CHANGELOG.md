@@ -4,6 +4,16 @@ Notable changes to Zepper. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-25
+
+### Fixed
+
+- **An extension opening a window at one of its own pages by a short address** (`chrome.windows.create` with `options.html`, say) didn't get that page. It now does.
+
+### Removed
+
+- **Loading a YouTube page again when its video kept reloading.** Zepper no longer reloads the page by itself after the player restarts a video four times without playing it.
+
 ## [0.2.2] - 2026-11-19
 
 ### Added
@@ -410,7 +420,8 @@ The first public version.
 - Now-playing card, automatic picture-in-picture and opt-in Widevine for protected video.
 - Print, Save Page As, Export as PDF, a PDF viewer, per-site zoom and the usual browser shortcuts.
 
-[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/imdewan/zepper-browser/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/imdewan/zepper-browser/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/imdewan/zepper-browser/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/imdewan/zepper-browser/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/imdewan/zepper-browser/compare/v0.1.25...v0.2.0
