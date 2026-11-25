@@ -76,7 +76,7 @@ What Zepper does today, by area. See [ARCHITECTURE.md](ARCHITECTURE.md) for how 
 
 ## Privacy and security
 
-- **Ad blocking:** built in, as Brave Shields does it: the same lists (uBlock Origin's, EasyList and EasyPrivacy, Brave's own and its first-party list, URLhaus's malware list), refreshed daily, and Brave's scripts. Covers network requests, cosmetic filtering and scriptlets, including YouTube ads.
+- **Ad blocking:** built in, as Brave Shields does it: the same lists (uBlock Origin's, EasyList and EasyPrivacy, Brave's own and its first-party list, URLhaus's malware list), refreshed every 8 hours, and Brave's scripts. Covers network requests, cosmetic filtering and scriptlets, including YouTube ads.
 - **Revoked certificates refused, as in Chrome.** Zepper fetches Chrome's CRLSet itself (the certificates Google blocks or revokes when a certificate authority's keys leak or it misissues), at launch and every 6 hours, from Google's update server as Chrome does, and refuses connections through anything it lists. A block reaches Zepper within hours, without an update. About Zepper shows which CRLSet it has.
 - **Protections, on by default.** Each can be turned off in Settings → Privacy, and all of them for one site from the lock icon:
   - **Cookie banners hidden**, with Brave's cookie notice blocker (Fanboy's and uBlock Origin's cookie lists, and Brave's).

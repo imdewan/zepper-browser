@@ -232,7 +232,7 @@ const projects = [
     author: 'Brave Software and contributors',
     url: 'https://github.com/brave/adblock-lists',
     detail:
-      'Zepper blocks with the lists Brave Shields uses, Brave’s own among them: its fixes, first-party ads and cookie notices. Downloaded daily.',
+      'Zepper blocks with the lists Brave Shields uses, Brave’s own among them: its fixes, first-party ads and cookie notices. Downloaded every 8 hours.',
     text: MPL
   },
   {
@@ -241,7 +241,7 @@ const projects = [
     license: 'MPL-2.0',
     author: 'Brave Software and contributors',
     url: 'https://github.com/brave/adblock-resources',
-    detail: 'The scripts Brave runs on some sites, its YouTube fixes among them. Downloaded daily.',
+    detail: 'The scripts Brave runs on some sites, its YouTube fixes among them. Downloaded every 8 hours.',
     text: MPL
   },
   {
@@ -250,7 +250,8 @@ const projects = [
     license: 'GPL-3.0',
     author: 'Raymond Hill and the uBlock Origin contributors',
     url: 'https://github.com/uBlockOrigin/uAssets',
-    detail: "Ads, trackers, badware, link shorteners, YouTube's ads and cookie notices. Downloaded daily, most through Ghostery's copies.",
+    detail:
+      "Ads, trackers, badware, link shorteners, YouTube's ads and cookie notices. Downloaded every 8 hours, most through Ghostery's copies.",
     text: GPL
   },
   {
@@ -259,7 +260,7 @@ const projects = [
     license: 'GPL-3.0 OR CC-BY-SA-3.0',
     author: 'The EasyList authors',
     url: 'https://easylist.to/',
-    detail: 'Ads and trackers. Downloaded daily.',
+    detail: 'Ads and trackers. Downloaded every 8 hours.',
     text: GPL
   },
   {
@@ -268,7 +269,7 @@ const projects = [
     license: 'CC-BY-3.0',
     author: 'Fanboy and the EasyList authors',
     url: 'https://easylist.to/',
-    detail: 'Cookie notices and app promotions. Downloaded daily.',
+    detail: 'Cookie notices and app promotions. Downloaded every 8 hours.',
     licenseUrl: 'https://creativecommons.org/licenses/by/3.0/'
   },
   {
@@ -277,7 +278,7 @@ const projects = [
     license: 'CC0-1.0 AND MIT',
     author: 'curben (malware-filter), from abuse.ch’s URLhaus',
     url: 'https://gitlab.com/malware-filter/urlhaus-filter',
-    detail: 'Sites spreading malware. Downloaded daily.',
+    detail: 'Sites spreading malware. Downloaded every 8 hours.',
     licenseUrl: 'https://gitlab.com/malware-filter/urlhaus-filter#license'
   },
   {
