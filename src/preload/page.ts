@@ -940,7 +940,6 @@ function applyCosmetics(): void {
     return
   }
   if (response.styles) webFrame.insertCSS(response.styles, { cssOrigin: 'user' })
-  const youtube = window === window.top && /(^|\.)youtube\.com$/.test(location.hostname)
   if (response.scripts.length > 0) {
     // Compile in this (isolated, CSP-free) world, then run the function in the
     // page's main world. Scriptlets must patch page globals before any page
@@ -951,51 +950,8 @@ function applyCosmetics(): void {
     } catch {
       // A broken scriptlet must never break the page.
     }
-    if (youtube) reloadStuckYouTube()
   }
   watchDomForGenericRules()
-}
-
-/** Player reloads of one video, without it playing, before the page is loaded again. */
-const YOUTUBE_RELOADS = 4
-
-/**
- * YouTube, with its ads blocked: uBlock Origin's fix reloads the player when it looks stuck, and now and
- * then it never stops (the time flickering to 0:00 and back, the video never starting). Loading the page
- * again starts it. Once per video, so one that won't play can't keep reloading the page.
- */
-function reloadStuckYouTube(): void {
-  let video = ''
-  let loads = 0
-  document.addEventListener(
-    'loadstart',
-    (event) => {
-      const id = location.pathname === '/watch' ? new URLSearchParams(location.search).get('v') : null
-      if (!(event.target instanceof HTMLVideoElement) || !id) return
-      if (id !== video) {
-        video = id
-        loads = 0
-      }
-      if (++loads < YOUTUBE_RELOADS) return
-      const key = `zepper-reloaded-${id}`
-      try {
-        if (sessionStorage.getItem(key)) return
-        sessionStorage.setItem(key, '1')
-      } catch {
-        return
-      }
-      location.reload()
-    },
-    true
-  )
-  // Playing, it wasn't stuck.
-  document.addEventListener(
-    'timeupdate',
-    (event) => {
-      if (event.target instanceof HTMLVideoElement && !event.target.paused && event.target.currentTime > 1) loads = 0
-    },
-    true
-  )
 }
 
 /**
