@@ -91,9 +91,10 @@ jobs:
             opensuse*) zypper --non-interactive install -y git tar gzip ;;
             archlinux*) pacman -Sy --noconfirm --needed git ;;
           esac
+      # The test as it is on this branch (a distro's image can change under a release), trying the
+      # packages built from the tag.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
           sparse-checkout: scripts
       - uses: actions/download-artifact@v4
         with:

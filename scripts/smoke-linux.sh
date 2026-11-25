@@ -22,7 +22,8 @@ case "$ID" in
     zepper=/opt/Zepper/zepper
     ;;
   opensuse-* | sles)
-    $sudo zypper --non-interactive install -y xvfb-run xdotool ImageMagick dbus-1 procps util-linux shadow
+    # Tumbleweed's image has busybox's awk, which xvfb-run's gawk has to replace.
+    $sudo zypper --non-interactive install -y --force-resolution xvfb-run xdotool ImageMagick dbus-1 procps util-linux shadow
     $sudo zypper --non-interactive install -y --allow-unsigned-rpm "$package"
     zepper=/opt/Zepper/zepper
     ;;
