@@ -146,4 +146,4 @@ The same code runs on Linux; the differences are kept to a few places.
 
 ## License
 
-Zepper is licensed under the GPL-3.0 (only). That matches `electron-chrome-extensions`, which `src/main/extensions.ts` uses under its GPL-3.0 option. Other dependencies are under permissive or GPL-compatible licenses (MIT, BSD, MPL-2.0).
+Zepper is licensed under the GPL-3.0 (only). Its dependencies are under permissive or GPL-compatible licenses (MIT, BSD, MPL-2.0); `electron-chrome-extensions` (`src/main/extensions.ts`), once GPL-3.0, is MIT since 4.10.

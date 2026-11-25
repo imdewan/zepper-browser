@@ -51,7 +51,6 @@ export class Extensions {
     if (this.contexts.has(ses)) return
     const host = this.host
     const context = new ElectronChromeExtensions({
-      license: 'GPL-3.0',
       session: ses,
       createTab: async (details) => [host.createTab(details.url ?? 'about:blank', details.active !== false), host.window()],
       selectTab: (webContents) => host.selectTab(webContents),

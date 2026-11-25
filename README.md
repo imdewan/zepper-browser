@@ -255,4 +255,4 @@ Zepper stands on the shoulders of [Electron](https://www.electronjs.org/) and [C
 
 Zepper is free software, licensed under the [GNU General Public License v3.0 only](LICENSE). You can use, study, change and share it; if you distribute a modified version, it has to stay under the same license, with its source available.
 
-Copyright © 2026 Dewan Shakil. Third-party components keep their own licenses: Electron and Chromium (MIT and BSD-style), electron-chrome-extensions (GPL-3.0), Mozilla's Readability (Apache-2.0), Ghostery's adblocker (MPL-2.0), and the filter lists, which are downloaded at runtime under their own terms. Google Widevine is downloaded from Google only if you turn it on, under Google's terms.
+Copyright © 2026 Dewan Shakil. Third-party components keep their own licenses: Electron and Chromium (MIT and BSD-style), electron-chrome-extensions (MIT), Mozilla's Readability (Apache-2.0), Ghostery's adblocker (MPL-2.0), and the filter lists, which are downloaded at runtime under their own terms. Google Widevine is downloaded from Google only if you turn it on, under Google's terms.
