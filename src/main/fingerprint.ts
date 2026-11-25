@@ -84,7 +84,11 @@ export function guardTab(wc: WebContents, decide: (url: string) => Disguise | nu
     try {
       if (current && type === 'worker') await debug.sendCommand('Runtime.evaluate', { expression: workerScript(current) }, sessionId)
       if (type === 'iframe') {
-        await debug.sendCommand('Emulation.setHardwareConcurrencyOverride', { hardwareConcurrency: current?.cores ?? REAL_CORES }, sessionId)
+        await debug.sendCommand(
+          'Emulation.setHardwareConcurrencyOverride',
+          { hardwareConcurrency: current?.cores ?? REAL_CORES },
+          sessionId
+        )
       }
       // Their own workers and frames, the same way.
       if (type === 'worker' || type === 'iframe') {

@@ -441,7 +441,12 @@ export function matchesPattern(pattern: string, url: string): boolean {
     } else if (host !== patternHost) return false
   }
   const path = parsed.pathname + parsed.search
-  const glob = new RegExp(`^${patternPath.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`)
+  const glob = new RegExp(
+    `^${patternPath
+      .split('*')
+      .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+      .join('.*')}$`
+  )
   return glob.test(path)
 }
 

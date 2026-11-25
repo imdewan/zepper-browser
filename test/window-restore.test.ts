@@ -13,7 +13,16 @@ const space = (id: string, name: string, profile = 'default'): Space =>
   ({ id, name, icon: '😀', theme: {}, collapsedPins: false, lastTabId: null, pinnedItems: [], profile }) as unknown as Space
 
 const tab = (id: string, kind: 'normal' | 'pinned' | 'essential', spaceId: string): PersistedState['tabs'][number] =>
-  ({ id, kind, spaceId, url: `https://example.com/${id}`, title: id, favicon: null, pinned: null, lastActiveAt: 0 }) as PersistedState['tabs'][number]
+  ({
+    id,
+    kind,
+    spaceId,
+    url: `https://example.com/${id}`,
+    title: id,
+    favicon: null,
+    pinned: null,
+    lastActiveAt: 0
+  }) as PersistedState['tabs'][number]
 
 const state = (spaces: Space[], tabs: PersistedState['tabs'], extra: Partial<PersistedState> = {}): PersistedState => ({
   version: 1,
@@ -31,17 +40,31 @@ const main = (extra: Partial<PersistedState> = {}): PersistedState =>
   state(
     [space('work', 'Work'), space('home', 'Home', 'home-profile')],
     [tab('pin', 'pinned', 'work'), tab('ess', 'essential', 'work'), tab('old', 'normal', 'work')],
-    { activeTabId: 'old', closedWithOthersOpen: true, window: { bounds: { x: 1, y: 1, width: 100, height: 100 }, maximized: false }, ...extra }
+    {
+      activeTabId: 'old',
+      closedWithOthersOpen: true,
+      window: { bounds: { x: 1, y: 1, width: 100, height: 100 }, maximized: false },
+      ...extra
+    }
   )
 
 test('the closed window keeps its pins, Essentials and spaces, but not its open tabs', () => {
   const merged = mergeNewestWindow(main(), state([space('w2', 'Work')], [tab('new', 'normal', 'w2')]))
-  assert.deepEqual(merged.tabs.map((t) => t.id), ['pin', 'ess', 'new'])
-  assert.deepEqual(merged.spaces.map((s) => s.id), ['work', 'home'])
+  assert.deepEqual(
+    merged.tabs.map((t) => t.id),
+    ['pin', 'ess', 'new']
+  )
+  assert.deepEqual(
+    merged.spaces.map((s) => s.id),
+    ['work', 'home']
+  )
 })
 
 test("the newest window's open tabs come across, in the matching space, with their history", () => {
-  const history = { index: 0, entries: [{ url: 'https://example.com/a', title: 'a' }] } as unknown as PersistedState['tabs'][number]['history']
+  const history = {
+    index: 0,
+    entries: [{ url: 'https://example.com/a', title: 'a' }]
+  } as unknown as PersistedState['tabs'][number]['history']
   const merged = mergeNewestWindow(
     main(),
     state([space('w2', 'Work'), space('h2', 'Home', 'home-profile')], [{ ...tab('a', 'normal', 'w2'), history }, tab('b', 'normal', 'h2')])
@@ -54,7 +77,10 @@ test("the newest window's open tabs come across, in the matching space, with the
 test("the newest window's pinned tabs come back as open tabs, and its copies of Essentials don't", () => {
   const pinned = { ...tab('p2', 'pinned', 'w2'), pinned: { url: 'https://example.com/start', title: 'start', favicon: null } }
   const merged = mergeNewestWindow(main(), state([space('w2', 'Work')], [pinned, tab('e2', 'essential', 'w2')]))
-  assert.deepEqual(merged.tabs.map((t) => t.id), ['pin', 'ess', 'p2'])
+  assert.deepEqual(
+    merged.tabs.map((t) => t.id),
+    ['pin', 'ess', 'p2']
+  )
   const carried = merged.tabs.find((t) => t.id === 'p2')
   assert.equal(carried?.kind, 'normal')
   assert.equal(carried?.pinned, null)
@@ -104,7 +130,10 @@ test("the newest window's splits come across only whole, and the closed mark goe
       splits: [split('whole', ['a', 'b']), split('part', ['a', 'e'])]
     })
   )
-  assert.deepEqual(merged.splits?.map((s) => s.id), ['whole'])
+  assert.deepEqual(
+    merged.splits?.map((s) => s.id),
+    ['whole']
+  )
   assert.equal('closedWithOthersOpen' in merged, false)
 })
 
